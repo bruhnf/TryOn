@@ -1,0 +1,127 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SubscriptionLevel {
+  BASIC
+  PRO
+  PREMIUM
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETE
+  FAILED
+}
+
+model User {
+  id                String            @id @default(uuid())
+  username          String            @unique
+  email             String            @unique
+  passwordHash      String
+  verified          Boolean           @default(false)
+  verifyToken       String?
+  verifyTokenExpiry DateTime?
+  passwordResetToken       String?
+  passwordResetTokenExpiry DateTime?
+  subscriptionLevel SubscriptionLevel @default(BASIC)
+  bio               String?
+  // avatarUrl = close-up photo — used for profile display ONLY, never sent to Grok
+  avatarUrl         String?
+  // fullBodyUrl and mediumBodyUrl are the inputs for the Grok try-on API
+  fullBodyUrl       String?
+  mediumBodyUrl     String?
+  followingCount    Int               @default(0)
+  followersCount    Int               @default(0)
+  likesCount        Int               @default(0)
+  address           String?
+  city              String?
+  state             String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  tryOnJobs     TryOnJob[]
+  locations     UserLocation[]
+  following     Follow[]       @relation("Follower")
+  followers     Follow[]       @relation("Following")
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model TryOnJob {
+  id                String    @id @default(uuid())
+  userId            String
+  status            JobStatus @default(PENDING)
+  clothingPhoto1Url String
+  clothingPhoto2Url String?
+  resultFullBodyUrl String?
+  resultMediumUrl   String?
+  // which user body photo perspectives were used as inputs
+  perspectivesUsed  String[]
+  errorMessage      String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("tryon_jobs")
+}
+
+model UserLocation {
+  id                 String   @id @default(uuid())
+  userId             String
+  ip                 String
+  country            String?
+  region             String?
+  city               String?
+  latitude           Float?
+  longitude          Float?
+  timezone           String?
+  trigger            String?
+  suspiciousLocation Boolean  @default(false)
+  distanceFromLast   Float?
+  timestamp          DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_locations")
+}
+
+model Follow {
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+  @@map("follows")
+}
+
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("app_settings")
+}

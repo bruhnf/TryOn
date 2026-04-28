@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "TryOn",
+    "slug": "tryon",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.tryon.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "TryOn uses your camera to photograph clothing items for virtual try-on.",
+        "NSPhotoLibraryUsageDescription": "TryOn uses your photo library to upload your body photos and clothing images.",
+        "NSPhotoLibraryAddUsageDescription": "TryOn saves your try-on results to your photo library."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.tryon.app",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "scheme": "tryon",
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-camera",
+        { "cameraPermission": "TryOn uses your camera to photograph clothing items." }
+      ],
+      [
+        "expo-image-picker",
+        { "photosPermission": "TryOn accesses your photos to let you upload body and clothing images." }
+      ]
+    ]
+  }
+}

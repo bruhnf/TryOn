@@ -1,0 +1,119 @@
+import { Request, Response } from 'express';
+import { v4 as uuidv4 } from 'uuid';
+import prisma from '../lib/prisma';
+import { uploadToS3, keyFromUrl } from '../services/s3Service';
+import { safeFilename } from '../middleware/uploadMiddleware';
+import { enqueueTryOn } from '../queue/tryonQueue';
+import { DAILY_TRYON_LIMITS, CLOTHING_ITEM_LIMITS } from '../middleware/subscription';
+import { resizeImageForTryOn } from '../utils/imageProcessor';
+
+export async function submitTryOn(req: Request, res: Response): Promise<void> {
+  if (!req.user) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
+  const files = req.files as Express.Multer.File[] | undefined;
+  if (!files || files.length === 0) {
+    res.status(400).json({ error: 'At least one clothing photo is required' });
+    return;
+  }
+
+  const { userId, subscriptionLevel } = req.user;
+  const maxItems = CLOTHING_ITEM_LIMITS[subscriptionLevel];
+  if (files.length > maxItems) {
+    res.status(400).json({
+      error: `Your ${subscriptionLevel} plan allows ${maxItems} clothing item(s) per try-on`,
+    });
+    return;
+  }
+
+  // Check daily limit
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayCount = await prisma.tryOnJob.count({
+    where: { userId, createdAt: { gte: todayStart }, status: { not: 'FAILED' } },
+  });
+
+  const dailyLimit = DAILY_TRYON_LIMITS[subscriptionLevel];
+  if (todayCount >= dailyLimit) {
+    res.status(429).json({
+      error: `Daily try-on limit reached (${dailyLimit} for ${subscriptionLevel} plan)`,
+    });
+    return;
+  }
+
+  // Determine which body photos are available (full body takes priority, never avatar/close-up)
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { fullBodyUrl: true, mediumBodyUrl: true },
+  });
+  if (!user) { res.status(404).json({ error: 'User not found' }); return; }
+
+  const bodyPhotos: Array<{ perspective: 'full_body' | 'medium'; url: string }> = [];
+  if (user.fullBodyUrl) bodyPhotos.push({ perspective: 'full_body', url: user.fullBodyUrl });
+  if (user.mediumBodyUrl) bodyPhotos.push({ perspective: 'medium', url: user.mediumBodyUrl });
+
+  if (bodyPhotos.length === 0) {
+    res.status(422).json({
+      error: 'NO_BODY_PHOTOS',
+      message:
+        'To use try-on, please upload a full body or medium (waist-up) photo in your profile.',
+    });
+    return;
+  }
+
+  // Upload clothing photos to S3 (resize to 576x1024 first)
+  const clothingUrls: string[] = [];
+  for (const file of files) {
+    // Resize image to 576x1024 portrait
+    const processed = await resizeImageForTryOn(file.buffer);
+    const baseFilename = safeFilename(file.originalname).replace(/\.[^/.]+$/, '');
+    const filename = `${uuidv4()}-${baseFilename}.jpg`;
+    const key = await uploadToS3('clothing-photos', userId, filename, processed.buffer, processed.mimeType);
+    clothingUrls.push(
+      `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`,
+    );
+  }
+
+  const jobId = uuidv4();
+  await prisma.tryOnJob.create({
+    data: {
+      id: jobId,
+      userId,
+      clothingPhoto1Url: clothingUrls[0],
+      clothingPhoto2Url: clothingUrls[1] ?? null,
+      perspectivesUsed: [],
+    },
+  });
+
+  await enqueueTryOn({ jobId, userId, clothingUrls, bodyPhotos });
+
+  res.status(202).json({ jobId, status: 'PENDING' });
+}
+
+export async function getJobStatus(req: Request, res: Response): Promise<void> {
+  if (!req.user) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
+  const { jobId } = req.params;
+  const job = await prisma.tryOnJob.findUnique({ where: { id: jobId } });
+  if (!job || job.userId !== req.user.userId) {
+    res.status(404).json({ error: 'Job not found' });
+    return;
+  }
+
+  res.json(job);
+}
+
+export async function getTryOnHistory(req: Request, res: Response): Promise<void> {
+  if (!req.user) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
+  const page = Math.max(1, parseInt(req.query.page as string ?? '1', 10));
+  const limit = 20;
+
+  const jobs = await prisma.tryOnJob.findMany({
+    where: { userId: req.user.userId, status: 'COMPLETE' },
+    orderBy: { createdAt: 'desc' },
+    skip: (page - 1) * limit,
+    take: limit,
+  });
+
+  res.json({ jobs, page });
+}
