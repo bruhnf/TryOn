@@ -70,8 +70,8 @@ export default function OnboardingPhotoScreen({ navigation }: Props) {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: slot.key === 'avatar' ? [1, 1] : [3, 4],
+      allowsEditing: slot.key === 'avatar',
+      aspect: slot.key === 'avatar' ? [1, 1] : undefined,
       quality: 0.85,
     });
 

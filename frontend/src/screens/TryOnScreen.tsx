@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -15,8 +15,10 @@ import api from '../config/api';
 import { useUserStore } from '../store/useUserStore';
 import { TryOnJob } from '../types';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
+import FullScreenImageModal from '../components/FullScreenImageModal';
 
-const POLL_INTERVAL_MS = 3000;
+const POLL_INTERVAL_MS = 5000; // 5 seconds between polls
+const MAX_POLL_ERRORS = 3; // Stop polling after this many consecutive errors
 
 export default function TryOnScreen() {
   const insets = useSafeAreaInsets();
@@ -25,13 +27,24 @@ export default function TryOnScreen() {
   const [clothingPhotos, setClothingPhotos] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [activeJob, setActiveJob] = useState<TryOnJob | null>(null);
-  const [pollTimer, setPollTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+  
+  // Use refs for polling to avoid closure issues and ensure cleanup
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollErrorsRef = useRef(0);
+  const isMountedRef = useRef(true);
 
   const maxItems = user?.subscriptionLevel === 'BASIC' ? 1 : 2;
 
   useEffect(() => {
-    return () => { if (pollTimer) clearTimeout(pollTimer); };
-  }, [pollTimer]);
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+  }, []);
 
   function hasBodyPhoto(): boolean {
     return !!(user?.fullBodyUrl || user?.mediumBodyUrl);
@@ -62,8 +75,7 @@ export default function TryOnScreen() {
 
   async function takePhoto() {
     const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [3, 4],
+      allowsEditing: false,
       quality: 0.85,
     });
     if (!result.canceled && result.assets[0]) {
@@ -74,8 +86,7 @@ export default function TryOnScreen() {
   async function pickFromLibrary() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [3, 4],
+      allowsEditing: false,
       quality: 0.85,
     });
     if (!result.canceled && result.assets[0]) {
@@ -133,21 +144,58 @@ export default function TryOnScreen() {
   }
 
   function pollJobStatus(jobId: string) {
-    const timer = setTimeout(async () => {
+    if (!isMountedRef.current) return;
+    
+    pollTimerRef.current = setTimeout(async () => {
+      if (!isMountedRef.current) return;
+      
       try {
         const { data } = await api.get<TryOnJob>(`/tryon/${jobId}`);
+        if (!isMountedRef.current) return;
+        
         setActiveJob(data);
+        pollErrorsRef.current = 0; // Reset error count on success
+        
         if (data.status === 'PENDING' || data.status === 'PROCESSING') {
           pollJobStatus(jobId);
         }
-      } catch {
-        // stop polling on error
+      } catch (err: unknown) {
+        if (!isMountedRef.current) return;
+        
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        pollErrorsRef.current += 1;
+        
+        if (status === 429) {
+          // Rate limited - wait longer before retrying
+          console.log('Rate limited, waiting before retry...');
+          pollTimerRef.current = setTimeout(() => pollJobStatus(jobId), 10000); // Wait 10 seconds
+        } else if (pollErrorsRef.current < MAX_POLL_ERRORS) {
+          // Retry on other errors
+          pollJobStatus(jobId);
+        } else {
+          // Too many errors - show user a way to retry
+          Alert.alert(
+            'Connection Issue',
+            'Unable to check job status. The job may still be processing.',
+            [
+              { text: 'Check Again', onPress: () => {
+                pollErrorsRef.current = 0;
+                pollJobStatus(jobId);
+              }},
+              { text: 'Start Over', onPress: resetTryOn, style: 'destructive' },
+            ]
+          );
+        }
       }
     }, POLL_INTERVAL_MS);
-    setPollTimer(timer);
   }
 
   function resetTryOn() {
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+    pollErrorsRef.current = 0;
     setClothingPhotos([]);
     setActiveJob(null);
   }
@@ -252,6 +300,7 @@ function StatusPill({ label, active, primary }: { label: string; active: boolean
 }
 
 function ResultView({ job, onReset }: { job: TryOnJob; onReset: () => void }) {
+  const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
   const isPending = job.status === 'PENDING' || job.status === 'PROCESSING';
   const isFailed = job.status === 'FAILED';
 
@@ -288,14 +337,24 @@ function ResultView({ job, onReset }: { job: TryOnJob; onReset: () => void }) {
     <View style={styles.resultContainer}>
       <Text style={styles.resultTitle}>Your Try-On Results</Text>
       {images.map((img) => (
-        <View key={img.url} style={styles.resultImageWrap}>
+        <TouchableOpacity
+          key={img.url}
+          style={styles.resultImageWrap}
+          onPress={() => setFullScreenImage(img.url)}
+          activeOpacity={0.9}
+        >
           <Image source={{ uri: img.url }} style={styles.resultImage} resizeMode="contain" />
           <Text style={styles.resultLabel}>{img.label}</Text>
-        </View>
+        </TouchableOpacity>
       ))}
       <TouchableOpacity style={styles.resetBtn} onPress={onReset}>
         <Text style={styles.resetBtnText}>Try Another Outfit</Text>
       </TouchableOpacity>
+      <FullScreenImageModal
+        visible={!!fullScreenImage}
+        imageUrl={fullScreenImage}
+        onClose={() => setFullScreenImage(null)}
+      />
     </View>
   );
 }

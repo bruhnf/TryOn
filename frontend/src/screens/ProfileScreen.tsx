@@ -63,8 +63,8 @@ export default function ProfileScreen() {
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect,
+      allowsEditing: field === 'avatar',
+      aspect: field === 'avatar' ? aspect : undefined,
       quality: 0.85,
     });
     if (result.canceled || !result.assets[0]) return;

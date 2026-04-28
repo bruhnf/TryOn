@@ -25,10 +25,16 @@ app.use(
   '/api/auth',
   rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true }),
 );
-app.use(
-  '/api/tryon',
-  rateLimit({ windowMs: 60 * 1000, max: 10, standardHeaders: true }),
-);
+
+// Rate limit only applies to POST (job submissions), not GET (status polling)
+import { Request, Response, NextFunction } from 'express';
+const tryonPostLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, standardHeaders: true });
+app.use('/api/tryon', (req: Request, res: Response, next: NextFunction) => {
+  if (req.method === 'POST') {
+    return tryonPostLimiter(req, res, next);
+  }
+  next();
+});
 
 app.use('/api/auth', authRoutes);
 app.use('/api/upload', uploadRoutes);

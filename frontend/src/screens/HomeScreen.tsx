@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../config/api';
 import { TryOnJob } from '../types';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
+import FullScreenImageModal from '../components/FullScreenImageModal';
 
 interface FeedJob extends TryOnJob {
   user: { username: string; avatarUrl?: string };
@@ -25,6 +26,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
 
   async function fetchFeed(p = 1, refresh = false) {
     try {
@@ -65,7 +67,9 @@ export default function HomeScreen() {
       <FlatList
         data={jobs}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <FeedCard job={item} />}
+        renderItem={({ item }) => (
+          <FeedCard job={item} onImagePress={(url) => setFullScreenImage(url)} />
+        )}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         onEndReached={loadMore}
         onEndReachedThreshold={0.4}
@@ -81,11 +85,16 @@ export default function HomeScreen() {
         }
         contentContainerStyle={jobs.length === 0 ? styles.emptyContainer : undefined}
       />
+      <FullScreenImageModal
+        visible={!!fullScreenImage}
+        imageUrl={fullScreenImage}
+        onClose={() => setFullScreenImage(null)}
+      />
     </View>
   );
 }
 
-function FeedCard({ job }: { job: FeedJob }) {
+function FeedCard({ job, onImagePress }: { job: FeedJob; onImagePress: (url: string) => void }) {
   const displayUrl = job.resultFullBodyUrl ?? job.resultMediumUrl;
 
   return (
@@ -105,17 +114,28 @@ function FeedCard({ job }: { job: FeedJob }) {
 
       <View style={styles.resultsRow}>
         {displayUrl ? (
-          <Image source={{ uri: displayUrl }} style={styles.resultImage} resizeMode="cover" />
+          <TouchableOpacity
+            style={styles.resultImageContainer}
+            onPress={() => onImagePress(displayUrl)}
+            activeOpacity={0.9}
+          >
+            <Image source={{ uri: displayUrl }} style={styles.resultImage} resizeMode="cover" />
+          </TouchableOpacity>
         ) : (
           <View style={[styles.resultImage, styles.resultPlaceholder]}>
             <ActivityIndicator color={Colors.gray400} />
           </View>
         )}
-        <Image
-          source={{ uri: job.clothingPhoto1Url }}
-          style={styles.clothingThumb}
-          resizeMode="cover"
-        />
+        <TouchableOpacity
+          onPress={() => onImagePress(job.clothingPhoto1Url)}
+          activeOpacity={0.9}
+        >
+          <Image
+            source={{ uri: job.clothingPhoto1Url }}
+            style={styles.clothingThumb}
+            resizeMode="cover"
+          />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -163,6 +183,9 @@ const styles = StyleSheet.create({
   },
   username: { fontSize: Typography.fontSizeMD, fontWeight: Typography.fontWeightSemiBold },
   resultsRow: { flexDirection: 'row', gap: Spacing.sm, padding: Spacing.md, paddingTop: 0 },
+  resultImageContainer: {
+    flex: 1,
+  },
   resultImage: {
     flex: 1,
     aspectRatio: 3 / 4,

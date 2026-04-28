@@ -189,48 +189,63 @@ export async function generateTryOnImage(input: TryOnInput): Promise<string> {
   console.log('[Grok] Sending request...');
   const startTime = Date.now();
 
-  const response = await fetch(`${env.grok.apiUrl}/images/edits`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${env.grok.apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(requestBody),
-  });
+  // Set timeout for API call (2 minutes max for image generation)
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120000);
 
-  const elapsed = Date.now() - startTime;
-  console.log(`[Grok] Response received in ${elapsed}ms`);
-  console.log(`[Grok] Status: ${response.status} ${response.statusText}`);
+  try {
+    const response = await fetch(`${env.grok.apiUrl}/images/edits`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.grok.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
 
-  const responseBody = await response.text();
+    const elapsed = Date.now() - startTime;
+    console.log(`[Grok] Response received in ${elapsed}ms`);
+    console.log(`[Grok] Status: ${response.status} ${response.statusText}`);
 
-  if (!response.ok) {
-    console.error('\n========== GROK API ERROR ==========');
-    console.error('Status:', response.status);
-    console.error('Headers:', Object.fromEntries(response.headers.entries()));
-    console.error('Body:', responseBody);
-    console.error('=====================================\n');
-    throw new Error(`Grok API error ${response.status}: ${responseBody}`);
+    const responseBody = await response.text();
+
+    if (!response.ok) {
+      console.error('\n========== GROK API ERROR ==========');
+      console.error('Status:', response.status);
+      console.error('Headers:', Object.fromEntries(response.headers.entries()));
+      console.error('Body:', responseBody);
+      console.error('=====================================\n');
+      throw new Error(`Grok API error ${response.status}: ${responseBody}`);
+    }
+
+    const data = JSON.parse(responseBody) as {
+      data?: Array<{ url?: string; b64_json?: string }>;
+    };
+
+    console.log('\n========== GROK API SUCCESS ==========');
+    console.log('Response:', JSON.stringify(data, null, 2));
+    console.log('=======================================\n');
+
+    const imageData = data.data?.[0];
+    if (imageData?.url) {
+      console.log('[Grok] Returning image URL:', imageData.url);
+      return imageData.url;
+    }
+    if (imageData?.b64_json) {
+      console.log('[Grok] Returning base64 image (length:', imageData.b64_json.length, ')');
+      return `data:image/png;base64,${imageData.b64_json}`;
+    }
+
+    console.error('[Grok] No image in response!');
+    throw new Error('Grok API returned no image content');
+  } catch (err: unknown) {
+    clearTimeout(timeoutId);
+    if ((err as Error).name === 'AbortError') {
+      throw new Error('Grok API request timed out after 2 minutes');
+    }
+    throw err;
   }
-
-  const data = JSON.parse(responseBody) as {
-    data?: Array<{ url?: string; b64_json?: string }>;
-  };
-
-  console.log('\n========== GROK API SUCCESS ==========');
-  console.log('Response:', JSON.stringify(data, null, 2));
-  console.log('=======================================\n');
-
-  const imageData = data.data?.[0];
-  if (imageData?.url) {
-    console.log('[Grok] Returning image URL:', imageData.url);
-    return imageData.url;
-  }
-  if (imageData?.b64_json) {
-    console.log('[Grok] Returning base64 image (length:', imageData.b64_json.length, ')');
-    return `data:image/png;base64,${imageData.b64_json}`;
-  }
-
-  console.error('[Grok] No image in response!');
-  throw new Error('Grok API returned no image content');
 }

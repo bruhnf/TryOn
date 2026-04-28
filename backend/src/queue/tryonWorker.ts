@@ -83,11 +83,15 @@ worker.on('failed', async (job, err) => {
   console.error('Stack:', err.stack);
   console.error('==========================================\n');
   
-  if (job?.data.jobId) {
-    await prisma.tryOnJob.update({
-      where: { id: job.data.jobId },
-      data: { status: 'FAILED', errorMessage: err.message },
-    });
+  if (job?.data?.jobId) {
+    try {
+      await prisma.tryOnJob.update({
+        where: { id: job.data.jobId },
+        data: { status: 'FAILED', errorMessage: err.message?.substring(0, 500) || 'Unknown error' },
+      });
+    } catch (dbErr) {
+      console.error('[Worker] Failed to update job status in database:', dbErr);
+    }
   }
 });
 
