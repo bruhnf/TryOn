@@ -65,6 +65,9 @@ RUN npx prisma generate
 # Copy compiled code from builder
 COPY --from=builder /app/dist ./dist
 
+# Copy public static files (admin dashboard, etc.)
+COPY public ./public
+
 # Set ownership
 RUN chown -R nodejs:nodejs /app
 
