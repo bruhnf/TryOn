@@ -1,4 +1,3 @@
-export type SubscriptionLevel = 'BASIC' | 'PRO' | 'PREMIUM';
 export type JobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETE' | 'FAILED';
 
 export interface User {
@@ -6,7 +5,8 @@ export interface User {
   username: string;
   email: string;
   verified: boolean;
-  subscriptionLevel: SubscriptionLevel;
+  isSubscribed: boolean;
+  credits: number;
   bio?: string;
   avatarUrl?: string;
   fullBodyUrl?: string;

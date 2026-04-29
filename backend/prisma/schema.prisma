@@ -7,17 +7,18 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum SubscriptionLevel {
-  BASIC
-  PRO
-  PREMIUM
-}
-
 enum JobStatus {
   PENDING
   PROCESSING
   COMPLETE
   FAILED
+}
+
+enum CreditTransactionType {
+  PURCHASE
+  GRANT
+  USAGE
+  REFUND
 }
 
 model User {
@@ -30,7 +31,10 @@ model User {
   verifyTokenExpiry DateTime?
   passwordResetToken       String?
   passwordResetTokenExpiry DateTime?
-  subscriptionLevel SubscriptionLevel @default(BASIC)
+  // Subscription: true = active subscriber, false = free user
+  isSubscribed      Boolean           @default(false)
+  // Credits: bonus credits that can be used beyond daily limit
+  credits           Int               @default(0)
   bio               String?
   // avatarUrl = close-up photo — used for profile display ONLY, never sent to Grok
   avatarUrl         String?
@@ -46,11 +50,12 @@ model User {
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
-  tryOnJobs     TryOnJob[]
-  locations     UserLocation[]
-  following     Follow[]       @relation("Follower")
-  followers     Follow[]       @relation("Following")
-  refreshTokens RefreshToken[]
+  tryOnJobs          TryOnJob[]
+  locations          UserLocation[]
+  following          Follow[]            @relation("Follower")
+  followers          Follow[]            @relation("Following")
+  refreshTokens      RefreshToken[]
+  creditTransactions CreditTransaction[]
 
   @@map("users")
 }
@@ -124,4 +129,18 @@ model AppSetting {
   updatedAt DateTime @updatedAt
 
   @@map("app_settings")
+}
+
+model CreditTransaction {
+  id          String                @id @default(uuid())
+  userId      String
+  type        CreditTransactionType
+  amount      Int                   // positive for grants/purchases, negative for usage
+  description String?
+  createdAt   DateTime              @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("credit_transactions")
 }

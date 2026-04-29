@@ -24,7 +24,8 @@ interface AdminUser {
   username: string;
   email: string;
   verified: boolean;
-  subscriptionLevel: 'BASIC' | 'PRO' | 'PREMIUM';
+  isSubscribed: boolean;
+  credits: number;
   createdAt: string;
 }
 
@@ -32,6 +33,8 @@ interface Stats {
   userCount: number;
   jobCount: number;
   completedJobs: number;
+  subscriberCount: number;
+  totalCreditsOutstanding: number;
 }
 
 export default function AdminConsoleScreen({ navigation }: Props) {
@@ -97,16 +100,30 @@ export default function AdminConsoleScreen({ navigation }: Props) {
     }
   }
 
-  async function changeSubscription(user: AdminUser, level: 'BASIC' | 'PRO' | 'PREMIUM') {
+  async function toggleSubscription(user: AdminUser) {
     try {
       const { data } = await adminApi.patch(`/admin/user/${user.id}/subscription`, {
-        subscriptionLevel: level,
+        isSubscribed: !user.isSubscribed,
       });
       setUsers((prev) =>
-        prev.map((u) => (u.id === user.id ? { ...u, subscriptionLevel: data.subscriptionLevel } : u))
+        prev.map((u) => (u.id === user.id ? { ...u, isSubscribed: data.isSubscribed } : u))
       );
     } catch {
       Alert.alert('Error', 'Failed to update subscription');
+    }
+  }
+
+  async function adjustCredits(user: AdminUser, amount: number) {
+    try {
+      const { data } = await adminApi.patch(`/admin/user/${user.id}/credits`, {
+        amount,
+        reason: amount > 0 ? 'Admin credit grant' : 'Admin credit deduction',
+      });
+      setUsers((prev) =>
+        prev.map((u) => (u.id === user.id ? { ...u, credits: data.credits } : u))
+      );
+    } catch {
+      Alert.alert('Error', 'Failed to adjust credits');
     }
   }
 
@@ -133,11 +150,11 @@ export default function AdminConsoleScreen({ navigation }: Props) {
     );
   }
 
-  function showSubscriptionOptions(user: AdminUser) {
-    Alert.alert('Change Subscription', `Current: ${user.subscriptionLevel}`, [
-      { text: 'BASIC', onPress: () => changeSubscription(user, 'BASIC') },
-      { text: 'PRO', onPress: () => changeSubscription(user, 'PRO') },
-      { text: 'PREMIUM', onPress: () => changeSubscription(user, 'PREMIUM') },
+  function showCreditsOptions(user: AdminUser) {
+    Alert.alert('Adjust Credits', `Current: ${user.credits}`, [
+      { text: '+10 Credits', onPress: () => adjustCredits(user, 10) },
+      { text: '+50 Credits', onPress: () => adjustCredits(user, 50) },
+      { text: '-10 Credits', onPress: () => adjustCredits(user, -10) },
       { text: 'Cancel', style: 'cancel' },
     ]);
   }
@@ -147,12 +164,20 @@ export default function AdminConsoleScreen({ navigation }: Props) {
       <View style={styles.userCard}>
         <View style={styles.userHeader}>
           <Text style={styles.username}>{item.username}</Text>
-          <TouchableOpacity
-            style={[styles.subscriptionBadge, styles[`sub${item.subscriptionLevel}`]]}
-            onPress={() => showSubscriptionOptions(item)}
-          >
-            <Text style={styles.subscriptionText}>{item.subscriptionLevel}</Text>
-          </TouchableOpacity>
+          <View style={styles.badgeRow}>
+            <TouchableOpacity
+              style={[styles.subscriptionBadge, item.isSubscribed ? styles.subActive : styles.subInactive]}
+              onPress={() => toggleSubscription(item)}
+            >
+              <Text style={styles.subscriptionText}>{item.isSubscribed ? 'Subscribed' : 'Free'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.creditsBadge}
+              onPress={() => showCreditsOptions(item)}
+            >
+              <Text style={styles.creditsText}>{item.credits} credits</Text>
+            </TouchableOpacity>
+          </View>
         </View>
         <Text style={styles.email}>{item.email}</Text>
         <Text style={styles.date}>
@@ -164,7 +189,7 @@ export default function AdminConsoleScreen({ navigation }: Props) {
             <Switch
               value={item.verified}
               onValueChange={() => toggleVerified(item)}
-              trackColor={{ false: Colors.gray300, true: Colors.black }}
+              trackColor={{ false: Colors.gray400, true: Colors.black }}
               thumbColor={Colors.white}
             />
           </View>
@@ -229,12 +254,16 @@ export default function AdminConsoleScreen({ navigation }: Props) {
             <Text style={styles.statLabel}>Users</Text>
           </View>
           <View style={styles.statBox}>
-            <Text style={styles.statNumber}>{stats.jobCount}</Text>
-            <Text style={styles.statLabel}>Jobs</Text>
+            <Text style={styles.statNumber}>{stats.subscriberCount}</Text>
+            <Text style={styles.statLabel}>Subscribers</Text>
           </View>
           <View style={styles.statBox}>
             <Text style={styles.statNumber}>{stats.completedJobs}</Text>
-            <Text style={styles.statLabel}>Completed</Text>
+            <Text style={styles.statLabel}>Jobs Done</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={styles.statNumber}>{stats.totalCreditsOutstanding}</Text>
+            <Text style={styles.statLabel}>Credits</Text>
           </View>
         </View>
       )}
@@ -267,7 +296,7 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   backText: {
-    fontSize: Typography.body,
+    fontSize: Typography.fontSizeMD,
     color: Colors.black,
   },
   authContainer: {
@@ -276,15 +305,15 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
   },
   title: {
-    fontSize: Typography.h1,
+    fontSize: Typography.fontSizeXXL,
     fontWeight: '700',
     color: Colors.black,
     textAlign: 'center',
     marginBottom: Spacing.xs,
   },
   subtitle: {
-    fontSize: Typography.body,
-    color: Colors.gray500,
+    fontSize: Typography.fontSizeMD,
+    color: Colors.gray600,
     textAlign: 'center',
     marginBottom: Spacing.xl,
   },
@@ -292,7 +321,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     borderRadius: Radius.md,
     padding: Spacing.md,
-    fontSize: Typography.body,
+    fontSize: Typography.fontSizeMD,
     color: Colors.black,
     marginBottom: Spacing.md,
     borderWidth: 1,
@@ -306,7 +335,7 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: Colors.white,
-    fontSize: Typography.body,
+    fontSize: Typography.fontSizeMD,
     fontWeight: '600',
   },
   disabled: {
@@ -324,13 +353,13 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.gray200,
   },
   headerTitle: {
-    fontSize: Typography.h3,
+    fontSize: Typography.fontSizeLG,
     fontWeight: '700',
     color: Colors.black,
   },
   logoutText: {
-    fontSize: Typography.body,
-    color: Colors.gray500,
+    fontSize: Typography.fontSizeMD,
+    color: Colors.gray600,
   },
   statsContainer: {
     flexDirection: 'row',
@@ -343,16 +372,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statNumber: {
-    fontSize: Typography.h2,
+    fontSize: Typography.fontSizeXL,
     fontWeight: '700',
     color: Colors.black,
   },
   statLabel: {
-    fontSize: Typography.caption,
-    color: Colors.gray500,
+    fontSize: Typography.fontSizeSM,
+    color: Colors.gray600,
   },
   sectionTitle: {
-    fontSize: Typography.body,
+    fontSize: Typography.fontSizeMD,
     fontWeight: '600',
     color: Colors.gray600,
     paddingHorizontal: Spacing.md,
@@ -376,18 +405,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Spacing.xs,
   },
+  badgeRow: {
+    flexDirection: 'row',
+    gap: Spacing.xs,
+  },
   username: {
-    fontSize: Typography.body,
+    fontSize: Typography.fontSizeMD,
     fontWeight: '600',
     color: Colors.black,
   },
   email: {
-    fontSize: Typography.caption,
-    color: Colors.gray500,
+    fontSize: Typography.fontSizeSM,
+    color: Colors.gray600,
     marginBottom: Spacing.xs,
   },
   date: {
-    fontSize: Typography.caption,
+    fontSize: Typography.fontSizeSM,
     color: Colors.gray400,
     marginBottom: Spacing.sm,
   },
@@ -404,7 +437,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   verifyLabel: {
-    fontSize: Typography.caption,
+    fontSize: Typography.fontSizeSM,
     color: Colors.gray600,
     marginRight: Spacing.sm,
   },
@@ -413,7 +446,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.xs,
   },
   deleteText: {
-    fontSize: Typography.caption,
+    fontSize: Typography.fontSizeSM,
     color: '#dc2626',
   },
   subscriptionBadge: {
@@ -421,14 +454,22 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: Radius.sm,
   },
-  subBASIC: {
-    backgroundColor: Colors.gray200,
+  subActive: {
+    backgroundColor: '#22c55e',
   },
-  subPRO: {
+  subInactive: {
+    backgroundColor: Colors.gray400,
+  },
+  creditsBadge: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
     backgroundColor: '#3b82f6',
   },
-  subPREMIUM: {
-    backgroundColor: '#f59e0b',
+  creditsText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Colors.white,
   },
   subscriptionText: {
     fontSize: 10,

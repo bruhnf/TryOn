@@ -4,11 +4,13 @@ import prisma from '../lib/prisma';
 import { uploadToS3, keyFromUrl } from '../services/s3Service';
 import { safeFilename } from '../middleware/uploadMiddleware';
 import { enqueueTryOn } from '../queue/tryonQueue';
-import { DAILY_TRYON_LIMITS, CLOTHING_ITEM_LIMITS } from '../middleware/subscription';
+import { DAILY_TRYON_LIMIT, MAX_CLOTHING_ITEMS } from '../middleware/subscription';
 import { resizeImageForTryOn } from '../utils/imageProcessor';
 
 export async function submitTryOn(req: Request, res: Response): Promise<void> {
   if (!req.user) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
+  console.log('[submitTryOn] req.user:', JSON.stringify(req.user));
 
   const files = req.files as Express.Multer.File[] | undefined;
   if (!files || files.length === 0) {
@@ -16,28 +18,72 @@ export async function submitTryOn(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const { userId, subscriptionLevel } = req.user;
-  const maxItems = CLOTHING_ITEM_LIMITS[subscriptionLevel];
-  if (files.length > maxItems) {
+  const { userId, isSubscribed, credits } = req.user;
+  
+  console.log(`[submitTryOn] userId=${userId}, isSubscribed=${isSubscribed}, credits=${credits}`);
+
+  // Check clothing item limit (same for all users)
+  if (files.length > MAX_CLOTHING_ITEMS) {
     res.status(400).json({
-      error: `Your ${subscriptionLevel} plan allows ${maxItems} clothing item(s) per try-on`,
+      error: `Maximum ${MAX_CLOTHING_ITEMS} clothing item(s) per try-on`,
     });
     return;
   }
 
-  // Check daily limit
+  // Check if user can generate (needs subscription or credits)
+  if (!isSubscribed && credits <= 0) {
+    console.log('[submitTryOn] SUBSCRIPTION_REQUIRED - isSubscribed:', isSubscribed, 'credits:', credits);
+    res.status(403).json({
+      error: 'SUBSCRIPTION_REQUIRED',
+      message: 'Please subscribe or purchase credits to use try-on.',
+    });
+    return;
+  }
+
+  // Check daily limit for subscribers
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const todayCount = await prisma.tryOnJob.count({
     where: { userId, createdAt: { gte: todayStart }, status: { not: 'FAILED' } },
   });
 
-  const dailyLimit = DAILY_TRYON_LIMITS[subscriptionLevel];
-  if (todayCount >= dailyLimit) {
-    res.status(429).json({
-      error: `Daily try-on limit reached (${dailyLimit} for ${subscriptionLevel} plan)`,
-    });
-    return;
+  // Subscribers get daily limit, non-subscribers must use credits
+  let useCredit = false;
+  if (isSubscribed) {
+    if (todayCount >= DAILY_TRYON_LIMIT) {
+      // Subscriber exceeded daily limit - check if they have credits
+      if (credits <= 0) {
+        res.status(429).json({
+          error: 'DAILY_LIMIT_REACHED',
+          message: `Daily limit of ${DAILY_TRYON_LIMIT} reached. Purchase credits for more try-ons.`,
+          dailyUsed: todayCount,
+          dailyLimit: DAILY_TRYON_LIMIT,
+        });
+        return;
+      }
+      useCredit = true;
+    }
+  } else {
+    // Non-subscriber must use credits
+    useCredit = true;
+  }
+
+  // Deduct credit if needed
+  if (useCredit) {
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: userId },
+        data: { credits: { decrement: 1 } },
+      }),
+      prisma.creditTransaction.create({
+        data: {
+          userId,
+          type: 'USAGE',
+          amount: -1,
+          description: 'Try-on generation',
+        },
+      }),
+    ]);
   }
 
   // Determine which body photos are available (full body takes priority, never avatar/close-up)

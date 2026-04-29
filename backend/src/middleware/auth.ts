@@ -1,12 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import { env } from '../config/env';
-import { SubscriptionLevel } from '@prisma/client';
 
 interface AccessTokenPayload {
   userId: string;
   email: string;
-  subscriptionLevel: SubscriptionLevel;
+  isSubscribed: boolean;
+  credits: number;
 }
 
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
@@ -35,13 +35,11 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
 }
 
 export function signAccessToken(payload: AccessTokenPayload): string {
-  return jwt.sign(payload, env.jwtSecret, { expiresIn: env.jwtExpiresIn });
+  return jwt.sign(payload, env.jwtSecret, { expiresIn: env.jwtExpiresIn } as SignOptions);
 }
 
 export function signRefreshToken(userId: string): string {
-  return jwt.sign({ userId }, env.jwtRefreshSecret, {
-    expiresIn: env.jwtRefreshExpiresIn,
-  });
+  return jwt.sign({ userId }, env.jwtRefreshSecret, { expiresIn: env.jwtRefreshExpiresIn } as SignOptions);
 }
 
 export function verifyRefreshToken(token: string): { userId: string } {

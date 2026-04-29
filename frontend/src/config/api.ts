@@ -25,6 +25,8 @@ function onTokenRefreshed(token: string) {
 api.interceptors.request.use(async (config) => {
   const token = await storage.getAccessToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  // Skip ngrok browser warning for API calls
+  config.headers['ngrok-skip-browser-warning'] = 'true';
   return config;
 });
 

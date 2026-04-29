@@ -14,6 +14,7 @@ import api from '../config/api';
 import { TryOnJob } from '../types';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
 import FullScreenImageModal from '../components/FullScreenImageModal';
+import CreditDisplay from '../components/CreditDisplay';
 
 interface FeedJob extends TryOnJob {
   user: { username: string; avatarUrl?: string };
@@ -26,7 +27,8 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-  const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
+  const [fullScreenImages, setFullScreenImages] = useState<string[]>([]);
+  const [fullScreenInitialIndex, setFullScreenInitialIndex] = useState(0);
 
   async function fetchFeed(p = 1, refresh = false) {
     try {
@@ -63,12 +65,26 @@ export default function HomeScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <Text style={styles.header}>TryOn</Text>
+      <View style={styles.headerRow}>
+        <CreditDisplay />
+        <Text style={styles.header}>TryOn</Text>
+        <View style={{ width: 50 }} />
+      </View>
       <FlatList
         data={jobs}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <FeedCard job={item} onImagePress={(url) => setFullScreenImage(url)} />
+          <FeedCard
+            job={item}
+            onResultPress={(urls, index) => {
+              setFullScreenImages(urls);
+              setFullScreenInitialIndex(index);
+            }}
+            onClothingPress={(url) => {
+              setFullScreenImages([url]);
+              setFullScreenInitialIndex(0);
+            }}
+          />
         )}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         onEndReached={loadMore}
@@ -86,16 +102,30 @@ export default function HomeScreen() {
         contentContainerStyle={jobs.length === 0 ? styles.emptyContainer : undefined}
       />
       <FullScreenImageModal
-        visible={!!fullScreenImage}
-        imageUrl={fullScreenImage}
-        onClose={() => setFullScreenImage(null)}
+        visible={fullScreenImages.length > 0}
+        imageUrls={fullScreenImages}
+        initialIndex={fullScreenInitialIndex}
+        onClose={() => setFullScreenImages([])}
       />
     </View>
   );
 }
 
-function FeedCard({ job, onImagePress }: { job: FeedJob; onImagePress: (url: string) => void }) {
-  const displayUrl = job.resultFullBodyUrl ?? job.resultMediumUrl;
+function FeedCard({
+  job,
+  onResultPress,
+  onClothingPress,
+}: {
+  job: FeedJob;
+  onResultPress: (urls: string[], index: number) => void;
+  onClothingPress: (url: string) => void;
+}) {
+  // Collect all available result images
+  const resultImages: string[] = [];
+  if (job.resultFullBodyUrl) resultImages.push(job.resultFullBodyUrl);
+  if (job.resultMediumUrl) resultImages.push(job.resultMediumUrl);
+  
+  const displayUrl = resultImages[0];
 
   return (
     <View style={styles.card}>
@@ -116,10 +146,15 @@ function FeedCard({ job, onImagePress }: { job: FeedJob; onImagePress: (url: str
         {displayUrl ? (
           <TouchableOpacity
             style={styles.resultImageContainer}
-            onPress={() => onImagePress(displayUrl)}
+            onPress={() => onResultPress(resultImages, 0)}
             activeOpacity={0.9}
           >
             <Image source={{ uri: displayUrl }} style={styles.resultImage} resizeMode="cover" />
+            {resultImages.length > 1 && (
+              <View style={styles.multiImageBadge}>
+                <Text style={styles.multiImageText}>1/{resultImages.length}</Text>
+              </View>
+            )}
           </TouchableOpacity>
         ) : (
           <View style={[styles.resultImage, styles.resultPlaceholder]}>
@@ -127,7 +162,7 @@ function FeedCard({ job, onImagePress }: { job: FeedJob; onImagePress: (url: str
           </View>
         )}
         <TouchableOpacity
-          onPress={() => onImagePress(job.clothingPhoto1Url)}
+          onPress={() => onClothingPress(job.clothingPhoto1Url)}
           activeOpacity={0.9}
         >
           <Image
@@ -144,12 +179,17 @@ function FeedCard({ job, onImagePress }: { job: FeedJob; onImagePress: (url: str
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.white },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
   header: {
     fontSize: Typography.fontSizeXXL,
     fontWeight: Typography.fontWeightBold,
     color: Colors.black,
-    padding: Spacing.md,
-    paddingBottom: Spacing.sm,
   },
   card: {
     marginHorizontal: Spacing.md,
@@ -185,6 +225,7 @@ const styles = StyleSheet.create({
   resultsRow: { flexDirection: 'row', gap: Spacing.sm, padding: Spacing.md, paddingTop: 0 },
   resultImageContainer: {
     flex: 1,
+    position: 'relative',
   },
   resultImage: {
     flex: 1,
@@ -193,6 +234,20 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.gray100,
   },
   resultPlaceholder: { alignItems: 'center', justifyContent: 'center' },
+  multiImageBadge: {
+    position: 'absolute',
+    top: Spacing.sm,
+    right: Spacing.sm,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: Radius.sm,
+  },
+  multiImageText: {
+    color: Colors.white,
+    fontSize: Typography.fontSizeXS,
+    fontWeight: Typography.fontWeightSemiBold,
+  },
   clothingThumb: {
     width: 90,
     aspectRatio: 3 / 4,

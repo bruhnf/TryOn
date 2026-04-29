@@ -110,9 +110,9 @@ export default function LoginScreen({ navigation }: Props) {
                   { text: 'Cancel', style: 'cancel' },
                   {
                     text: 'Send',
-                    onPress: async (e) => {
-                      if (e) {
-                        await api.post('/auth/forgot-password', { email: e });
+                    onPress: async (email?: string) => {
+                      if (email) {
+                        await api.post('/auth/forgot-password', { email });
                         Alert.alert('Sent', 'Check your email for a reset link.');
                       }
                     },

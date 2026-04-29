@@ -101,7 +101,8 @@ export default function SettingsScreen() {
       <SectionHeader label="Account" />
       <SettingRow label="Email" value={user?.email} />
       <SettingRow label="Username" value={`@${user?.username}`} />
-      <SettingRow label="Subscription" value={user?.subscriptionLevel} />
+      <SettingRow label="Subscription" value={user?.isSubscribed ? 'Active' : 'Free'} />
+      <SettingRow label="Credits" value={String(user?.credits ?? 0)} />
 
       <SectionHeader label="Privacy & Data" />
       <SettingButton label="Delete All Body Photos" onPress={handleDeletePhotos} />

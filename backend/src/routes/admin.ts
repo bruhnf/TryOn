@@ -13,7 +13,8 @@ router.get('/users', async (_req: Request, res: Response) => {
       username: true,
       email: true,
       verified: true,
-      subscriptionLevel: true,
+      isSubscribed: true,
+      credits: true,
       createdAt: true,
     },
     orderBy: { createdAt: 'desc' },
@@ -51,26 +52,60 @@ router.patch('/user/:userId/verify', async (req: Request, res: Response) => {
 });
 
 router.patch('/user/:userId/subscription', async (req: Request, res: Response) => {
-  const { subscriptionLevel } = req.body as { subscriptionLevel?: string };
-  if (!subscriptionLevel || !['BASIC', 'PRO', 'PREMIUM'].includes(subscriptionLevel)) {
-    res.status(400).json({ error: 'subscriptionLevel must be BASIC, PRO, or PREMIUM' });
+  const { isSubscribed } = req.body as { isSubscribed?: boolean };
+  if (typeof isSubscribed !== 'boolean') {
+    res.status(400).json({ error: 'isSubscribed must be a boolean' });
     return;
   }
   const user = await prisma.user.update({
     where: { id: req.params.userId },
-    data: { subscriptionLevel: subscriptionLevel as 'BASIC' | 'PRO' | 'PREMIUM' },
-    select: { id: true, username: true, email: true, subscriptionLevel: true },
+    data: { isSubscribed },
+    select: { id: true, username: true, email: true, isSubscribed: true, credits: true },
   });
   res.json(user);
 });
 
+router.patch('/user/:userId/credits', async (req: Request, res: Response) => {
+  const { amount, reason } = req.body as { amount?: number; reason?: string };
+  if (typeof amount !== 'number' || amount === 0) {
+    res.status(400).json({ error: 'amount must be a non-zero number' });
+    return;
+  }
+  
+  const [user] = await prisma.$transaction([
+    prisma.user.update({
+      where: { id: req.params.userId },
+      data: { credits: { increment: amount } },
+      select: { id: true, username: true, email: true, credits: true },
+    }),
+    prisma.creditTransaction.create({
+      data: {
+        userId: req.params.userId,
+        type: amount > 0 ? 'GRANT' : 'USAGE',
+        amount,
+        description: reason || (amount > 0 ? 'Admin credit grant' : 'Admin credit deduction'),
+      },
+    }),
+  ]);
+  
+  res.json(user);
+});
+
 router.get('/stats', async (_req: Request, res: Response) => {
-  const [userCount, jobCount, completedJobs] = await Promise.all([
+  const [userCount, jobCount, completedJobs, subscriberCount, totalCredits] = await Promise.all([
     prisma.user.count(),
     prisma.tryOnJob.count(),
     prisma.tryOnJob.count({ where: { status: 'COMPLETE' } }),
+    prisma.user.count({ where: { isSubscribed: true } }),
+    prisma.user.aggregate({ _sum: { credits: true } }),
   ]);
-  res.json({ userCount, jobCount, completedJobs });
+  res.json({ 
+    userCount, 
+    jobCount, 
+    completedJobs, 
+    subscriberCount,
+    totalCreditsOutstanding: totalCredits._sum.credits || 0,
+  });
 });
 
 export default router;

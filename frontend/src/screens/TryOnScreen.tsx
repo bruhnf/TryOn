@@ -16,6 +16,7 @@ import { useUserStore } from '../store/useUserStore';
 import { TryOnJob } from '../types';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
 import FullScreenImageModal from '../components/FullScreenImageModal';
+import CreditDisplay from '../components/CreditDisplay';
 
 const POLL_INTERVAL_MS = 5000; // 5 seconds between polls
 const MAX_POLL_ERRORS = 3; // Stop polling after this many consecutive errors
@@ -33,7 +34,7 @@ export default function TryOnScreen() {
   const pollErrorsRef = useRef(0);
   const isMountedRef = useRef(true);
 
-  const maxItems = user?.subscriptionLevel === 'BASIC' ? 1 : 2;
+  const maxItems = 1; // One clothing item per try-on
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -52,10 +53,7 @@ export default function TryOnScreen() {
 
   async function pickClothingPhoto() {
     if (clothingPhotos.length >= maxItems) {
-      Alert.alert(
-        'Limit Reached',
-        `Your ${user?.subscriptionLevel} plan supports up to ${maxItems} clothing item(s). Upgrade to add more.`,
-      );
+      Alert.alert('Limit Reached', 'You can only add 1 photo per try-on.');
       return;
     }
 
@@ -207,7 +205,11 @@ export default function TryOnScreen() {
       style={styles.container}
       contentContainerStyle={[styles.inner, { paddingTop: insets.top + Spacing.md }]}
     >
-      <Text style={styles.title}>Try On Clothes</Text>
+      <View style={styles.headerRow}>
+        <CreditDisplay />
+        <Text style={styles.title}>Try On</Text>
+        <View style={{ width: 50 }} />
+      </View>
       <Text style={styles.subtitle}>
         Photograph an outfit or clothing item and see how it looks on you.
       </Text>
@@ -222,12 +224,7 @@ export default function TryOnScreen() {
 
       {!activeJob && (
         <>
-          <Text style={styles.sectionLabel}>
-            Clothing Photos{' '}
-            <Text style={styles.planBadge}>
-              ({maxItems} max on {user?.subscriptionLevel ?? 'BASIC'})
-            </Text>
-          </Text>
+          <Text style={styles.sectionLabel}>Clothing Photo</Text>
 
           <View style={styles.photoRow}>
             {clothingPhotos.map((uri, i) => (
@@ -236,7 +233,6 @@ export default function TryOnScreen() {
                 <TouchableOpacity style={styles.removeBtn} onPress={() => removePhoto(i)}>
                   <Text style={styles.removeBtnText}>✕</Text>
                 </TouchableOpacity>
-                <Text style={styles.photoLabel}>Outfit {i + 1}</Text>
               </View>
             ))}
 
@@ -244,8 +240,7 @@ export default function TryOnScreen() {
               <TouchableOpacity style={styles.photoSlot} onPress={pickClothingPhoto}>
                 <View style={styles.addPlaceholder}>
                   <Text style={styles.addPlus}>+</Text>
-                  <Text style={styles.addLabel}>Add</Text>
-                  <Text style={styles.addSublabel}>Photo {clothingPhotos.length + 1}</Text>
+                  <Text style={styles.addLabel}>Add Photo</Text>
                 </View>
               </TouchableOpacity>
             )}
@@ -300,7 +295,8 @@ function StatusPill({ label, active, primary }: { label: string; active: boolean
 }
 
 function ResultView({ job, onReset }: { job: TryOnJob; onReset: () => void }) {
-  const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
+  const [fullScreenImages, setFullScreenImages] = useState<string[]>([]);
+  const [fullScreenIndex, setFullScreenIndex] = useState(0);
   const isPending = job.status === 'PENDING' || job.status === 'PROCESSING';
   const isFailed = job.status === 'FAILED';
 
@@ -333,14 +329,19 @@ function ResultView({ job, onReset }: { job: TryOnJob; onReset: () => void }) {
     job.resultMediumUrl && { label: 'Waist Up', url: job.resultMediumUrl },
   ].filter(Boolean) as Array<{ label: string; url: string }>;
 
+  const allUrls = images.map((img) => img.url);
+
   return (
     <View style={styles.resultContainer}>
       <Text style={styles.resultTitle}>Your Try-On Results</Text>
-      {images.map((img) => (
+      {images.map((img, index) => (
         <TouchableOpacity
           key={img.url}
           style={styles.resultImageWrap}
-          onPress={() => setFullScreenImage(img.url)}
+          onPress={() => {
+            setFullScreenImages(allUrls);
+            setFullScreenIndex(index);
+          }}
           activeOpacity={0.9}
         >
           <Image source={{ uri: img.url }} style={styles.resultImage} resizeMode="contain" />
@@ -351,9 +352,10 @@ function ResultView({ job, onReset }: { job: TryOnJob; onReset: () => void }) {
         <Text style={styles.resetBtnText}>Try Another Outfit</Text>
       </TouchableOpacity>
       <FullScreenImageModal
-        visible={!!fullScreenImage}
-        imageUrl={fullScreenImage}
-        onClose={() => setFullScreenImage(null)}
+        visible={fullScreenImages.length > 0}
+        imageUrls={fullScreenImages}
+        initialIndex={fullScreenIndex}
+        onClose={() => setFullScreenImages([])}
       />
     </View>
   );
@@ -362,11 +364,16 @@ function ResultView({ job, onReset }: { job: TryOnJob; onReset: () => void }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.white },
   inner: { padding: Spacing.xl },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.xs,
+  },
   title: {
     fontSize: Typography.fontSizeXXL,
     fontWeight: Typography.fontWeightBold,
     color: Colors.black,
-    marginBottom: Spacing.xs,
   },
   subtitle: {
     fontSize: Typography.fontSizeMD,

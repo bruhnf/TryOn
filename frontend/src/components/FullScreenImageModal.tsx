@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Modal,
   View,
@@ -8,13 +8,17 @@ import {
   StatusBar,
   Dimensions,
   Text,
+  ScrollView,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/theme';
 
 interface FullScreenImageModalProps {
   visible: boolean;
-  imageUrl: string | null;
+  imageUrls: string[];
+  initialIndex?: number;
   onClose: () => void;
 }
 
@@ -22,12 +26,25 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function FullScreenImageModal({
   visible,
-  imageUrl,
+  imageUrls,
+  initialIndex = 0,
   onClose,
 }: FullScreenImageModalProps) {
   const insets = useSafeAreaInsets();
+  const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const scrollRef = useRef<ScrollView>(null);
 
-  if (!imageUrl) return null;
+  if (imageUrls.length === 0) return null;
+
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const offsetX = event.nativeEvent.contentOffset.x;
+    const index = Math.round(offsetX / SCREEN_WIDTH);
+    if (index !== currentIndex && index >= 0 && index < imageUrls.length) {
+      setCurrentIndex(index);
+    }
+  };
+
+  const labels = ['Full Body', 'Medium'];
 
   return (
     <Modal
@@ -47,11 +64,44 @@ export default function FullScreenImageModal({
           <Text style={styles.closeText}>✕</Text>
         </TouchableOpacity>
 
-        <Image
-          source={{ uri: imageUrl }}
-          style={styles.image}
-          resizeMode="contain"
-        />
+        <ScrollView
+          ref={scrollRef}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          contentOffset={{ x: initialIndex * SCREEN_WIDTH, y: 0 }}
+        >
+          {imageUrls.map((url, index) => (
+            <View key={index} style={styles.imageContainer}>
+              <Image
+                source={{ uri: url }}
+                style={styles.image}
+                resizeMode="contain"
+              />
+            </View>
+          ))}
+        </ScrollView>
+
+        {imageUrls.length > 1 && (
+          <View style={[styles.pagination, { bottom: insets.bottom + 40 }]}>
+            <Text style={styles.paginationLabel}>
+              {labels[currentIndex] || `${currentIndex + 1} of ${imageUrls.length}`}
+            </Text>
+            <View style={styles.dots}>
+              {imageUrls.map((_, index) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.dot,
+                    index === currentIndex && styles.dotActive,
+                  ]}
+                />
+              ))}
+            </View>
+          </View>
+        )}
 
         <TouchableOpacity
           style={styles.tapArea}
@@ -86,6 +136,12 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontWeight: '300',
   },
+  imageContainer: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   image: {
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT * 0.8,
@@ -97,5 +153,29 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: -1,
+  },
+  pagination: {
+    position: 'absolute',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  paginationLabel: {
+    color: Colors.white,
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  dots: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+  },
+  dotActive: {
+    backgroundColor: Colors.white,
   },
 });

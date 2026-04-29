@@ -12,13 +12,30 @@ import profileRoutes from './routes/profile';
 import friendsRoutes from './routes/friends';
 import feedRoutes from './routes/feed';
 import adminRoutes from './routes/admin';
+import creditsRoutes from './routes/credits';
 
 import './queue/tryonWorker';
 
 const app = express();
 
-app.use(helmet());
-app.use(cors({ origin: env.allowedOrigins, credentials: true }));
+// Trust first proxy (needed for rate limiting behind reverse proxy / Expo)
+app.set('trust proxy', 1);
+
+// Debug logging for all requests
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} - Origin: ${req.headers.origin}`);
+  next();
+});
+
+app.use(helmet({
+  crossOriginResourcePolicy: env.isDev ? false : { policy: 'same-origin' },
+}));
+app.use(cors({ 
+  origin: env.isDev ? true : env.allowedOrigins, 
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'ngrok-skip-browser-warning'],
+}));
 app.use(express.json({ limit: '10mb' }));
 
 app.use(
@@ -43,6 +60,7 @@ app.use('/api/profile', profileRoutes);
 app.use('/api/friends', friendsRoutes);
 app.use('/api/feed', feedRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/credits', creditsRoutes);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 

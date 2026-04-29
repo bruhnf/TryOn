@@ -108,7 +108,8 @@ export async function login(req: Request, res: Response): Promise<void> {
   const accessToken = signAccessToken({
     userId: user.id,
     email: user.email,
-    subscriptionLevel: user.subscriptionLevel,
+    isSubscribed: user.isSubscribed,
+    credits: user.credits,
   });
   const rawRefresh = signRefreshToken(user.id);
   const refreshExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
@@ -127,7 +128,8 @@ export async function login(req: Request, res: Response): Promise<void> {
       id: user.id,
       username: user.username,
       email: user.email,
-      subscriptionLevel: user.subscriptionLevel,
+      isSubscribed: user.isSubscribed,
+      credits: user.credits,
       verified: user.verified,
       bio: user.bio,
       avatarUrl: user.avatarUrl,
@@ -164,7 +166,8 @@ export async function refreshToken(req: Request, res: Response): Promise<void> {
     const accessToken = signAccessToken({
       userId: user.id,
       email: user.email,
-      subscriptionLevel: user.subscriptionLevel,
+      isSubscribed: user.isSubscribed,
+      credits: user.credits,
     });
 
     res.json({ accessToken });

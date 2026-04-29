@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Development Environment Notice
+
+**This is a test and development environment.** There is no need to preserve existing users, tokens, or data when making schema changes or migrations. Feel free to drop and recreate the database as needed.
+
 ## Project Overview
 
 TryOn is an AI-powered virtual clothing try-on mobile app. The "Try-On" mobile app is part of Evo Face Flow and uses evofaceflow.com for it's domain name. It is a monorepo with two main packages: 
@@ -58,10 +62,10 @@ Express app with JWT authentication and BullMQ job queue for async AI image gene
 - **Prisma**: `prisma/schema.prisma` — database schema; migrations in `prisma/migrations/`
 
 **Try-on flow:**
-1. Client uploads 1–2 clothing photos → S3 via multer-s3
+1. Client uploads 1 item of clothing or outfit photo → S3 via multer-s3
 2. Backend determines which user body photos exist (full body, medium — never close-up/profile)
 3. If neither full body nor medium exists → return 422 with `NO_BODY_PHOTOS` error code; frontend shows the upload prompt dialog
-4. Job queued in Redis (BullMQ) with S3 URLs for clothing photos + available user body photo URLs
+4. Job queued in Redis (BullMQ) with S3 URLs for clothing photo + available user body photo URLs
 5. Worker calls Grok Imagine API once per available body photo perspective
 6. Result images stored in S3; job result written back to DB
 7. Client polls or receives push notification on completion
@@ -109,7 +113,8 @@ email         String   @unique
 passwordHash  String
 verified      Boolean  @default(false)
 verifyToken   String?
-subscriptionLevel  SubscriptionLevel @default(BASIC)   // BASIC | PRO | PREMIUM
+isSubscribed  Boolean  @default(false)   // true = active subscriber
+credits       Int      @default(0)        // bonus credits for extra try-ons
 bio           String?
 avatarUrl     String?   // close-up / profile photo (used as profile avatar only)
 fullBodyUrl   String?   // full-body front view (used for try-on)
@@ -172,6 +177,16 @@ value     String
 updatedAt DateTime @updatedAt
 ```
 
+### CreditTransaction
+```
+id          String   @id @default(uuid())
+userId      String
+type        CreditTransactionType  // PURCHASE | GRANT | USAGE | REFUND
+amount      Int                    // positive for grants/purchases, negative for usage
+description String?
+createdAt   DateTime @default(now())
+```
+
 ---
 
 ## Key Business Rules
@@ -193,10 +208,15 @@ updatedAt DateTime @updatedAt
   Users may delete their photos and all AI-processed derivatives at any time from Settings.
 - Body photo upload is also accessible at any time from Profile > Manage Body Photos.
 
-### Subscription Levels
-- **BASIC**: 1 clothing item per try-on; 5 try-ons/day
-- **PRO**: 2 clothing items per try-on; 25 try-ons/day; save results to device
-- **PREMIUM**: 2 clothing items per try-on; unlimited try-ons; save results; history browsing
+### Subscription & Credits
+- **Flat subscription model**: Users are either subscribed (`isSubscribed: true`) or free users.
+- **Subscribers** get 15 try-ons per day included with their subscription.
+- **Free users** must have credits to use the try-on feature.
+- **Credits** can be purchased or granted by the app (promotional).
+- When a subscriber exceeds their daily limit, credits are used automatically.
+- All users upload 1 clothing item per try-on.
+- Credit balance is displayed in the top-left corner of the app.
+- Credit transactions are tracked in the `CreditTransaction` model (PURCHASE, GRANT, USAGE, REFUND).
 
 ### Geo / Location Tracking
 - Location is recorded on every login and token refresh.
