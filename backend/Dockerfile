@@ -38,18 +38,21 @@ RUN npx prisma generate
 RUN npm run build
 
 # ============================================
-# Production stage
+# Production stage (Debian-based for Prisma compatibility)
 # ============================================
-FROM node:20-alpine AS prod
+FROM node:20-slim AS prod
 
 WORKDIR /app
 
-# Install OpenSSL 1.1 compatibility (required by Prisma)
-RUN apk add --no-cache openssl1.1-compat
+# Install OpenSSL (required by Prisma) and wget for healthcheck
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssl \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
 
 # Security: Run as non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+RUN groupadd -g 1001 nodejs && \
+    useradd -u 1001 -g nodejs nodejs
 
 # Install only production dependencies
 COPY package*.json ./
