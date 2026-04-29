@@ -12,8 +12,10 @@ banaction = iptables-multiport
 # sendername = Fail2Ban
 # action = %(action_mwl)s
 
+# Note: sshd jail disabled - SSH logs not available in container
+# Enable on host if running fail2ban directly on the server
 [sshd]
-enabled = true
+enabled = false
 port = ssh
 filter = sshd
 logpath = /var/log/auth.log
