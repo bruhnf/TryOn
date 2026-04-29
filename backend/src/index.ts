@@ -18,34 +18,77 @@ import './queue/tryonWorker';
 
 const app = express();
 
-// Trust first proxy (needed for rate limiting behind reverse proxy / Expo)
+// Trust first proxy (needed for rate limiting behind reverse proxy)
 app.set('trust proxy', 1);
 
-// Debug logging for all requests
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} - Origin: ${req.headers.origin}`);
-  next();
-});
+// Request logging (development only)
+if (env.isDev) {
+  app.use((req, _res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+    next();
+  });
+}
 
+// Security headers
 app.use(helmet({
   crossOriginResourcePolicy: env.isDev ? false : { policy: 'same-origin' },
+  contentSecurityPolicy: env.isDev ? false : undefined,
 }));
+
+// CORS configuration
 app.use(cors({ 
   origin: env.isDev ? true : env.allowedOrigins, 
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'ngrok-skip-browser-warning'],
 }));
-app.use(express.json({ limit: '10mb' }));
 
-app.use(
-  '/api/auth',
-  rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true }),
-);
+// Body parsing with size limits
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-// Rate limit only applies to POST (job submissions), not GET (status polling)
+// Global rate limiter (fallback, less aggressive)
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 1000, // 1000 requests per 15 minutes
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+  skip: (req) => req.path === '/health',
+});
+app.use(globalLimiter);
+
+// Auth rate limiter (strict - prevent brute force)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // 20 attempts per 15 minutes
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many authentication attempts, please try again later.' },
+});
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/signup', authLimiter);
+app.use('/api/auth/forgot-password', authLimiter);
+
+// Upload rate limiter
+const uploadLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // 10 uploads per minute
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Upload limit reached, please wait.' },
+});
+app.use('/api/upload', uploadLimiter);
+
+// Try-on rate limiter (POST only - job submissions)
 import { Request, Response, NextFunction } from 'express';
-const tryonPostLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, standardHeaders: true });
+const tryonPostLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 5, // 5 try-on submissions per minute
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Try-on limit reached, please wait.' },
+});
 app.use('/api/tryon', (req: Request, res: Response, next: NextFunction) => {
   if (req.method === 'POST') {
     return tryonPostLimiter(req, res, next);
@@ -53,6 +96,7 @@ app.use('/api/tryon', (req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/tryon', tryonRoutes);
@@ -62,8 +106,15 @@ app.use('/api/feed', feedRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/credits', creditsRoutes);
 
-app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+// Health check (no auth required)
+app.get('/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
+// 404 handler
+app.use((_req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
+
+// Global error handler
 app.use(
   (
     err: Error,
@@ -71,8 +122,14 @@ app.use(
     res: express.Response,
     _next: express.NextFunction,
   ) => {
-    console.error(err);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('[Error]', err.message);
+    
+    // Don't leak error details in production
+    if (env.isDev) {
+      res.status(500).json({ error: err.message, stack: err.stack });
+    } else {
+      res.status(500).json({ error: 'Internal server error' });
+    }
   },
 );
 

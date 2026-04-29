@@ -29,10 +29,11 @@ npm run seed     # Seed development data
 ### Frontend
 ```bash
 cd frontend
-npm start        # Expo dev server
-npm run android  # Android preview build
-npm run ios      # iOS preview build
-npm run web      # Web preview
+npx expo start -c          # Dev server with cache clear
+npx expo start --tunnel    # Dev server with ngrok (for Expo Go on physical device)
+npm run android            # Android preview build
+npm run ios                # iOS preview build
+npm run web                # Web preview
 ```
 
 ### Docker (full stack locally)

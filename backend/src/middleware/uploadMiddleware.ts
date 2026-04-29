@@ -24,11 +24,12 @@ export const uploadSingle = multer({
   limits: { fileSize: MAX_SIZE_BYTES },
 }).single('photo');
 
+// For try-on: only 1 photo allowed
 export const uploadMultiple = multer({
   storage,
   fileFilter,
-  limits: { fileSize: MAX_SIZE_BYTES, files: 2 },
-}).array('photos', 2);
+  limits: { fileSize: MAX_SIZE_BYTES, files: 1 },
+}).array('photos', 1);
 
 export function safeFilename(originalName: string): string {
   const ext = path.extname(originalName).toLowerCase() || '.jpg';

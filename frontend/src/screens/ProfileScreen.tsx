@@ -309,11 +309,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.gray200,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
     marginBottom: Spacing.md,
     position: 'relative',
   },
-  avatarImage: { width: '100%', height: '100%' },
+  avatarImage: { width: '100%', height: '100%', borderRadius: 45 },
   avatarPlaceholder: {
     fontSize: 36,
     fontWeight: Typography.fontWeightBold,
@@ -321,8 +320,8 @@ const styles = StyleSheet.create({
   },
   avatarEditBadge: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
+    bottom: -2,
+    right: -2,
     width: 28,
     height: 28,
     borderRadius: 14,
