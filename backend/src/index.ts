@@ -3,6 +3,7 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
+import path from 'path';
 import { env } from './config/env';
 
 import authRoutes from './routes/auth';
@@ -28,6 +29,12 @@ if (env.isDev) {
     next();
   });
 }
+
+// Serve admin dashboard BEFORE helmet (needs inline scripts)
+app.get('/admin', (_req, res) => {
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self'");
+  res.sendFile(path.join(__dirname, '../public/admin.html'));
+});
 
 // Security headers
 app.use(helmet({

@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TryOn Admin</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #eee;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container { max-width: 1400px; margin: 0 auto; }
+    h1 { color: #fff; margin-bottom: 20px; }
+    h2 { color: #888; margin: 20px 0 10px; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.5px; }
+    
+    .auth-form {
+      background: #1a1a1a;
+      padding: 30px;
+      border-radius: 12px;
+      max-width: 400px;
+      margin: 100px auto;
+      border: 1px solid #333;
+    }
+    .auth-form input {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 15px;
+      border: 1px solid #333;
+      border-radius: 8px;
+      background: #0a0a0a;
+      color: #fff;
+    }
+    .auth-form button {
+      width: 100%;
+      padding: 12px;
+      background: #fff;
+      border: none;
+      border-radius: 8px;
+      color: #000;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .auth-form button:hover { background: #e0e0e0; }
+    
+    .dashboard { display: none; }
+    .dashboard.active { display: block; }
+    
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 15px;
+      margin-bottom: 30px;
+    }
+    .stat-card {
+      background: #1a1a1a;
+      padding: 20px;
+      border-radius: 12px;
+      text-align: center;
+      border: 1px solid #333;
+    }
+    .stat-card .value {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #fff;
+    }
+    .stat-card .label {
+      color: #666;
+      font-size: 0.85rem;
+      margin-top: 5px;
+    }
+    
+    .section {
+      background: #1a1a1a;
+      padding: 20px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      border: 1px solid #333;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #333;
+    }
+    th { color: #888; font-weight: 500; font-size: 0.85rem; text-transform: uppercase; }
+    
+    .btn {
+      padding: 6px 14px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      margin-right: 5px;
+      font-weight: 500;
+    }
+    .btn-primary { background: #fff; color: #000; }
+    .btn-danger { background: #ff4757; color: #fff; }
+    .btn-success { background: #2ed573; color: #000; }
+    .btn-secondary { background: #333; color: #fff; }
+    .btn:hover { opacity: 0.85; }
+    
+    .form-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .form-group input, .form-group select {
+      padding: 10px;
+      border: 1px solid #333;
+      border-radius: 6px;
+      background: #0a0a0a;
+      color: #fff;
+    }
+    .form-group input { flex: 1; min-width: 150px; }
+    
+    .error { color: #ff4757; margin-top: 10px; }
+    .success { color: #2ed573; margin-top: 10px; }
+    
+    .nav {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .nav button {
+      padding: 10px 20px;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      color: #888;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .nav button.active {
+      border-color: #fff;
+      color: #fff;
+      background: #333;
+    }
+    
+    .logout-btn {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      padding: 8px 16px;
+      background: transparent;
+      border: 1px solid #ff4757;
+      color: #ff4757;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    
+    /* Modal styles */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-overlay.active {
+      display: flex;
+    }
+    .modal {
+      background: #1a1a1a;
+      border-radius: 12px;
+      padding: 25px;
+      max-width: 700px;
+      width: 90%;
+      max-height: 85vh;
+      overflow-y: auto;
+      position: relative;
+      border: 1px solid #333;
+    }
+    .modal h2 {
+      margin-top: 0;
+      margin-bottom: 20px;
+      color: #fff;
+      border-bottom: 1px solid #333;
+      padding-bottom: 10px;
+    }
+    .modal-close {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      background: none;
+      border: none;
+      color: #888;
+      font-size: 1.5rem;
+      cursor: pointer;
+    }
+    .modal-close:hover { color: #fff; }
+    
+    .user-field {
+      display: flex;
+      padding: 10px 0;
+      border-bottom: 1px solid #333;
+    }
+    .user-field:last-child { border-bottom: none; }
+    .field-label {
+      color: #666;
+      width: 140px;
+      flex-shrink: 0;
+    }
+    .field-value {
+      color: #fff;
+      word-break: break-all;
+    }
+    .user-avatar {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      object-fit: cover;
+      margin-bottom: 15px;
+    }
+    .modal-footer {
+      margin-top: 20px;
+      text-align: center;
+    }
+    .username-link {
+      color: #fff;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    .username-link:hover { color: #ccc; }
+    
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .badge-success { background: #2ed573; color: #000; }
+    .badge-warning { background: #ffa502; color: #000; }
+    .badge-danger { background: #ff4757; color: #fff; }
+    .badge-info { background: #3742fa; color: #fff; }
+    .badge-muted { background: #333; color: #888; }
+    
+    .credits-input {
+      width: 80px !important;
+      min-width: 80px !important;
+      flex: none !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Login Form -->
+    <div class="auth-form" id="authForm">
+      <h1 style="text-align: center; margin-bottom: 20px;">👗 TryOn Admin</h1>
+      <input type="password" id="apiKey" placeholder="Admin API Key">
+      <button onclick="login()">Login</button>
+      <div class="error" id="authError"></div>
+    </div>
+
+    <!-- Dashboard -->
+    <div class="dashboard" id="dashboard">
+      <button class="logout-btn" onclick="logout()">Logout</button>
+      <h1>👗 TryOn Admin Dashboard</h1>
+      
+      <div class="nav">
+        <button class="active" onclick="showTab('stats')">Dashboard</button>
+        <button onclick="showTab('users')">Users</button>
+        <button onclick="showTab('jobs')">Try-On Jobs</button>
+        <button onclick="showTab('security')">Security</button>
+      </div>
+
+      <!-- Stats Tab -->
+      <div id="stats-tab">
+        <div class="stats-grid" id="statsGrid">
+          <div class="stat-card">
+            <div class="value" id="totalUsers">-</div>
+            <div class="label">Total Users</div>
+          </div>
+          <div class="stat-card">
+            <div class="value" id="totalJobs">-</div>
+            <div class="label">Total Try-Ons</div>
+          </div>
+          <div class="stat-card">
+            <div class="value" id="completedJobs">-</div>
+            <div class="label">Completed</div>
+          </div>
+          <div class="stat-card">
+            <div class="value" id="subscriberCount">-</div>
+            <div class="label">Subscribers</div>
+          </div>
+          <div class="stat-card">
+            <div class="value" id="totalCredits">-</div>
+            <div class="label">Credits Outstanding</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Users Tab -->
+      <div id="users-tab" style="display: none;">
+        <div class="section">
+          <h2>Create Test User</h2>
+          <div class="form-group">
+            <input type="text" id="newUsername" placeholder="Username">
+            <input type="email" id="newEmail" placeholder="Email">
+            <input type="password" id="newPassword" placeholder="Password">
+            <button class="btn btn-success" onclick="createUser()">Create User</button>
+          </div>
+          <div id="createUserMsg"></div>
+        </div>
+
+        <div class="section">
+          <h2>Users</h2>
+          <table id="usersTable">
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Email</th>
+                <th>Verified</th>
+                <th>Subscription</th>
+                <th>Credits</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="usersBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Jobs Tab -->
+      <div id="jobs-tab" style="display: none;">
+        <div class="section">
+          <h2>Recent Try-On Jobs</h2>
+          <table id="jobsTable">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>User</th>
+                <th>Status</th>
+                <th>Perspectives</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="jobsBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Security Tab -->
+      <div id="security-tab" style="display: none;">
+        <div class="stats-grid">
+          <div class="stat-card" style="border-left: 3px solid #ff4757;">
+            <div class="value" id="suspicious24h" style="color: #ff4757;">-</div>
+            <div class="label">Suspicious (24h)</div>
+          </div>
+          <div class="stat-card" style="border-left: 3px solid #ffa502;">
+            <div class="value" id="suspicious7d" style="color: #ffa502;">-</div>
+            <div class="label">Suspicious (7d)</div>
+          </div>
+          <div class="stat-card">
+            <div class="value" id="suspiciousTotal">-</div>
+            <div class="label">Total Flagged</div>
+          </div>
+          <div class="stat-card">
+            <div class="value" id="suspiciousUsers">-</div>
+            <div class="label">Unique Users</div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>🚨 Suspicious Login Attempts</h2>
+          <p style="color: #666; margin-bottom: 15px; font-size: 0.9rem;">
+            Logins flagged when user appears to travel &gt;500 km in under 2 hours
+          </p>
+          <table id="suspiciousTable">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Username</th>
+                <th>Email</th>
+                <th>Location</th>
+                <th>Distance</th>
+                <th>IP</th>
+              </tr>
+            </thead>
+            <tbody id="suspiciousBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- User Details Modal -->
+      <div class="modal-overlay" id="userModal">
+        <div class="modal">
+          <button class="modal-close" onclick="closeUserModal()">&times;</button>
+          <h2>User Details</h2>
+          <div id="userModalContent"></div>
+          <div class="modal-footer">
+            <button class="btn btn-primary" onclick="closeUserModal()">Close</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Credits Modal -->
+      <div class="modal-overlay" id="creditsModal">
+        <div class="modal" style="max-width: 400px;">
+          <button class="modal-close" onclick="closeCreditsModal()">&times;</button>
+          <h2>Adjust Credits</h2>
+          <div id="creditsModalContent">
+            <p style="color: #888; margin-bottom: 15px;">User: <span id="creditsUsername"></span></p>
+            <p style="color: #888; margin-bottom: 15px;">Current balance: <strong id="currentCredits"></strong></p>
+            <div class="form-group" style="flex-direction: column;">
+              <input type="number" id="creditsAmount" placeholder="Amount (positive to add, negative to deduct)">
+              <input type="text" id="creditsReason" placeholder="Reason (optional)">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeCreditsModal()">Cancel</button>
+            <button class="btn btn-success" onclick="submitCredits()">Apply</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let apiKey = localStorage.getItem('adminApiKey') || '';
+    let pendingCreditsUserId = null;
+    const API_BASE = window.location.origin + '/api/admin';
+
+    // Check if already logged in
+    if (apiKey) {
+      checkAuth();
+    }
+
+    async function checkAuth() {
+      try {
+        const res = await fetch(`${API_BASE}/stats`, {
+          headers: { 'X-Admin-Key': apiKey }
+        });
+        if (res.ok) {
+          showDashboard();
+          loadStats();
+        } else {
+          logout();
+        }
+      } catch (e) {
+        logout();
+      }
+    }
+
+    async function login() {
+      apiKey = document.getElementById('apiKey').value;
+      const errEl = document.getElementById('authError');
+      errEl.textContent = 'Logging in...';
+      
+      if (!apiKey) {
+        errEl.textContent = 'Please enter an API key';
+        return;
+      }
+      
+      try {
+        const res = await fetch(`${API_BASE}/stats`, {
+          headers: { 'X-Admin-Key': apiKey }
+        });
+        
+        if (res.ok) {
+          localStorage.setItem('adminApiKey', apiKey);
+          showDashboard();
+          loadStats();
+        } else {
+          errEl.textContent = `Invalid API key (${res.status})`;
+        }
+      } catch (e) {
+        errEl.textContent = 'Connection error: ' + e.message;
+      }
+    }
+
+    function logout() {
+      apiKey = '';
+      localStorage.removeItem('adminApiKey');
+      document.getElementById('authForm').style.display = 'block';
+      document.getElementById('dashboard').classList.remove('active');
+    }
+
+    function showDashboard() {
+      document.getElementById('authForm').style.display = 'none';
+      document.getElementById('dashboard').classList.add('active');
+    }
+
+    function showTab(tab) {
+      ['stats', 'users', 'jobs', 'security'].forEach(t => {
+        document.getElementById(t + '-tab').style.display = t === tab ? 'block' : 'none';
+      });
+      document.querySelectorAll('.nav button').forEach((btn, i) => {
+        btn.classList.toggle('active', ['stats', 'users', 'jobs', 'security'][i] === tab);
+      });
+      
+      if (tab === 'users') loadUsers();
+      if (tab === 'jobs') loadJobs();
+      if (tab === 'security') loadSecurity();
+    }
+
+    async function loadStats() {
+      try {
+        const res = await fetch(`${API_BASE}/stats`, {
+          headers: { 'X-Admin-Key': apiKey }
+        });
+        const data = await res.json();
+        
+        document.getElementById('totalUsers').textContent = data.userCount;
+        document.getElementById('totalJobs').textContent = data.jobCount;
+        document.getElementById('completedJobs').textContent = data.completedJobs;
+        document.getElementById('subscriberCount').textContent = data.subscriberCount;
+        document.getElementById('totalCredits').textContent = data.totalCreditsOutstanding;
+      } catch (e) {
+        console.error('Failed to load stats', e);
+      }
+    }
+
+    async function loadUsers() {
+      try {
+        const res = await fetch(`${API_BASE}/users`, {
+          headers: { 'X-Admin-Key': apiKey }
+        });
+        const users = await res.json();
+        
+        const tbody = document.getElementById('usersBody');
+        tbody.innerHTML = users.map(u => `
+          <tr>
+            <td><span class="username-link" onclick="showUserDetails('${u.id}')">${u.username}</span></td>
+            <td>${u.email}</td>
+            <td>
+              <span class="badge ${u.verified ? 'badge-success' : 'badge-muted'}">${u.verified ? 'Yes' : 'No'}</span>
+              ${!u.verified ? `<button class="btn btn-secondary" style="margin-left: 5px; padding: 2px 8px;" onclick="verifyUser('${u.id}', true)">Verify</button>` : ''}
+            </td>
+            <td>
+              <span class="badge ${u.isSubscribed ? 'badge-info' : 'badge-muted'}">${u.isSubscribed ? 'Active' : 'Free'}</span>
+              <button class="btn btn-secondary" style="margin-left: 5px; padding: 2px 8px;" onclick="toggleSubscription('${u.id}', ${!u.isSubscribed})">${u.isSubscribed ? 'Remove' : 'Add'}</button>
+            </td>
+            <td>
+              ${u.credits}
+              <button class="btn btn-secondary" style="margin-left: 5px; padding: 2px 8px;" onclick="openCreditsModal('${u.id}', '${u.username}', ${u.credits})">±</button>
+            </td>
+            <td>${new Date(u.createdAt).toLocaleDateString()}</td>
+            <td>
+              <button class="btn btn-danger" onclick="deleteUser('${u.id}')">Delete</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        console.error('Failed to load users', e);
+      }
+    }
+
+    async function loadJobs() {
+      try {
+        const res = await fetch(`${API_BASE}/jobs`, {
+          headers: { 'X-Admin-Key': apiKey }
+        });
+        const jobs = await res.json();
+        
+        const tbody = document.getElementById('jobsBody');
+        tbody.innerHTML = jobs.map(j => {
+          const statusClass = {
+            'COMPLETE': 'badge-success',
+            'PROCESSING': 'badge-info',
+            'PENDING': 'badge-warning',
+            'FAILED': 'badge-danger'
+          }[j.status] || 'badge-muted';
+          
+          return `
+            <tr>
+              <td style="font-family: monospace; font-size: 0.8rem;">${j.id.slice(0, 8)}...</td>
+              <td><span class="username-link" onclick="showUserDetails('${j.userId}')">${j.user?.username || j.userId.slice(0, 8)}</span></td>
+              <td><span class="badge ${statusClass}">${j.status}</span></td>
+              <td>${(j.perspectivesUsed || []).join(', ') || '-'}</td>
+              <td>${new Date(j.createdAt).toLocaleString()}</td>
+              <td>
+                ${j.resultFullBodyUrl ? `<a href="${j.resultFullBodyUrl}" target="_blank" class="btn btn-secondary" style="padding: 2px 8px;">Full</a>` : ''}
+                ${j.resultMediumUrl ? `<a href="${j.resultMediumUrl}" target="_blank" class="btn btn-secondary" style="padding: 2px 8px;">Medium</a>` : ''}
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } catch (e) {
+        console.error('Failed to load jobs', e);
+      }
+    }
+
+    async function loadSecurity() {
+      try {
+        const res = await fetch(`${API_BASE}/security/stats`, {
+          headers: { 'X-Admin-Key': apiKey }
+        });
+        const stats = await res.json();
+        
+        document.getElementById('suspicious24h').textContent = stats.last24Hours || 0;
+        document.getElementById('suspicious7d').textContent = stats.last7Days || 0;
+        document.getElementById('suspiciousTotal').textContent = stats.total || 0;
+        document.getElementById('suspiciousUsers').textContent = stats.uniqueUsers || 0;
+
+        const logsRes = await fetch(`${API_BASE}/security/suspicious?limit=50`, {
+          headers: { 'X-Admin-Key': apiKey }
+        });
+        const logs = await logsRes.json();
+        
+        const tbody = document.getElementById('suspiciousBody');
+        if (!logs.length) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #666;">No suspicious logins detected ✓</td></tr>';
+          return;
+        }
+        
+        tbody.innerHTML = logs.map(loc => `
+          <tr style="background: rgba(255, 71, 87, 0.1);">
+            <td>${new Date(loc.timestamp).toLocaleString()}</td>
+            <td><span class="username-link" onclick="showUserDetails('${loc.userId}')">${loc.user?.username || 'Unknown'}</span></td>
+            <td>${loc.user?.email || '-'}</td>
+            <td>${[loc.city, loc.region, loc.country].filter(Boolean).join(', ') || 'Unknown'}</td>
+            <td style="color: #ff4757; font-weight: bold;">${loc.distanceFromLast ? Math.round(loc.distanceFromLast) + ' km' : '-'}</td>
+            <td style="font-family: monospace; font-size: 0.85rem;">${loc.ip}</td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        console.error('Failed to load security data', e);
+      }
+    }
+
+    async function createUser() {
+      const username = document.getElementById('newUsername').value;
+      const email = document.getElementById('newEmail').value;
+      const password = document.getElementById('newPassword').value;
+      
+      if (!username || !email || !password) {
+        document.getElementById('createUserMsg').className = 'error';
+        document.getElementById('createUserMsg').textContent = 'All fields are required';
+        return;
+      }
+      
+      try {
+        const res = await fetch(`${API_BASE}/users`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Key': apiKey
+          },
+          body: JSON.stringify({ username, email, password })
+        });
+        const data = await res.json();
+        
+        const msgEl = document.getElementById('createUserMsg');
+        if (res.ok) {
+          msgEl.className = 'success';
+          msgEl.textContent = `Created user: ${data.username}`;
+          document.getElementById('newUsername').value = '';
+          document.getElementById('newEmail').value = '';
+          document.getElementById('newPassword').value = '';
+          loadUsers();
+          loadStats();
+        } else {
+          msgEl.className = 'error';
+          msgEl.textContent = data.error || 'Failed to create user';
+        }
+      } catch (e) {
+        document.getElementById('createUserMsg').className = 'error';
+        document.getElementById('createUserMsg').textContent = 'Failed to create user';
+      }
+    }
+
+    async function deleteUser(userId) {
+      if (!confirm('Delete this user and all their data?')) return;
+      
+      try {
+        await fetch(`${API_BASE}/user/${userId}`, {
+          method: 'DELETE',
+          headers: { 'X-Admin-Key': apiKey }
+        });
+        loadUsers();
+        loadStats();
+      } catch (e) {
+        alert('Failed to delete user');
+      }
+    }
+
+    async function verifyUser(userId, verified) {
+      try {
+        await fetch(`${API_BASE}/user/${userId}/verify`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Key': apiKey
+          },
+          body: JSON.stringify({ verified })
+        });
+        loadUsers();
+      } catch (e) {
+        alert('Failed to update verification status');
+      }
+    }
+
+    async function toggleSubscription(userId, isSubscribed) {
+      try {
+        await fetch(`${API_BASE}/user/${userId}/subscription`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Key': apiKey
+          },
+          body: JSON.stringify({ isSubscribed })
+        });
+        loadUsers();
+        loadStats();
+      } catch (e) {
+        alert('Failed to update subscription');
+      }
+    }
+
+    function openCreditsModal(userId, username, currentCredits) {
+      pendingCreditsUserId = userId;
+      document.getElementById('creditsUsername').textContent = username;
+      document.getElementById('currentCredits').textContent = currentCredits;
+      document.getElementById('creditsAmount').value = '';
+      document.getElementById('creditsReason').value = '';
+      document.getElementById('creditsModal').classList.add('active');
+    }
+
+    function closeCreditsModal() {
+      pendingCreditsUserId = null;
+      document.getElementById('creditsModal').classList.remove('active');
+    }
+
+    async function submitCredits() {
+      const amount = parseInt(document.getElementById('creditsAmount').value);
+      const reason = document.getElementById('creditsReason').value;
+      
+      if (!amount || isNaN(amount)) {
+        alert('Please enter a valid amount');
+        return;
+      }
+      
+      try {
+        await fetch(`${API_BASE}/user/${pendingCreditsUserId}/credits`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Key': apiKey
+          },
+          body: JSON.stringify({ amount, reason })
+        });
+        closeCreditsModal();
+        loadUsers();
+        loadStats();
+      } catch (e) {
+        alert('Failed to update credits');
+      }
+    }
+
+    async function showUserDetails(userId) {
+      try {
+        const res = await fetch(`${API_BASE}/user/${userId}`, {
+          headers: { 'X-Admin-Key': apiKey }
+        });
+        
+        if (!res.ok) {
+          alert('Failed to load user details');
+          return;
+        }
+        
+        const user = await res.json();
+        
+        const avatarHtml = user.avatarUrl 
+          ? `<img src="${user.avatarUrl}" class="user-avatar" crossorigin="anonymous" alt="Avatar" onerror="this.style.display='none'">`
+          : '';
+        
+        let locationsHtml = '';
+        if (user.locations && user.locations.length > 0) {
+          const hasSuspicious = user.locations.some(loc => loc.suspiciousLocation);
+          locationsHtml = `
+            <h3 style="color: #888; margin-top: 20px; margin-bottom: 10px; font-size: 0.9rem; text-transform: uppercase;">
+              Login Locations (last ${user.locations.length})
+              ${hasSuspicious ? '<span style="color: #ff4757; margin-left: 10px;">⚠️ Suspicious</span>' : ''}
+            </h3>
+            <table style="width: 100%; font-size: 0.8rem;">
+              <tr style="color: #666;">
+                <th style="padding: 5px;">Date</th>
+                <th style="padding: 5px;">Location</th>
+                <th style="padding: 5px;">Distance</th>
+                <th style="padding: 5px;">IP</th>
+              </tr>
+              ${user.locations.map(loc => `
+                <tr style="border-bottom: 1px solid #333; ${loc.suspiciousLocation ? 'background: rgba(255, 71, 87, 0.15);' : ''}">
+                  <td style="padding: 5px;">${loc.suspiciousLocation ? '🚨 ' : ''}${new Date(loc.timestamp).toLocaleString()}</td>
+                  <td style="padding: 5px;">${[loc.city, loc.region, loc.country].filter(Boolean).join(', ') || 'Unknown'}</td>
+                  <td style="padding: 5px; ${loc.suspiciousLocation ? 'color: #ff4757; font-weight: bold;' : ''}">${loc.distanceFromLast ? Math.round(loc.distanceFromLast) + ' km' : '-'}</td>
+                  <td style="padding: 5px;">${loc.ip}</td>
+                </tr>
+              `).join('')}
+            </table>
+          `;
+        }
+        
+        const content = `
+          <div style="text-align: center;">${avatarHtml}</div>
+          <div class="user-field"><span class="field-label">ID:</span><span class="field-value" style="font-family: monospace; font-size: 0.85rem;">${user.id}</span></div>
+          <div class="user-field"><span class="field-label">Username:</span><span class="field-value">${user.username}</span></div>
+          <div class="user-field"><span class="field-label">Email:</span><span class="field-value">${user.email}</span></div>
+          <div class="user-field"><span class="field-label">Verified:</span><span class="field-value">${user.verified ? '✓ Yes' : '✗ No'}</span></div>
+          <div class="user-field"><span class="field-label">Subscription:</span><span class="field-value">${user.isSubscribed ? 'Active' : 'Free'}</span></div>
+          <div class="user-field"><span class="field-label">Credits:</span><span class="field-value">${user.credits}</span></div>
+          <div class="user-field"><span class="field-label">Bio:</span><span class="field-value">${user.bio || '(none)'}</span></div>
+          <div class="user-field"><span class="field-label">Followers:</span><span class="field-value">${user.followersCount}</span></div>
+          <div class="user-field"><span class="field-label">Following:</span><span class="field-value">${user.followingCount}</span></div>
+          <div class="user-field"><span class="field-label">Likes:</span><span class="field-value">${user.likesCount}</span></div>
+          <div class="user-field"><span class="field-label">Created:</span><span class="field-value">${new Date(user.createdAt).toLocaleString()}</span></div>
+          ${locationsHtml}
+        `;
+        
+        document.getElementById('userModalContent').innerHTML = content;
+        document.getElementById('userModal').classList.add('active');
+      } catch (e) {
+        console.error('Failed to load user details', e);
+        alert('Failed to load user details');
+      }
+    }
+
+    function closeUserModal() {
+      document.getElementById('userModal').classList.remove('active');
+    }
+
+    // Close modals when clicking outside
+    document.getElementById('userModal').addEventListener('click', function(e) {
+      if (e.target === this) closeUserModal();
+    });
+    document.getElementById('creditsModal').addEventListener('click', function(e) {
+      if (e.target === this) closeCreditsModal();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+[DEFAULT]
+# Ban duration: 1 hour
+bantime = 3600
+# Time window for counting failures
+findtime = 600
+# Max retries before ban
+maxretry = 5
+# Use iptables action for banning
+banaction = iptables-multiport
+# Email notifications (optional - requires mailutils)
+# destemail = admin@evofaceflow.com
+# sendername = Fail2Ban
+# action = %(action_mwl)s
+
+[sshd]
+enabled = true
+port = ssh
+filter = sshd
+logpath = /var/log/auth.log
+maxretry = 3
+
+# Block IPs that hit too many 404s (vulnerability scanners)
+[nginx-404]
+enabled = true
+port = http,https
+filter = nginx-404
+logpath = /var/log/nginx/access.log
+# Ban after 10 404s in 60 seconds
+maxretry = 10
+findtime = 60
+# Ban for 1 hour
+bantime = 3600
+
+# Block bad bots and script kiddies
+[nginx-badbots]
+enabled = true
+port = http,https
+filter = nginx-badbots
+logpath = /var/log/nginx/access.log
+maxretry = 1
+bantime = 86400
+
+# Block brute force attempts on auth endpoints
+[nginx-auth]
+enabled = true
+port = http,https
+filter = nginx-auth
+logpath = /var/log/nginx/access.log
+maxretry = 10
+findtime = 300
+bantime = 7200
+
+# Block requests for PHP files (we don't serve PHP)
+[nginx-nophp]
+enabled = true
+port = http,https
+filter = nginx-nophp
+logpath = /var/log/nginx/access.log
+maxretry = 2
+findtime = 60
+bantime = 86400
+
+# Block requests for common WordPress paths
+[nginx-wordpress]
+enabled = true
+port = http,https
+filter = nginx-wordpress
+logpath = /var/log/nginx/access.log
+maxretry = 2
+findtime = 60
+bantime = 86400

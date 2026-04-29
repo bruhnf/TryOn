@@ -39,13 +39,13 @@ export default function LoginScreen({ navigation }: Props) {
       );
       await setUser(data.user, data.accessToken, data.refreshToken);
     } catch (err: unknown) {
+      const errorCode = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
       const msg =
-        (err as { response?: { data?: { error?: string; message?: string } } })?.response?.data
-          ?.message ??
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        errorCode ??
         'Login failed. Please try again.';
 
-      if (msg === 'EMAIL_NOT_VERIFIED') {
+      if (errorCode === 'EMAIL_NOT_VERIFIED') {
         Alert.alert(
           'Email Not Verified',
           'Please verify your email before logging in. Check your inbox.',

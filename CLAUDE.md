@@ -238,6 +238,32 @@ createdAt   DateTime @default(now())
 - **Hosting**: AWS Lightsail Ubuntu 22.04
 - **Email**: AWS SES (transactional) — verification emails, suspicious login alerts
 - **Geo-IP**: ip-api.com or MaxMind GeoLite2 (server-side, never exposed to client)
+- **Intrusion Prevention**: Fail2ban for automated IP banning
+
+---
+
+## Admin Dashboard
+
+Access at `https://api.evofaceflow.com/admin` (requires `ADMIN_API_KEY`).
+
+Features:
+- **Dashboard**: User count, try-on jobs, subscribers, credits outstanding
+- **Users**: List all users, create test users, verify accounts, toggle subscriptions, adjust credits
+- **Try-On Jobs**: View recent jobs with status, perspectives used, result links
+- **Security**: Suspicious login stats, flagged locations, user location history
+
+Admin API endpoints (all require `X-Admin-Key` header):
+- `GET /api/admin/stats` — dashboard statistics
+- `GET /api/admin/users` — list users
+- `POST /api/admin/users` — create test user
+- `GET /api/admin/user/:id` — user details with location history
+- `DELETE /api/admin/user/:id` — delete user
+- `PATCH /api/admin/user/:id/verify` — toggle verification
+- `PATCH /api/admin/user/:id/subscription` — toggle subscription
+- `PATCH /api/admin/user/:id/credits` — adjust credits
+- `GET /api/admin/jobs` — list try-on jobs
+- `GET /api/admin/security/stats` — suspicious login statistics
+- `GET /api/admin/security/suspicious` — list suspicious logins
 
 ---
 
@@ -272,3 +298,22 @@ GEOIP_API_KEY         # if using a paid geo-IP provider
 - Rate limiting applied to `/api/auth` and `/api/tryon` endpoints.
 - GDPR/CCPA: users can export and delete all personal data including body photos and AI results.
 - The close-up photo path (`avatarUrl`) is validated server-side and excluded from all Grok API calls.
+
+### Fail2ban & Rate Limiting
+
+Production deployment includes fail2ban for automated IP banning:
+- **nginx-404**: Bans IPs after 10+ 404 errors in 60 seconds (1 hour ban)
+- **nginx-nophp**: Bans IPs requesting `.php` files (24 hour ban) — we don't serve PHP
+- **nginx-wordpress**: Bans IPs requesting `wp-*` paths (24 hour ban) — we don't run WordPress
+- **nginx-badbots**: Bans IPs sending malicious requests (SQL injection, XSS attempts)
+- **nginx-auth**: Bans IPs with excessive failed auth attempts
+
+Nginx also blocks common vulnerability scan targets at the edge (returns 444 / connection dropped):
+- All `.php`, `.asp`, `.aspx`, `.jsp`, `.cgi` requests
+- WordPress paths (`wp-admin`, `wp-content`, `wp-includes`, `xmlrpc.php`)
+- Sensitive files (`.env`, `.git`, `.htaccess`)
+
+Configuration files:
+- `fail2ban/jail.local` — jail definitions
+- `fail2ban/filter.d/*.conf` — filter regex patterns
+- `nginx/nginx.conf` — rate limit zones and blocking rules

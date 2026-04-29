@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { requireAdmin } from '../middleware/auth';
 import prisma from '../lib/prisma';
+import { hashPassword } from '../utils/password';
 
 const router = Router();
 
@@ -21,6 +22,66 @@ router.get('/users', async (_req: Request, res: Response) => {
     take: 100,
   });
   res.json(users);
+});
+
+// Create test user
+router.post('/users', async (req: Request, res: Response) => {
+  const { username, email, password } = req.body as { username?: string; email?: string; password?: string };
+  
+  if (!username || !email || !password) {
+    res.status(400).json({ error: 'username, email, and password are required' });
+    return;
+  }
+  
+  const existing = await prisma.user.findFirst({
+    where: { OR: [{ email }, { username }] },
+  });
+  if (existing) {
+    res.status(409).json({ error: existing.email === email ? 'Email already in use' : 'Username taken' });
+    return;
+  }
+  
+  const passwordHash = await hashPassword(password);
+  const user = await prisma.user.create({
+    data: { username, email, passwordHash, verified: true },
+    select: { id: true, username: true, email: true, verified: true, credits: true },
+  });
+  
+  res.status(201).json(user);
+});
+
+// Get single user with locations
+router.get('/user/:userId', async (req: Request, res: Response) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.params.userId },
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      verified: true,
+      isSubscribed: true,
+      credits: true,
+      bio: true,
+      avatarUrl: true,
+      fullBodyUrl: true,
+      mediumBodyUrl: true,
+      followingCount: true,
+      followersCount: true,
+      likesCount: true,
+      createdAt: true,
+      locations: {
+        orderBy: { timestamp: 'desc' },
+        take: 10,
+      },
+    },
+  });
+  
+  if (!user) {
+    res.status(404).json({ error: 'User not found' });
+    return;
+  }
+  
+  res.json(user);
 });
 
 router.get('/jobs', async (_req: Request, res: Response) => {
@@ -106,6 +167,49 @@ router.get('/stats', async (_req: Request, res: Response) => {
     subscriberCount,
     totalCreditsOutstanding: totalCredits._sum.credits || 0,
   });
+});
+
+// Security stats
+router.get('/security/stats', async (_req: Request, res: Response) => {
+  const now = new Date();
+  const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  
+  const [last24Hours, last7Days, total, uniqueUsers] = await Promise.all([
+    prisma.userLocation.count({
+      where: { suspiciousLocation: true, timestamp: { gte: oneDayAgo } },
+    }),
+    prisma.userLocation.count({
+      where: { suspiciousLocation: true, timestamp: { gte: sevenDaysAgo } },
+    }),
+    prisma.userLocation.count({
+      where: { suspiciousLocation: true },
+    }),
+    prisma.userLocation.groupBy({
+      by: ['userId'],
+      where: { suspiciousLocation: true },
+    }).then(groups => groups.length),
+  ]);
+  
+  res.json({ last24Hours, last7Days, total, uniqueUsers });
+});
+
+// Suspicious logins list
+router.get('/security/suspicious', async (req: Request, res: Response) => {
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+  
+  const locations = await prisma.userLocation.findMany({
+    where: { suspiciousLocation: true },
+    orderBy: { timestamp: 'desc' },
+    take: limit,
+    include: {
+      user: {
+        select: { username: true, email: true },
+      },
+    },
+  });
+  
+  res.json(locations);
 });
 
 export default router;

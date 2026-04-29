@@ -151,7 +151,54 @@ In the AWS Lightsail console, go to your instance > Networking > Firewall:
 - Allow TCP 22 (SSH)
 - Block all other ports
 
-## 7. Monitoring & Logs
+## 7. Fail2ban Setup
+
+Fail2ban is included in the Docker Compose configuration and will automatically ban IPs that:
+- Generate too many 404 errors (vulnerability scanners)
+- Request PHP files (we don't serve PHP)
+- Request WordPress paths (we don't run WordPress)
+- Send malicious requests (SQL injection, XSS attempts)
+- Have excessive failed auth attempts
+
+### Verify fail2ban is running
+
+```bash
+docker compose -f docker-compose.prod.yml logs fail2ban
+```
+
+### Check banned IPs
+
+```bash
+docker compose -f docker-compose.prod.yml exec fail2ban fail2ban-client status
+docker compose -f docker-compose.prod.yml exec fail2ban fail2ban-client status nginx-404
+```
+
+### Unban an IP
+
+```bash
+docker compose -f docker-compose.prod.yml exec fail2ban fail2ban-client set nginx-404 unbanip 1.2.3.4
+```
+
+### Configuration files
+
+- `fail2ban/jail.local` — jail definitions (ban times, retry limits)
+- `fail2ban/filter.d/*.conf` — regex patterns for each jail
+
+## 8. Admin Dashboard
+
+Access the admin dashboard at `https://api.evofaceflow.com/admin`
+
+Login with the `ADMIN_API_KEY` from your backend `.env` file.
+
+Features:
+- View user statistics, try-on jobs, and credits
+- Create test users
+- Verify/unverify user accounts
+- Toggle subscriptions
+- Adjust user credits
+- View suspicious login attempts and security stats
+
+## 9. Monitoring & Logs
 
 ### View logs
 
@@ -163,6 +210,7 @@ docker compose -f docker-compose.prod.yml logs -f
 docker compose -f docker-compose.prod.yml logs -f backend
 docker compose -f docker-compose.prod.yml logs -f nginx
 docker compose -f docker-compose.prod.yml logs -f postgres
+docker compose -f docker-compose.prod.yml logs -f fail2ban
 ```
 
 ### Resource monitoring
@@ -171,7 +219,7 @@ docker compose -f docker-compose.prod.yml logs -f postgres
 docker stats
 ```
 
-## 8. Database Backup
+## 10. Database Backup
 
 ### Manual backup
 
@@ -195,7 +243,7 @@ Create backup directory:
 mkdir -p /opt/evofaceflow/backups
 ```
 
-## 9. Updating the Application
+## 11. Updating the Application
 
 ```bash
 cd /opt/evofaceflow/TryOn
@@ -204,7 +252,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 docker compose -f docker-compose.prod.yml exec backend npx prisma migrate deploy
 ```
 
-## 10. Rollback Procedure
+## 12. Rollback Procedure
 
 If deployment fails:
 

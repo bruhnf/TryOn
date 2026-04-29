@@ -71,6 +71,7 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - ./certbot/www:/var/www/certbot:ro
+      - nginx_logs:/var/log/nginx
     depends_on:
       backend:
         condition: service_healthy
@@ -82,9 +83,31 @@ services:
         limits:
           memory: 128M
 
+  fail2ban:
+    image: crazymax/fail2ban:latest
+    restart: always
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    volumes:
+      - ./fail2ban/jail.local:/etc/fail2ban/jail.local:ro
+      - ./fail2ban/filter.d:/etc/fail2ban/filter.d:ro
+      - nginx_logs:/var/log/nginx:ro
+      - fail2ban_data:/data
+    environment:
+      - TZ=UTC
+      - F2B_LOG_LEVEL=INFO
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
 volumes:
   postgres_data:
   redis_data:
+  nginx_logs:
+  fail2ban_data:
 
 networks:
   internal:

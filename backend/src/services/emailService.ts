@@ -2,9 +2,9 @@ import nodemailer from 'nodemailer';
 import { env } from '../config/env';
 
 function createTransport() {
-  // In development without SMTP config, create a mock transport
-  if (env.isDev && !env.email.smtpHost) {
-    console.log('[Email] No SMTP configured - emails will be logged to console');
+  // If SMTP not configured, skip email sending
+  if (!env.email.smtpHost || !env.email.smtpUser) {
+    console.warn('[Email] SMTP not configured - emails will be logged to console only');
     return null;
   }
   return nodemailer.createTransport({
@@ -19,8 +19,8 @@ const transport = createTransport();
 
 async function sendMail(options: { from: string; to: string; subject: string; html: string }) {
   if (!transport) {
-    // Log email to console in dev mode without SMTP
-    console.log('\n[Email - DEV MODE]');
+    // Log email to console when SMTP not configured
+    console.log('\n[Email - NO SMTP]');
     console.log(`To: ${options.to}`);
     console.log(`Subject: ${options.subject}`);
     console.log(`Content: ${options.html.replace(/<[^>]*>/g, '')}`);

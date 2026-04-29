@@ -2,7 +2,7 @@ import axios from 'axios';
 import { storage } from '../utils/storage';
 
 const STAGING_URL = 'http://localhost:3000/api';
-const DEV_URL = 'https://alden-unconcludable-camilo.ngrok-free.dev/api';
+const DEV_URL = 'https://api.evofaceflow.com/api';  // Using production API for testing
 const PROD_URL = 'https://api.evofaceflow.com/api';
 
 export const BASE_URL = __DEV__ ? DEV_URL : PROD_URL;
