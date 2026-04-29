@@ -44,6 +44,9 @@ FROM node:20-alpine AS prod
 
 WORKDIR /app
 
+# Install OpenSSL 1.1 compatibility (required by Prisma)
+RUN apk add --no-cache openssl1.1-compat
+
 # Security: Run as non-root user
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001

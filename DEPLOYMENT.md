@@ -47,9 +47,11 @@ sudo apt install certbot -y
 ## 2. Clone Repository
 
 ```bash
-cd ~
+sudo mkdir -p /opt/evofaceflow
+sudo chown ubuntu:ubuntu /opt/evofaceflow
+cd /opt/evofaceflow
 git clone https://github.com/YOUR_USERNAME/TryOn.git
-cd TryOn/www
+cd TryOn
 ```
 
 ## 3. Configure Environment Variables
@@ -85,6 +87,7 @@ openssl rand -hex 32  # For JWT_SECRET, JWT_REFRESH_SECRET, ADMIN_API_KEY
 ### Create certbot directory structure
 
 ```bash
+cd /opt/evofaceflow/TryOn
 mkdir -p certbot/www
 ```
 
@@ -108,7 +111,7 @@ sudo crontab -e
 
 Add:
 ```
-0 0 * * * certbot renew --quiet --post-hook "docker compose -f ~/TryOn/www/docker-compose.prod.yml restart nginx"
+0 0 * * * certbot renew --quiet --post-hook "docker compose -f /opt/evofaceflow/TryOn/docker-compose.prod.yml restart nginx"
 ```
 
 ## 5. Deploy Application
@@ -116,7 +119,7 @@ Add:
 ### Build and start all services
 
 ```bash
-cd ~/TryOn/www
+cd /opt/evofaceflow/TryOn
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
@@ -184,18 +187,18 @@ crontab -e
 
 Add:
 ```
-0 2 * * * cd ~/TryOn/www && docker compose -f docker-compose.prod.yml exec -T postgres pg_dump -U tryon_prod tryon_db | gzip > ~/backups/db_$(date +\%Y\%m\%d).sql.gz
+0 2 * * * cd /opt/evofaceflow/TryOn && docker compose -f docker-compose.prod.yml exec -T postgres pg_dump -U tryon_prod tryon_db | gzip > /opt/evofaceflow/backups/db_$(date +\%Y\%m\%d).sql.gz
 ```
 
 Create backup directory:
 ```bash
-mkdir -p ~/backups
+mkdir -p /opt/evofaceflow/backups
 ```
 
 ## 9. Updating the Application
 
 ```bash
-cd ~/TryOn/www
+cd /opt/evofaceflow/TryOn
 git pull origin main
 docker compose -f docker-compose.prod.yml up -d --build
 docker compose -f docker-compose.prod.yml exec backend npx prisma migrate deploy
