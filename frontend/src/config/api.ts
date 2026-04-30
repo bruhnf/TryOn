@@ -1,11 +1,19 @@
 import axios from 'axios';
 import { storage } from '../utils/storage';
 
-const STAGING_URL = 'http://localhost:3000/api';
-const DEV_URL = 'https://api.evofaceflow.com/api';  // Using production API for testing
-const PROD_URL = 'https://api.evofaceflow.com/api';
+// ============================================
+// API ENVIRONMENT CONFIGURATION
+// ============================================
+// To switch environments, change USE_LOCAL below:
+//   - true  = Local development (localhost:3000)
+//   - false = Live server (api.evofaceflow.com)
+// ============================================
+const USE_LOCAL = false;
 
-export const BASE_URL = __DEV__ ? DEV_URL : PROD_URL;
+const LOCAL_URL = 'http://localhost:3000/api';
+const LIVE_URL = 'https://api.evofaceflow.com/api';
+
+export const BASE_URL = USE_LOCAL ? LOCAL_URL : LIVE_URL;
 
 const api = axios.create({ baseURL: BASE_URL, timeout: 30000 });
 

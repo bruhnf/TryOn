@@ -267,6 +267,52 @@ git checkout <previous-commit-hash>
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
+## 13. Local vs Live Development
+
+The frontend can connect to either a local backend or the live Lightsail server.
+
+### Configuration
+
+Edit `frontend/src/config/api.ts`:
+
+```typescript
+// Change USE_LOCAL to switch environments:
+const USE_LOCAL = false;  // false = live server, true = local
+
+const LOCAL_URL = 'http://localhost:3000/api';
+const LIVE_URL = 'https://api.evofaceflow.com/api';
+```
+
+### Local Development
+
+1. Set `USE_LOCAL = true` in `frontend/src/config/api.ts`
+2. Start backend locally:
+   ```bash
+   cd backend
+   npm run dev
+   ```
+3. Start frontend:
+   ```bash
+   cd frontend
+   npx expo start
+   ```
+
+### Testing Against Live Server
+
+1. Set `USE_LOCAL = false` in `frontend/src/config/api.ts`
+2. Start frontend with tunnel (required for Expo Go on physical devices):
+   ```bash
+   cd frontend
+   npx expo start --tunnel
+   ```
+3. The backend is already running on Lightsail
+
+### Pre-Commit Checklist
+
+Before committing changes:
+- Ensure `USE_LOCAL = false` in `frontend/src/config/api.ts`
+- This ensures production builds always use the live server
+
 ## Troubleshooting
 
 ### Backend won't start

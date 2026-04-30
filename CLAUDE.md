@@ -36,6 +36,30 @@ npm run ios                # iOS preview build
 npm run web                # Web preview
 ```
 
+### Switching Between Local and Live Backend
+
+The frontend can connect to either a local backend or the live Lightsail server. Configure this in `frontend/src/config/api.ts`:
+
+```typescript
+// Change USE_LOCAL to switch environments:
+const USE_LOCAL = false;  // false = live server, true = local
+
+const LOCAL_URL = 'http://localhost:3000/api';
+const LIVE_URL = 'https://api.evofaceflow.com/api';
+```
+
+**Local Development Setup:**
+1. Set `USE_LOCAL = true` in `frontend/src/config/api.ts`
+2. Start backend: `cd backend && npm run dev`
+3. Start frontend: `cd frontend && npx expo start`
+
+**Live Server Testing:**
+1. Set `USE_LOCAL = false` in `frontend/src/config/api.ts`
+2. Start frontend: `cd frontend && npx expo start --tunnel`
+3. Backend is already running on Lightsail
+
+**Important:** Always set `USE_LOCAL = false` before committing to ensure production builds use the live server.
+
 ### Docker (full stack locally)
 ```bash
 docker-compose up --build                              # Dev environment (PostgreSQL + Redis + backend)
