@@ -14,6 +14,7 @@ import HomeScreen from '../screens/HomeScreen';
 import TryOnScreen from '../screens/TryOnScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import FriendsScreen from '../screens/FriendsScreen';
+import ShopScreen from '../screens/ShopScreen';
 import InboxScreen from '../screens/InboxScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
@@ -28,7 +29,7 @@ export type AuthStackParams = {
 
 export type MainTabParams = {
   Home: undefined;
-  Friends: undefined;
+  Shop: undefined;
   TryOn: undefined;
   Inbox: undefined;
   Profile: undefined;
@@ -41,6 +42,7 @@ export type RootStackParams = {
   EditProfile: undefined;
   AdminConsole: undefined;
   Purchase: undefined;
+  Friends: { initialTab?: 'following' | 'followers' };
 };
 
 const Stack = createNativeStackNavigator<RootStackParams>();
@@ -107,11 +109,11 @@ function MainTabs() {
         }}
       />
       <Tab.Screen
-        name="Friends"
-        component={FriendsScreen}
+        name="Shop"
+        component={ShopScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="people-outline" size={size} color={color} />
+            <Ionicons name="bag-outline" size={size} color={color} />
           ),
         }}
       />
@@ -185,6 +187,11 @@ export default function AppNavigator() {
               name="Purchase"
               component={PurchaseScreen}
               options={{ presentation: 'modal', headerShown: false }}
+            />
+            <Stack.Screen
+              name="Friends"
+              component={FriendsScreen}
+              options={{ presentation: 'modal', headerShown: true, title: 'Friends' }}
             />
           </>
         ) : (

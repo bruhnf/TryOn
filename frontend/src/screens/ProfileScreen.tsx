@@ -168,16 +168,24 @@ export default function ProfileScreen() {
 
         {/* Stats */}
         <View style={styles.statsRow}>
-          {[
-            { label: 'Following', value: user.followingCount },
-            { label: 'Followers', value: user.followersCount },
-            { label: 'Likes', value: user.likesCount },
-          ].map((s) => (
-            <View key={s.label} style={styles.stat}>
-              <Text style={styles.statValue}>{s.value}</Text>
-              <Text style={styles.statLabel}>{s.label}</Text>
-            </View>
-          ))}
+          <TouchableOpacity 
+            style={styles.stat} 
+            onPress={() => navigation.navigate('Friends', { initialTab: 'following' })}
+          >
+            <Text style={styles.statValue}>{user.followingCount}</Text>
+            <Text style={styles.statLabel}>Following</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.stat} 
+            onPress={() => navigation.navigate('Friends', { initialTab: 'followers' })}
+          >
+            <Text style={styles.statValue}>{user.followersCount}</Text>
+            <Text style={styles.statLabel}>Followers</Text>
+          </TouchableOpacity>
+          <View style={styles.stat}>
+            <Text style={styles.statValue}>{user.likesCount}</Text>
+            <Text style={styles.statLabel}>Likes</Text>
+          </View>
         </View>
 
         {user.bio ? <Text style={styles.bio}>{user.bio}</Text> : null}

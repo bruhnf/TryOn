@@ -11,16 +11,21 @@ import {
   Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../config/api';
 import { PublicUser } from '../types';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
+import { RootStackParams } from '../navigation';
 
 type Tab = 'following' | 'followers';
+type FriendsRouteProp = RouteProp<RootStackParams, 'Friends'>;
 
 export default function FriendsScreen() {
   const insets = useSafeAreaInsets();
-  const [tab, setTab] = useState<Tab>('following');
+  const route = useRoute<FriendsRouteProp>();
+  const initialTab = route.params?.initialTab ?? 'following';
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [searchMode, setSearchMode] = useState(false);
   const [query, setQuery] = useState('');
   const [following, setFollowing] = useState<PublicUser[]>([]);
