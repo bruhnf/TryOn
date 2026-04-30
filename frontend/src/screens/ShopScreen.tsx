@@ -3,15 +3,14 @@ import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
+import HeaderMenu from '../components/HeaderMenu';
 
 export default function ShopScreen() {
   const insets = useSafeAreaInsets();
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Shop</Text>
-      </View>
+      <HeaderMenu title="Shop" />
 
       <ScrollView 
         contentContainerStyle={styles.content}
@@ -89,18 +88,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.white,
-  },
-  header: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.gray200,
-  },
-  title: {
-    fontSize: Typography.fontSizeXXL,
-    fontWeight: Typography.fontWeightBold,
-    color: Colors.black,
-    textAlign: 'center',
   },
   content: {
     padding: Spacing.md,

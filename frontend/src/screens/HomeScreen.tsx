@@ -15,6 +15,7 @@ import { TryOnJob } from '../types';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
 import FullScreenImageModal from '../components/FullScreenImageModal';
 import CreditDisplay from '../components/CreditDisplay';
+import HeaderMenu from '../components/HeaderMenu';
 
 interface FeedJob extends TryOnJob {
   user: { username: string; firstName?: string; lastName?: string; avatarUrl?: string };
@@ -65,11 +66,10 @@ export default function HomeScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.headerRow}>
-        <CreditDisplay />
-        <Text style={styles.header}>TryOn</Text>
-        <View style={{ width: 50 }} />
-      </View>
+      <HeaderMenu 
+        title="TryOn" 
+        leftComponent={<CreditDisplay />}
+      />
       <FlatList
         data={jobs}
         keyExtractor={(item) => item.id}
@@ -189,18 +189,6 @@ function FeedCard({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.white },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-  },
-  header: {
-    fontSize: Typography.fontSizeXXL,
-    fontWeight: Typography.fontWeightBold,
-    color: Colors.black,
-  },
   card: {
     marginHorizontal: Spacing.md,
     marginBottom: Spacing.lg,

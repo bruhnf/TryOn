@@ -131,9 +131,12 @@ export default function ProfileScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View style={{ flex: 1 }} />
-        <TouchableOpacity onPress={() => setMenuVisible(true)} style={styles.menuButton}>
-          <Ionicons name="ellipsis-vertical" size={22} color={Colors.black} />
-        </TouchableOpacity>
+        <Text style={styles.headerTitle}>User Profile</Text>
+        <View style={styles.headerRight}>
+          <TouchableOpacity onPress={() => setMenuVisible(true)} style={styles.menuButton}>
+            <Ionicons name="ellipsis-vertical" size={22} color={Colors.black} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -336,7 +339,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.md,
-    paddingBottom: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.gray200,
+  },
+  headerTitle: {
+    fontSize: Typography.fontSizeXL,
+    fontWeight: Typography.fontWeightBold,
+    color: Colors.black,
+    textAlign: 'center',
+  },
+  headerRight: {
+    flex: 1,
+    alignItems: 'flex-end',
   },
   menuButton: { padding: Spacing.sm },
   avatarSection: { alignItems: 'center', paddingVertical: Spacing.lg },
