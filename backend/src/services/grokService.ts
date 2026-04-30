@@ -129,7 +129,7 @@ function buildPrompt(perspective: TryOnPerspective): string {
   // IMAGE_0 = body photo, IMAGE_1 = clothing item
   return (
     `Generate a photorealistic ${viewDesc} image of the person in <IMAGE_0> wearing the clothing from <IMAGE_1>. ` +
-    `Maintain the person's exact face, skin tone, hair, body shape, and pose. ` +
+    `Maintain the person's exact face from <IMAGE_0>, skin tone, hair, body shape, and pose. ` +
     `Make the clothing fit naturally and realistically with proper fabric drape, wrinkles, and texture. ` +
     `Keep the original lighting, background, and high detail. Photorealistic, natural shadows.`
   );
