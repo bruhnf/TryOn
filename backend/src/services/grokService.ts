@@ -123,17 +123,12 @@ async function fetchImageAsBase64(url: string, label: string): Promise<{ base64:
   return { base64, mimeType };
 }
 
-function buildPrompt(perspective: TryOnPerspective, clothingCount: number): string {
+function buildPrompt(perspective: TryOnPerspective): string {
   const viewDesc = perspective === 'full_body' ? 'full body, head to toe' : 'waist-up, medium shot';
-  
-  // Reference images using xAI's <IMAGE_N> syntax
-  // IMAGE_0 = body photo, IMAGE_1+ = clothing items
-  const clothingRefs = clothingCount === 1 
-    ? '<IMAGE_1>' 
-    : Array.from({ length: clothingCount }, (_, i) => `<IMAGE_${i + 1}>`).join(' and ');
 
+  // IMAGE_0 = body photo, IMAGE_1 = clothing item
   return (
-    `Generate a photorealistic ${viewDesc} image of the person in <IMAGE_0> wearing the clothing from ${clothingRefs}. ` +
+    `Generate a photorealistic ${viewDesc} image of the person in <IMAGE_0> wearing the clothing from <IMAGE_1>. ` +
     `Maintain the person's exact face, skin tone, hair, body shape, and pose. ` +
     `Make the clothing fit naturally and realistically with proper fabric drape, wrinkles, and texture. ` +
     `Keep the original lighting, background, and high detail. Photorealistic, natural shadows.`
@@ -165,7 +160,7 @@ export async function generateTryOnImage(input: TryOnInput): Promise<string> {
     ...clothingImages.map(img => ({ url: `data:${img.mimeType};base64,${img.base64}` })),
   ];
 
-  const prompt = buildPrompt(perspective, clothingImageUrls.length);
+  const prompt = buildPrompt(perspective);
 
   console.log('\n========== GROK API REQUEST ==========');
   console.log('Endpoint:', `${env.grok.apiUrl}/images/edits`);
