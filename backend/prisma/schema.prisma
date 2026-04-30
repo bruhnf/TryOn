@@ -35,6 +35,8 @@ model User {
   isSubscribed      Boolean           @default(false)
   // Credits: bonus credits that can be used beyond daily limit
   credits           Int               @default(0)
+  firstName         String?
+  lastName          String?
   bio               String?
   // avatarUrl = close-up photo — used for profile display ONLY, never sent to Grok
   avatarUrl         String?

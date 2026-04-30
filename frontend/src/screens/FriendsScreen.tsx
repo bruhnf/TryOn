@@ -168,6 +168,7 @@ function UserRow({
   onFollow: () => void;
   onUnfollow: () => void;
 }) {
+  const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ');
   return (
     <View style={styles.userRow}>
       <View style={styles.userAvatar}>
@@ -178,7 +179,14 @@ function UserRow({
         )}
       </View>
       <View style={styles.userInfo}>
-        <Text style={styles.userName}>{user.username}</Text>
+        {fullName ? (
+          <>
+            <Text style={styles.userName}>{fullName}</Text>
+            <Text style={styles.userHandle}>@{user.username}</Text>
+          </>
+        ) : (
+          <Text style={styles.userName}>@{user.username}</Text>
+        )}
         {user.bio ? <Text style={styles.userBio} numberOfLines={1}>{user.bio}</Text> : null}
       </View>
       <TouchableOpacity
@@ -260,6 +268,7 @@ const styles = StyleSheet.create({
   },
   userInfo: { flex: 1 },
   userName: { fontSize: Typography.fontSizeMD, fontWeight: Typography.fontWeightSemiBold, color: Colors.black },
+  userHandle: { fontSize: Typography.fontSizeSM, color: Colors.gray600, marginTop: 1 },
   userBio: { fontSize: Typography.fontSizeSM, color: Colors.gray600, marginTop: 2 },
   followBtn: {
     paddingHorizontal: Spacing.md,

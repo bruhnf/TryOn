@@ -155,8 +155,12 @@ export default function ProfileScreen() {
           </TouchableOpacity>
 
           <View style={styles.userInfo}>
-            <Text style={styles.username}>{user.username}</Text>
-            <Text style={styles.handle}>@{user.username}</Text>
+            {(user.firstName || user.lastName) && (
+              <Text style={styles.fullName}>
+                {[user.firstName, user.lastName].filter(Boolean).join(' ')}
+              </Text>
+            )}
+            <Text style={styles.username}>@{user.username}</Text>
           </View>
         </View>
 
@@ -332,10 +336,15 @@ const styles = StyleSheet.create({
     borderColor: Colors.white,
   },
   userInfo: { alignItems: 'center' },
-  username: {
+  fullName: {
     fontSize: Typography.fontSizeLG,
     fontWeight: Typography.fontWeightBold,
     color: Colors.black,
+  },
+  username: {
+    fontSize: Typography.fontSizeSM,
+    color: Colors.gray600,
+    marginTop: 2,
   },
   handle: { fontSize: Typography.fontSizeSM, color: Colors.gray600, marginTop: 2 },
   statsRow: {

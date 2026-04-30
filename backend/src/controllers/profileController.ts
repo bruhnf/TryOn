@@ -3,12 +3,14 @@ import { z } from 'zod';
 import prisma from '../lib/prisma';
 
 const updateSchema = z.object({
+  firstName: z.string().max(50).optional(),
+  lastName: z.string().max(50).optional(),
   bio: z.string().max(200).optional(),
   username: z
     .string()
     .min(3)
     .max(30)
-    .regex(/^[a-zA-Z0-9_]+$/)
+    .regex(/^[a-zA-Z0-9_]+$/, 'Username can only contain letters, numbers, and underscores')
     .optional(),
   city: z.string().max(100).optional(),
   state: z.string().max(100).optional(),
@@ -21,6 +23,8 @@ export async function getProfile(req: Request, res: Response): Promise<void> {
     select: {
       id: true,
       username: true,
+      firstName: true,
+      lastName: true,
       bio: true,
       avatarUrl: true,
       fullBodyUrl: true,
@@ -68,6 +72,8 @@ export async function updateProfile(req: Request, res: Response): Promise<void> 
       id: true,
       username: true,
       email: true,
+      firstName: true,
+      lastName: true,
       bio: true,
       avatarUrl: true,
       fullBodyUrl: true,
@@ -93,6 +99,8 @@ export async function getMyProfile(req: Request, res: Response): Promise<void> {
       id: true,
       username: true,
       email: true,
+      firstName: true,
+      lastName: true,
       bio: true,
       avatarUrl: true,
       fullBodyUrl: true,

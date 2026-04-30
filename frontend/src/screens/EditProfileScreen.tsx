@@ -16,9 +16,31 @@ import api from '../config/api';
 import { useUserStore } from '../store/useUserStore';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
 
+// Helper to extract user-friendly error message from API response
+function parseApiError(err: unknown): string {
+  const response = (err as { response?: { data?: { error?: unknown } } })?.response?.data;
+  if (!response?.error) return 'Could not save changes.';
+  
+  // If error is a string, return it directly
+  if (typeof response.error === 'string') return response.error;
+  
+  // If error is Zod's flattened format, extract field errors
+  const zodError = response.error as { fieldErrors?: Record<string, string[]> };
+  if (zodError.fieldErrors) {
+    const messages = Object.entries(zodError.fieldErrors)
+      .map(([field, errors]) => `${field}: ${(errors as string[]).join(', ')}`)
+      .join('\n');
+    return messages || 'Validation failed.';
+  }
+  
+  return 'Could not save changes.';
+}
+
 export default function EditProfileScreen() {
   const navigation = useNavigation();
   const { user, updateUser } = useUserStore();
+  const [firstName, setFirstName] = useState(user?.firstName ?? '');
+  const [lastName, setLastName] = useState(user?.lastName ?? '');
   const [username, setUsername] = useState(user?.username ?? '');
   const [bio, setBio] = useState(user?.bio ?? '');
   const [city, setCity] = useState(user?.city ?? '');
@@ -26,15 +48,30 @@ export default function EditProfileScreen() {
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
+    // Client-side validation for username
+    const trimmedUsername = username.trim();
+    if (trimmedUsername && !/^[a-zA-Z0-9_]+$/.test(trimmedUsername)) {
+      Alert.alert('Invalid Username', 'Username can only contain letters, numbers, and underscores. No spaces allowed.');
+      return;
+    }
+    if (trimmedUsername && (trimmedUsername.length < 3 || trimmedUsername.length > 30)) {
+      Alert.alert('Invalid Username', 'Username must be between 3 and 30 characters.');
+      return;
+    }
+
     setSaving(true);
     try {
       const { data } = await api.patch('/profile/me', {
-        username: username.trim(),
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        username: trimmedUsername,
         bio: bio.trim(),
         city: city.trim(),
         state: state.trim(),
       });
       updateUser({
+        firstName: data.firstName,
+        lastName: data.lastName,
         username: data.username,
         bio: data.bio,
         city: data.city,
@@ -42,10 +79,7 @@ export default function EditProfileScreen() {
       });
       navigation.goBack();
     } catch (err: unknown) {
-      const error =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-        'Could not save changes.';
-      Alert.alert('Error', error);
+      Alert.alert('Error', parseApiError(err));
     } finally {
       setSaving(false);
     }
@@ -58,6 +92,30 @@ export default function EditProfileScreen() {
     >
       <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled">
         <View style={styles.form}>
+          <View style={styles.field}>
+            <Text style={styles.label}>First Name</Text>
+            <TextInput
+              style={styles.input}
+              value={firstName}
+              onChangeText={setFirstName}
+              placeholder="First name"
+              placeholderTextColor={Colors.gray400}
+              autoCapitalize="words"
+            />
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.label}>Last Name</Text>
+            <TextInput
+              style={styles.input}
+              value={lastName}
+              onChangeText={setLastName}
+              placeholder="Last name"
+              placeholderTextColor={Colors.gray400}
+              autoCapitalize="words"
+            />
+          </View>
+
           <View style={styles.field}>
             <Text style={styles.label}>Username</Text>
             <TextInput

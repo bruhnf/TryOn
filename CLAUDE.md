@@ -6,6 +6,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **This is a test and development environment.** There is no need to preserve existing users, tokens, or data when making schema changes or migrations. Feel free to drop and recreate the database as needed.
 
+---
+
+## ⚠️ DEPLOYMENT CHECKLIST
+
+**Every time you deploy to Lightsail, run ALL of these commands:**
+
+```bash
+ssh ubuntu@<your-lightsail-ip>
+cd /opt/evofaceflow/TryOn
+git pull
+docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml exec backend npx prisma migrate deploy  # ⚠️ DON'T SKIP!
+```
+
+> **🚨 The `prisma migrate deploy` step is REQUIRED after any schema changes or the backend will crash!**
+
+---
+
 ## Project Overview
 
 TryOn is an AI-powered virtual clothing try-on mobile app. The "Try-On" mobile app is part of Evo Face Flow and uses evofaceflow.com for it's domain name. It is a monorepo with two main packages: 

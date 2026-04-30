@@ -53,7 +53,7 @@ export async function getFollowing(req: Request, res: Response): Promise<void> {
     where: { followerId: req.user.userId },
     include: {
       following: {
-        select: { id: true, username: true, avatarUrl: true, bio: true },
+        select: { id: true, username: true, firstName: true, lastName: true, avatarUrl: true, bio: true },
       },
     },
     orderBy: { createdAt: 'desc' },
@@ -67,7 +67,7 @@ export async function getFollowers(req: Request, res: Response): Promise<void> {
     where: { followingId: req.user.userId },
     include: {
       follower: {
-        select: { id: true, username: true, avatarUrl: true, bio: true },
+        select: { id: true, username: true, firstName: true, lastName: true, avatarUrl: true, bio: true },
       },
     },
     orderBy: { createdAt: 'desc' },
@@ -85,10 +85,12 @@ export async function searchUsers(req: Request, res: Response): Promise<void> {
     where: {
       OR: [
         { username: { contains: q.trim(), mode: 'insensitive' } },
+        { firstName: { contains: q.trim(), mode: 'insensitive' } },
+        { lastName: { contains: q.trim(), mode: 'insensitive' } },
         { bio: { contains: q.trim(), mode: 'insensitive' } },
       ],
     },
-    select: { id: true, username: true, avatarUrl: true, bio: true },
+    select: { id: true, username: true, firstName: true, lastName: true, avatarUrl: true, bio: true },
     take: 20,
   });
   res.json(users);

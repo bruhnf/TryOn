@@ -7,6 +7,8 @@ export interface User {
   verified: boolean;
   isSubscribed: boolean;
   credits: number;
+  firstName?: string;
+  lastName?: string;
   bio?: string;
   avatarUrl?: string;
   fullBodyUrl?: string;
@@ -36,6 +38,8 @@ export interface TryOnJob {
 export interface PublicUser {
   id: string;
   username: string;
+  firstName?: string;
+  lastName?: string;
   avatarUrl?: string;
   bio?: string;
 }

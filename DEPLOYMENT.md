@@ -1,5 +1,30 @@
 # AWS Lightsail Deployment Guide
 
+---
+
+## ⚠️ QUICK DEPLOY REFERENCE (Read This First!)
+
+**Every time you deploy changes to Lightsail:**
+
+```bash
+# SSH into Lightsail
+ssh ubuntu@<your-lightsail-ip>
+cd /opt/evofaceflow/TryOn
+
+# Pull latest code
+git pull
+
+# Rebuild and restart containers
+docker compose -f docker-compose.prod.yml up -d --build
+
+# ⚠️ CRITICAL: Apply any database migrations
+docker compose -f docker-compose.prod.yml exec backend npx prisma migrate deploy
+```
+
+> **🚨 WARNING:** If you skip the `prisma migrate deploy` step after schema changes, the backend will crash with database errors!
+
+---
+
 ## Prerequisites
 
 - AWS Lightsail instance running Ubuntu 22.04
