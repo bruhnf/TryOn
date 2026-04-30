@@ -19,6 +19,8 @@ import { AuthStackParams } from '../navigation';
 type Props = { navigation: NativeStackNavigationProp<AuthStackParams, 'Signup'> };
 
 export default function SignupScreen({ navigation }: Props) {
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -54,6 +56,8 @@ export default function SignupScreen({ navigation }: Props) {
     setLoading(true);
     try {
       await api.post('/auth/signup', {
+        firstName: firstName.trim() || undefined,
+        lastName: lastName.trim() || undefined,
         username: username.trim(),
         email: email.trim().toLowerCase(),
         password,
@@ -107,6 +111,24 @@ export default function SignupScreen({ navigation }: Props) {
         </Text>
 
         <View style={styles.form}>
+          <View style={styles.nameRow}>
+            <TextInput
+              style={[styles.input, styles.nameInput]}
+              placeholder="First Name"
+              placeholderTextColor={Colors.gray400}
+              autoCapitalize="words"
+              value={firstName}
+              onChangeText={setFirstName}
+            />
+            <TextInput
+              style={[styles.input, styles.nameInput]}
+              placeholder="Last Name"
+              placeholderTextColor={Colors.gray400}
+              autoCapitalize="words"
+              value={lastName}
+              onChangeText={setLastName}
+            />
+          </View>
           <TextInput
             style={styles.input}
             placeholder="Username"
@@ -199,6 +221,13 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   form: { gap: Spacing.md },
+  nameRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  nameInput: {
+    flex: 1,
+  },
   input: {
     borderWidth: 1,
     borderColor: Colors.gray200,

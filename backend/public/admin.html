@@ -312,6 +312,8 @@
         <div class="section">
           <h2>Create Test User</h2>
           <div class="form-group">
+            <input type="text" id="newFirstName" placeholder="First Name">
+            <input type="text" id="newLastName" placeholder="Last Name">
             <input type="text" id="newUsername" placeholder="Username">
             <input type="email" id="newEmail" placeholder="Email">
             <input type="password" id="newPassword" placeholder="Password">
@@ -641,13 +643,15 @@
     }
 
     async function createUser() {
+      const firstName = document.getElementById('newFirstName').value.trim();
+      const lastName = document.getElementById('newLastName').value.trim();
       const username = document.getElementById('newUsername').value;
       const email = document.getElementById('newEmail').value;
       const password = document.getElementById('newPassword').value;
       
       if (!username || !email || !password) {
         document.getElementById('createUserMsg').className = 'error';
-        document.getElementById('createUserMsg').textContent = 'All fields are required';
+        document.getElementById('createUserMsg').textContent = 'Username, email, and password are required';
         return;
       }
       
@@ -658,7 +662,13 @@
             'Content-Type': 'application/json',
             'X-Admin-Key': apiKey
           },
-          body: JSON.stringify({ username, email, password })
+          body: JSON.stringify({ 
+            firstName: firstName || undefined,
+            lastName: lastName || undefined,
+            username, 
+            email, 
+            password 
+          })
         });
         const data = await res.json();
         
@@ -666,6 +676,8 @@
         if (res.ok) {
           msgEl.className = 'success';
           msgEl.textContent = `Created user: ${data.username}`;
+          document.getElementById('newFirstName').value = '';
+          document.getElementById('newLastName').value = '';
           document.getElementById('newUsername').value = '';
           document.getElementById('newEmail').value = '';
           document.getElementById('newPassword').value = '';

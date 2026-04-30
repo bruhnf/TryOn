@@ -26,7 +26,13 @@ router.get('/users', async (_req: Request, res: Response) => {
 
 // Create test user
 router.post('/users', async (req: Request, res: Response) => {
-  const { username, email, password } = req.body as { username?: string; email?: string; password?: string };
+  const { firstName, lastName, username, email, password } = req.body as { 
+    firstName?: string; 
+    lastName?: string; 
+    username?: string; 
+    email?: string; 
+    password?: string;
+  };
   
   if (!username || !email || !password) {
     res.status(400).json({ error: 'username, email, and password are required' });
@@ -43,7 +49,7 @@ router.post('/users', async (req: Request, res: Response) => {
   
   const passwordHash = await hashPassword(password);
   const user = await prisma.user.create({
-    data: { username, email, passwordHash, verified: true },
+    data: { firstName, lastName, username, email, passwordHash, verified: true },
     select: { id: true, username: true, email: true, verified: true, credits: true },
   });
   

@@ -15,6 +15,8 @@ import {
 import { recordLoginLocation } from '../services/locationService';
 
 const signupSchema = z.object({
+  firstName: z.string().max(50).optional(),
+  lastName: z.string().max(50).optional(),
   username: z
     .string()
     .min(3)
@@ -40,7 +42,7 @@ export async function signup(req: Request, res: Response): Promise<void> {
     res.status(400).json({ error: parse.error.flatten() });
     return;
   }
-  const { username, email, password } = parse.data;
+  const { firstName, lastName, username, email, password } = parse.data;
 
   const existing = await prisma.user.findFirst({
     where: { OR: [{ email }, { username }] },
@@ -57,7 +59,7 @@ export async function signup(req: Request, res: Response): Promise<void> {
   const verifyTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
   const user = await prisma.user.create({
-    data: { username, email, passwordHash, verifyToken, verifyTokenExpiry },
+    data: { firstName, lastName, username, email, passwordHash, verifyToken, verifyTokenExpiry },
   });
 
   await sendVerificationEmail(email, verifyToken);
