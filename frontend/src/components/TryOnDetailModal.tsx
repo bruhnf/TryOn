@@ -53,6 +53,8 @@ export default function TryOnDetailModal({
 
   if (!job) return null;
 
+  const jobId = job.id;
+
   // Collect available images
   const images: { url: string; label: string }[] = [];
   if (job.resultFullBodyUrl) images.push({ url: job.resultFullBodyUrl, label: 'Full Body' });
@@ -72,9 +74,9 @@ export default function TryOnDetailModal({
     const newValue = !isPrivate;
     setUpdating(true);
     try {
-      await api.patch(`/tryon/${job.id}/privacy`, { isPrivate: newValue });
+      await api.patch(`/tryon/${jobId}/privacy`, { isPrivate: newValue });
       setIsPrivate(newValue);
-      onPrivacyChanged?.(job.id, newValue);
+      onPrivacyChanged?.(jobId, newValue);
     } catch {
       Alert.alert('Error', 'Could not update privacy setting.');
     } finally {
@@ -109,6 +111,8 @@ export default function TryOnDetailModal({
           showsHorizontalScrollIndicator={false}
           onScroll={handleScroll}
           scrollEventThrottle={16}
+          style={[styles.carousel, { marginTop: insets.top + 60 }]}
+          contentContainerStyle={styles.carouselContent}
         >
           {images.map((img, index) => (
             <View key={index} style={styles.imageContainer}>
@@ -186,8 +190,6 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.95)',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   closeButton: {
     position: 'absolute',
@@ -200,16 +202,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  carousel: {
+    flex: 1,
+  },
+  carouselContent: {
+    alignItems: 'center',
+  },
   imageContainer: {
     width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT * 0.65,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: -60,
   },
   image: {
     width: SCREEN_WIDTH - 40,
-    height: '100%',
+    height: SCREEN_HEIGHT * 0.55,
     borderRadius: Radius.lg,
   },
   tapArea: {
