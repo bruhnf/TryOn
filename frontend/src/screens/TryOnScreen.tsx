@@ -12,18 +12,22 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import api from '../config/api';
 import { useUserStore } from '../store/useUserStore';
 import { TryOnJob } from '../types';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
 import FullScreenImageModal from '../components/FullScreenImageModal';
 import CreditDisplay from '../components/CreditDisplay';
+import { RootStackParams } from '../navigation';
 
 const POLL_INTERVAL_MS = 5000; // 5 seconds between polls
 const MAX_POLL_ERRORS = 3; // Stop polling after this many consecutive errors
 
 export default function TryOnScreen() {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParams>>();
   const user = useUserStore((s) => s.user);
 
   const [clothingPhotos, setClothingPhotos] = useState<string[]>([]);
@@ -134,8 +138,25 @@ export default function TryOnScreen() {
         (err as { response?: { data?: { error?: string; message?: string } } })?.response?.data;
       if (error?.error === 'NO_BODY_PHOTOS') {
         Alert.alert('Upload Body Photos', error.message ?? 'Please upload your body photos.');
-      } else if (error?.error?.includes('limit')) {
-        Alert.alert('Daily Limit Reached', error.error);
+      } else if (error?.error === 'SUBSCRIPTION_REQUIRED') {
+        // Navigate to purchase screen instead of showing error
+        Alert.alert(
+          'Credits Required',
+          'You need credits or a subscription to use try-on.',
+          [
+            { text: 'Not Now', style: 'cancel' },
+            { text: 'Get Credits', onPress: () => navigation.navigate('Purchase') },
+          ],
+        );
+      } else if (error?.error === 'DAILY_LIMIT_REACHED') {
+        Alert.alert(
+          'Daily Limit Reached',
+          error.message ?? 'You\'ve used all your daily try-ons. Get more credits to continue.',
+          [
+            { text: 'OK', style: 'cancel' },
+            { text: 'Get Credits', onPress: () => navigation.navigate('Purchase') },
+          ],
+        );
       } else {
         Alert.alert('Error', 'Could not submit try-on. Please try again.');
       }
@@ -210,7 +231,7 @@ export default function TryOnScreen() {
       contentContainerStyle={[styles.inner, { paddingTop: insets.top + Spacing.md }]}
     >
       <View style={styles.headerRow}>
-        <CreditDisplay />
+        <CreditDisplay onPress={() => navigation.navigate('Purchase')} />
         <Text style={styles.title}>Try On</Text>
         <View style={{ width: 50 }} />
       </View>

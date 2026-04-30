@@ -12,6 +12,7 @@ interface UserStore {
   initialize: () => Promise<void>;
   setUser: (user: User, accessToken: string, refreshToken: string) => Promise<void>;
   updateUser: (partial: Partial<User>) => void;
+  refreshUser: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -43,6 +44,15 @@ export const useUserStore = create<UserStore>((set) => ({
 
   updateUser: (partial) =>
     set((state) => ({ user: state.user ? { ...state.user, ...partial } : null })),
+
+  refreshUser: async () => {
+    try {
+      const { data } = await api.get<User>('/profile/me');
+      set({ user: data });
+    } catch {
+      // Silently fail - user will see stale data
+    }
+  },
 
   logout: async () => {
     const refreshToken = await storage.getRefreshToken();

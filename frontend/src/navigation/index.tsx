@@ -18,6 +18,7 @@ import InboxScreen from '../screens/InboxScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import AdminConsoleScreen from '../screens/AdminConsoleScreen';
+import PurchaseScreen from '../screens/PurchaseScreen';
 
 export type AuthStackParams = {
   Login: undefined;
@@ -39,6 +40,7 @@ export type RootStackParams = {
   Settings: undefined;
   EditProfile: undefined;
   AdminConsole: undefined;
+  Purchase: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParams>();
@@ -177,6 +179,11 @@ export default function AppNavigator() {
             <Stack.Screen
               name="AdminConsole"
               component={AdminConsoleScreen}
+              options={{ presentation: 'modal', headerShown: false }}
+            />
+            <Stack.Screen
+              name="Purchase"
+              component={PurchaseScreen}
               options={{ presentation: 'modal', headerShown: false }}
             />
           </>
