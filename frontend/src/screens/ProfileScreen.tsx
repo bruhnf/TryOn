@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Modal,
   FlatList,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -34,12 +35,13 @@ const MENU_ITEMS = [
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
-  const { user, updateUser, logout } = useUserStore();
+  const { user, updateUser, logout, refreshUser } = useUserStore();
   const [menuVisible, setMenuVisible] = useState(false);
   const [history, setHistory] = useState<TryOnJob[]>([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
   const [selectedJob, setSelectedJob] = useState<TryOnJob | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   React.useEffect(() => {
     if (!historyLoaded) loadHistory();
@@ -52,6 +54,12 @@ export default function ProfileScreen() {
     } catch {}
     setHistoryLoaded(true);
   }
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([refreshUser(), loadHistory()]);
+    setRefreshing(false);
+  }, []);
 
   async function handlePhotoUpload(
     field: 'avatar' | 'fullBody' | 'medium',
@@ -139,7 +147,12 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
         {/* Avatar Row with Credits and Subscription */}
         <View style={styles.avatarSection}>
           {/* Credits - Left */}
