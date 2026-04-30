@@ -165,3 +165,28 @@ export async function getTryOnHistory(req: Request, res: Response): Promise<void
 
   res.json({ jobs, page });
 }
+
+export async function updateJobPrivacy(req: Request, res: Response): Promise<void> {
+  if (!req.user) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
+  const { jobId } = req.params;
+  const { isPrivate } = req.body;
+
+  if (typeof isPrivate !== 'boolean') {
+    res.status(400).json({ error: 'isPrivate must be a boolean' });
+    return;
+  }
+
+  const job = await prisma.tryOnJob.findUnique({ where: { id: jobId } });
+  if (!job || job.userId !== req.user.userId) {
+    res.status(404).json({ error: 'Job not found' });
+    return;
+  }
+
+  const updated = await prisma.tryOnJob.update({
+    where: { id: jobId },
+    data: { isPrivate },
+  });
+
+  res.json(updated);
+}

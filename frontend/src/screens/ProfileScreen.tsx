@@ -21,6 +21,7 @@ import { useUserStore } from '../store/useUserStore';
 import { TryOnJob } from '../types';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
 import { RootStackParams } from '../navigation';
+import TryOnDetailModal from '../components/TryOnDetailModal';
 
 type Nav = NativeStackNavigationProp<RootStackParams>;
 
@@ -38,6 +39,7 @@ export default function ProfileScreen() {
   const [history, setHistory] = useState<TryOnJob[]>([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
+  const [selectedJob, setSelectedJob] = useState<TryOnJob | null>(null);
 
   React.useEffect(() => {
     if (!historyLoaded) loadHistory();
@@ -219,22 +221,46 @@ export default function ProfileScreen() {
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => {
                 const url = item.resultFullBodyUrl ?? item.resultMediumUrl;
+                const hasResults = !!(item.resultFullBodyUrl || item.resultMediumUrl);
                 return (
-                  <View style={styles.historyItem}>
+                  <TouchableOpacity
+                    style={styles.historyItem}
+                    onPress={() => hasResults && setSelectedJob(item)}
+                    activeOpacity={hasResults ? 0.7 : 1}
+                  >
                     {url ? (
-                      <Image source={{ uri: url }} style={styles.historyImage} resizeMode="cover" />
+                      <>
+                        <Image source={{ uri: url }} style={styles.historyImage} resizeMode="cover" />
+                        {item.isPrivate && (
+                          <View style={styles.privateBadge}>
+                            <Ionicons name="lock-closed" size={10} color={Colors.white} />
+                          </View>
+                        )}
+                      </>
                     ) : (
                       <View style={[styles.historyImage, styles.historyPlaceholder]}>
                         <Text style={styles.historyStatus}>{item.status}</Text>
                       </View>
                     )}
-                  </View>
+                  </TouchableOpacity>
                 );
               }}
             />
           )}
         </View>
       </ScrollView>
+
+      {/* Try-On Detail Modal */}
+      <TryOnDetailModal
+        visible={selectedJob !== null}
+        job={selectedJob}
+        onClose={() => setSelectedJob(null)}
+        onPrivacyChanged={(jobId, isPrivate) => {
+          setHistory((prev) =>
+            prev.map((j) => (j.id === jobId ? { ...j, isPrivate } : j))
+          );
+        }}
+      />
 
       {/* Hamburger dropdown menu */}
       <Modal transparent visible={menuVisible} animationType="fade" onRequestClose={() => setMenuVisible(false)}>
@@ -413,10 +439,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   emptyHistory: { fontSize: Typography.fontSizeMD, color: Colors.gray400, fontStyle: 'italic', marginTop: Spacing.sm },
-  historyItem: { flex: 1 / 3, aspectRatio: 1, padding: 1 },
+  historyItem: { flex: 1 / 3, aspectRatio: 1, padding: 1, position: 'relative' },
   historyImage: { width: '100%', height: '100%', borderRadius: 4 },
   historyPlaceholder: { backgroundColor: Colors.gray100, alignItems: 'center', justifyContent: 'center' },
   historyStatus: { fontSize: 9, color: Colors.gray400 },
+  privateBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'flex-end' },
   menuSheet: {
     backgroundColor: Colors.white,

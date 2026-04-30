@@ -1,0 +1,279 @@
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  Modal,
+  View,
+  Image,
+  TouchableOpacity,
+  StyleSheet,
+  StatusBar,
+  Dimensions,
+  Text,
+  ScrollView,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
+  Switch,
+  ActivityIndicator,
+  Alert,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { Colors, Typography, Spacing, Radius } from '../constants/theme';
+import { TryOnJob } from '../types';
+import api from '../config/api';
+
+interface TryOnDetailModalProps {
+  visible: boolean;
+  job: TryOnJob | null;
+  onClose: () => void;
+  onPrivacyChanged?: (jobId: string, isPrivate: boolean) => void;
+}
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+export default function TryOnDetailModal({
+  visible,
+  job,
+  onClose,
+  onPrivacyChanged,
+}: TryOnDetailModalProps) {
+  const insets = useSafeAreaInsets();
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isPrivate, setIsPrivate] = useState(job?.isPrivate ?? false);
+  const [updating, setUpdating] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+
+  // Reset state when job changes
+  useEffect(() => {
+    if (job) {
+      setIsPrivate(job.isPrivate ?? false);
+      setCurrentIndex(0);
+      scrollRef.current?.scrollTo({ x: 0, animated: false });
+    }
+  }, [job?.id]);
+
+  if (!job) return null;
+
+  // Collect available images
+  const images: { url: string; label: string }[] = [];
+  if (job.resultFullBodyUrl) images.push({ url: job.resultFullBodyUrl, label: 'Full Body' });
+  if (job.resultMediumUrl) images.push({ url: job.resultMediumUrl, label: 'Medium' });
+
+  if (images.length === 0) return null;
+
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const offsetX = event.nativeEvent.contentOffset.x;
+    const index = Math.round(offsetX / SCREEN_WIDTH);
+    if (index !== currentIndex && index >= 0 && index < images.length) {
+      setCurrentIndex(index);
+    }
+  };
+
+  async function togglePrivacy() {
+    const newValue = !isPrivate;
+    setUpdating(true);
+    try {
+      await api.patch(`/tryon/${job.id}/privacy`, { isPrivate: newValue });
+      setIsPrivate(newValue);
+      onPrivacyChanged?.(job.id, newValue);
+    } catch {
+      Alert.alert('Error', 'Could not update privacy setting.');
+    } finally {
+      setUpdating(false);
+    }
+  }
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
+      <StatusBar barStyle="light-content" backgroundColor="rgba(0,0,0,0.95)" />
+      <View style={styles.overlay}>
+        {/* Close button */}
+        <TouchableOpacity
+          style={[styles.closeButton, { top: insets.top + 16 }]}
+          onPress={onClose}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="close" size={24} color={Colors.white} />
+        </TouchableOpacity>
+
+        {/* Image carousel */}
+        <ScrollView
+          ref={scrollRef}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+        >
+          {images.map((img, index) => (
+            <View key={index} style={styles.imageContainer}>
+              <Image
+                source={{ uri: img.url }}
+                style={styles.image}
+                resizeMode="contain"
+              />
+            </View>
+          ))}
+        </ScrollView>
+
+        {/* Bottom controls */}
+        <View style={[styles.controls, { paddingBottom: insets.bottom + 20 }]}>
+          {/* Pagination */}
+          {images.length > 1 && (
+            <View style={styles.pagination}>
+              <Text style={styles.paginationLabel}>{images[currentIndex].label}</Text>
+              <View style={styles.dots}>
+                {images.map((_, index) => (
+                  <View
+                    key={index}
+                    style={[
+                      styles.dot,
+                      index === currentIndex && styles.dotActive,
+                    ]}
+                  />
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Privacy toggle */}
+          <View style={styles.privacyContainer}>
+            <View style={styles.privacyInfo}>
+              <Ionicons
+                name={isPrivate ? 'lock-closed' : 'globe-outline'}
+                size={20}
+                color={Colors.white}
+              />
+              <View style={styles.privacyTextContainer}>
+                <Text style={styles.privacyLabel}>
+                  {isPrivate ? 'Private' : 'Public'}
+                </Text>
+                <Text style={styles.privacyHint}>
+                  {isPrivate ? 'Only you can see this' : 'Visible on public feed'}
+                </Text>
+              </View>
+            </View>
+            {updating ? (
+              <ActivityIndicator color={Colors.white} size="small" />
+            ) : (
+              <Switch
+                value={isPrivate}
+                onValueChange={togglePrivacy}
+                trackColor={{ false: 'rgba(255,255,255,0.3)', true: Colors.white }}
+                thumbColor={isPrivate ? Colors.black : Colors.white}
+              />
+            )}
+          </View>
+        </View>
+
+        {/* Tap to close (background) */}
+        <TouchableOpacity
+          style={styles.tapArea}
+          onPress={onClose}
+          activeOpacity={1}
+        />
+      </View>
+    </Modal>
+  );
+}
+
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButton: {
+    position: 'absolute',
+    right: 16,
+    zIndex: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageContainer: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT * 0.65,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: -60,
+  },
+  image: {
+    width: SCREEN_WIDTH - 40,
+    height: '100%',
+    borderRadius: Radius.lg,
+  },
+  tapArea: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: -1,
+  },
+  controls: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 20,
+    zIndex: 10,
+  },
+  pagination: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  paginationLabel: {
+    color: Colors.white,
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  dots: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+  },
+  dotActive: {
+    backgroundColor: Colors.white,
+  },
+  privacyContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: Radius.md,
+    padding: 16,
+  },
+  privacyInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  privacyTextContainer: {
+    gap: 2,
+  },
+  privacyLabel: {
+    color: Colors.white,
+    fontSize: Typography.fontSizeMD,
+    fontWeight: Typography.fontWeightSemiBold,
+  },
+  privacyHint: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: Typography.fontSizeXS,
+  },
+});
