@@ -107,6 +107,11 @@ Fill in all required values. Generate secrets with:
 openssl rand -hex 32  # For JWT_SECRET, JWT_REFRESH_SECRET, ADMIN_API_KEY
 ```
 
+**Important:** Set `ALLOWED_ORIGINS` to include the website domain:
+```
+ALLOWED_ORIGINS=https://evofaceflow.com
+```
+
 ## 4. SSL Certificate Setup
 
 ### Create certbot directory structure

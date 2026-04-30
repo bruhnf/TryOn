@@ -91,6 +91,22 @@ GitHub Actions workflow (`.github/workflows/deploy.yml`) triggers on push to `ma
 
 ## Architecture
 
+### Website (`website/`)
+Static landing page for evoFaceFlow with web authentication.
+
+- **index.html** — Main landing page promoting TryOn app
+- **login.html** — Web login page
+- **signup.html** — Web signup page
+- **css/style.css** — Black/white minimal design
+- **js/auth.js** — Client-side authentication (calls backend API)
+
+**URLs:**
+- `https://evofaceflow.com` — Landing page
+- `https://www.evofaceflow.com` — Redirects to non-www
+- `https://api.evofaceflow.com` — Backend API
+
+**Note:** The website makes API calls to `api.evofaceflow.com`. Ensure `ALLOWED_ORIGINS` in backend `.env` includes `https://evofaceflow.com`.
+
 ### Backend (`backend/src/`)
 Express app with JWT authentication and BullMQ job queue for async AI image generation.
 

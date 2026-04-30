@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="evoFaceFlow - Health, Wellness, Nutrition & Fashion. Try on clothes virtually with our AI-powered TryOn app.">
+  <title>evoFaceFlow | Health, Wellness & Fashion</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="nav">
+    <div class="nav-container">
+      <a href="/" class="nav-logo">
+        <span class="logo-evo">evo</span><span class="logo-face">FaceFlow</span>
+      </a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#about">About</a>
+        <a href="#download">Download</a>
+      </div>
+      <div class="nav-auth" id="navAuth">
+        <a href="/login.html" class="btn btn-secondary">Log In</a>
+        <a href="/signup.html" class="btn btn-primary">Sign Up</a>
+      </div>
+      <div class="nav-user" id="navUser" style="display: none;">
+        <span class="user-greeting">Hello, <span id="userName"></span></span>
+        <button class="btn btn-secondary" onclick="logout()">Log Out</button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="hero-content">
+      <h1 class="hero-title">
+        Your Style.<br>
+        <span class="hero-highlight">Perfected.</span>
+      </h1>
+      <p class="hero-subtitle">
+        Experience the future of fashion with TryOn — our AI-powered app that lets you 
+        virtually try on any outfit before you buy. See exactly how clothes look on 
+        <em>your</em> body.
+      </p>
+      <div class="hero-cta">
+        <a href="#download" class="btn btn-primary btn-lg">Download TryOn</a>
+        <a href="#features" class="btn btn-secondary btn-lg">Learn More</a>
+      </div>
+    </div>
+    <div class="hero-image">
+      <!-- PLACEHOLDER: Hero lifestyle image showing person using the app -->
+      <div class="placeholder-image hero-placeholder">
+        <span>Hero Image</span>
+        <small>Lifestyle photo: Person using TryOn app</small>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section class="features" id="features">
+    <div class="container">
+      <h2 class="section-title">Why TryOn?</h2>
+      <p class="section-subtitle">Shop smarter. Return less. Look amazing.</p>
+      
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">
+            <!-- PLACEHOLDER: AI/camera icon illustration -->
+            <div class="placeholder-icon">📸</div>
+          </div>
+          <h3>AI-Powered Try-On</h3>
+          <p>Snap a photo of any clothing item and see it on your body in seconds using advanced AI technology.</p>
+        </div>
+        
+        <div class="feature-card">
+          <div class="feature-icon">
+            <!-- PLACEHOLDER: Body silhouette icon -->
+            <div class="placeholder-icon">👤</div>
+          </div>
+          <h3>Your Real Body</h3>
+          <p>Upload your own body photos for accurate, personalized results. Full body and waist-up views supported.</p>
+        </div>
+        
+        <div class="feature-card">
+          <div class="feature-icon">
+            <!-- PLACEHOLDER: Shopping bag icon -->
+            <div class="placeholder-icon">🛍️</div>
+          </div>
+          <h3>Shop With Confidence</h3>
+          <p>No more guessing. See exactly how that dress, jacket, or outfit will look before you buy.</p>
+        </div>
+        
+        <div class="feature-card">
+          <div class="feature-icon">
+            <!-- PLACEHOLDER: Privacy/lock icon -->
+            <div class="placeholder-icon">🔒</div>
+          </div>
+          <h3>Private & Secure</h3>
+          <p>Your photos are encrypted and secure. Choose to keep your try-ons private or share with friends.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- App Preview Section -->
+  <section class="app-preview">
+    <div class="container">
+      <div class="preview-content">
+        <h2 class="section-title">See It In Action</h2>
+        <p class="section-subtitle">Three simple steps to your perfect look</p>
+        
+        <div class="steps">
+          <div class="step">
+            <div class="step-number">1</div>
+            <h4>Upload Your Photo</h4>
+            <p>Add a full body or waist-up photo to your profile</p>
+          </div>
+          <div class="step">
+            <div class="step-number">2</div>
+            <h4>Snap the Outfit</h4>
+            <p>Take a photo of any clothing item while shopping</p>
+          </div>
+          <div class="step">
+            <div class="step-number">3</div>
+            <h4>See the Magic</h4>
+            <p>Our AI generates a realistic image of you wearing it</p>
+          </div>
+        </div>
+      </div>
+      <div class="preview-phones">
+        <!-- PLACEHOLDER: App screenshot mockups -->
+        <div class="placeholder-image phone-mockup">
+          <span>Phone Mockup 1</span>
+          <small>App screenshot: Try-On screen</small>
+        </div>
+        <div class="placeholder-image phone-mockup phone-mockup-front">
+          <span>Phone Mockup 2</span>
+          <small>App screenshot: Result view</small>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Social Proof / Community -->
+  <section class="community">
+    <div class="container">
+      <h2 class="section-title">Join the Community</h2>
+      <p class="section-subtitle">Share your looks, follow friends, and discover new styles</p>
+      
+      <div class="community-grid">
+        <!-- PLACEHOLDER: Community lifestyle images -->
+        <div class="placeholder-image community-img">
+          <span>Community Image 1</span>
+        </div>
+        <div class="placeholder-image community-img">
+          <span>Community Image 2</span>
+        </div>
+        <div class="placeholder-image community-img">
+          <span>Community Image 3</span>
+        </div>
+        <div class="placeholder-image community-img">
+          <span>Community Image 4</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- About Section -->
+  <section class="about" id="about">
+    <div class="container">
+      <div class="about-content">
+        <h2 class="section-title">About evoFaceFlow</h2>
+        <p>
+          At evoFaceFlow, we believe in the intersection of technology and wellness. 
+          Our mission is to help you look and feel your best through innovative tools 
+          that blend health, nutrition, and fashion.
+        </p>
+        <p>
+          The TryOn app is our flagship product — designed to revolutionize how you shop 
+          for clothes. No more returns, no more disappointment. Just confidence in every purchase.
+        </p>
+        <p>
+          We're committed to your privacy and security. Your body photos are encrypted 
+          and never shared. You control who sees your try-ons.
+        </p>
+      </div>
+      <div class="about-image">
+        <!-- PLACEHOLDER: About section lifestyle image -->
+        <div class="placeholder-image about-placeholder">
+          <span>About Image</span>
+          <small>Team or lifestyle photo</small>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Download CTA Section -->
+  <section class="download" id="download">
+    <div class="container">
+      <h2 class="section-title">Get TryOn Today</h2>
+      <p class="section-subtitle">Available on iOS and Android</p>
+      
+      <div class="download-buttons">
+        <!-- PLACEHOLDER: App Store link -->
+        <a href="#" class="store-badge" aria-label="Download on the App Store">
+          <div class="placeholder-badge">
+            <span>App Store</span>
+            <small>Download Badge</small>
+          </div>
+        </a>
+        <!-- PLACEHOLDER: Google Play link -->
+        <a href="#" class="store-badge" aria-label="Get it on Google Play">
+          <div class="placeholder-badge">
+            <span>Google Play</span>
+            <small>Download Badge</small>
+          </div>
+        </a>
+      </div>
+      
+      <p class="download-note">Free to download. Subscription includes 15 try-ons per day.</p>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <a href="/" class="nav-logo">
+            <span class="logo-evo">evo</span><span class="logo-face">FaceFlow</span>
+          </a>
+          <p>Health, Wellness, Nutrition & Fashion</p>
+        </div>
+        <div class="footer-links">
+          <h4>Product</h4>
+          <a href="#features">Features</a>
+          <a href="#download">Download</a>
+          <a href="/login.html">Log In</a>
+        </div>
+        <div class="footer-links">
+          <h4>Company</h4>
+          <a href="#about">About</a>
+          <a href="#">Careers</a>
+          <a href="#">Press</a>
+        </div>
+        <div class="footer-links">
+          <h4>Legal</h4>
+          <a href="#">Privacy Policy</a>
+          <a href="#">Terms of Service</a>
+          <a href="#">Cookie Policy</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2026 evoFaceFlow. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="/js/auth.js"></script>
+  <script>
+    // Check auth state on page load
+    checkAuthState();
+  </script>
+</body>
+</html>
