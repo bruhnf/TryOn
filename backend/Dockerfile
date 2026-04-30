@@ -1,12 +1,14 @@
 # ============================================
-# Development stage
+# Development stage (Debian-based for Prisma compatibility)
 # ============================================
-FROM node:20-alpine AS dev
+FROM node:20-slim AS dev
 
 WORKDIR /app
 
-# Install dependencies for native modules
-RUN apk add --no-cache python3 make g++
+# Install OpenSSL (required by Prisma)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssl \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
 RUN npm ci
