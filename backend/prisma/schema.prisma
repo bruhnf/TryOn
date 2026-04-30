@@ -78,6 +78,7 @@ model TryOnJob {
   id                String    @id @default(uuid())
   userId            String
   status            JobStatus @default(PENDING)
+  isPrivate         Boolean   @default(false)
   clothingPhoto1Url String
   clothingPhoto2Url String?
   resultFullBodyUrl String?

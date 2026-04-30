@@ -17,7 +17,7 @@ import FullScreenImageModal from '../components/FullScreenImageModal';
 import CreditDisplay from '../components/CreditDisplay';
 
 interface FeedJob extends TryOnJob {
-  user: { username: string; avatarUrl?: string };
+  user: { username: string; firstName?: string; lastName?: string; avatarUrl?: string };
 }
 
 export default function HomeScreen() {
@@ -95,7 +95,7 @@ export default function HomeScreen() {
             <Text style={styles.emptyIcon}>👕</Text>
             <Text style={styles.emptyTitle}>No try-ons yet</Text>
             <Text style={styles.emptySubtitle}>
-              Follow people or create your first try-on using the camera button below.
+              Be the first to create a try-on using the camera button below!
             </Text>
           </View>
         }
@@ -126,6 +126,7 @@ function FeedCard({
   if (job.resultMediumUrl) resultImages.push(job.resultMediumUrl);
   
   const displayUrl = resultImages[0];
+  const fullName = [job.user.firstName, job.user.lastName].filter(Boolean).join(' ');
 
   return (
     <View style={styles.card}>
@@ -139,7 +140,16 @@ function FeedCard({
             </Text>
           )}
         </View>
-        <Text style={styles.username}>@{job.user.username}</Text>
+        <View>
+          {fullName ? (
+            <>
+              <Text style={styles.displayName}>{fullName}</Text>
+              <Text style={styles.username}>@{job.user.username}</Text>
+            </>
+          ) : (
+            <Text style={styles.displayName}>@{job.user.username}</Text>
+          )}
+        </View>
       </View>
 
       <View style={styles.resultsRow}>
@@ -221,7 +231,8 @@ const styles = StyleSheet.create({
     fontWeight: Typography.fontWeightBold,
     color: Colors.gray600,
   },
-  username: { fontSize: Typography.fontSizeMD, fontWeight: Typography.fontWeightSemiBold },
+  displayName: { fontSize: Typography.fontSizeMD, fontWeight: Typography.fontWeightSemiBold, color: Colors.black },
+  username: { fontSize: Typography.fontSizeSM, color: Colors.gray600 },
   resultsRow: { flexDirection: 'row', gap: Spacing.sm, padding: Spacing.md, paddingTop: 0 },
   resultImageContainer: {
     flex: 1,

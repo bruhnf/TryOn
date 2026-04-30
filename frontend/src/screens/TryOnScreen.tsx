@@ -8,6 +8,7 @@ import {
   Alert,
   Image,
   ActivityIndicator,
+  Switch,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,6 +27,7 @@ export default function TryOnScreen() {
   const user = useUserStore((s) => s.user);
 
   const [clothingPhotos, setClothingPhotos] = useState<string[]>([]);
+  const [isPrivate, setIsPrivate] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [activeJob, setActiveJob] = useState<TryOnJob | null>(null);
   
@@ -119,6 +121,7 @@ export default function TryOnScreen() {
           name: 'clothing.jpg',
         } as unknown as Blob);
       }
+      formData.append('isPrivate', isPrivate.toString());
 
       const { data } = await api.post<{ jobId: string; status: string }>('/tryon', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -195,6 +198,7 @@ export default function TryOnScreen() {
     }
     pollErrorsRef.current = 0;
     setClothingPhotos([]);
+    setIsPrivate(false);
     setActiveJob(null);
   }
 
@@ -261,6 +265,21 @@ export default function TryOnScreen() {
               primary
             />
             <StatusPill label="Waist Up" active={!!user?.mediumBodyUrl} />
+          </View>
+
+          <View style={styles.privacyRow}>
+            <View style={styles.privacyInfo}>
+              <Text style={styles.privacyLabel}>Keep Private</Text>
+              <Text style={styles.privacyHint}>
+                {isPrivate ? 'Only visible to you' : 'Visible on public feed'}
+              </Text>
+            </View>
+            <Switch
+              value={isPrivate}
+              onValueChange={setIsPrivate}
+              trackColor={{ false: Colors.gray200, true: Colors.black }}
+              thumbColor={Colors.white}
+            />
           </View>
 
           <TouchableOpacity
@@ -449,7 +468,27 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
   divider: { height: 1, backgroundColor: Colors.gray200, marginVertical: Spacing.lg },
-  bodyPhotoStatus: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.xl },
+  bodyPhotoStatus: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
+  privacyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.gray100,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.xl,
+  },
+  privacyInfo: { flex: 1 },
+  privacyLabel: {
+    fontSize: Typography.fontSizeMD,
+    fontWeight: Typography.fontWeightSemiBold,
+    color: Colors.black,
+  },
+  privacyHint: {
+    fontSize: Typography.fontSizeXS,
+    color: Colors.gray600,
+    marginTop: 2,
+  },
   pill: { paddingHorizontal: Spacing.md, paddingVertical: 6, borderRadius: Radius.full },
   pillActive: { backgroundColor: Colors.black },
   pillInactive: { backgroundColor: Colors.gray100 },

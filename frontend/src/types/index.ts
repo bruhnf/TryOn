@@ -25,6 +25,7 @@ export interface TryOnJob {
   id: string;
   userId: string;
   status: JobStatus;
+  isPrivate?: boolean;
   clothingPhoto1Url: string;
   clothingPhoto2Url?: string;
   resultFullBodyUrl?: string;
@@ -32,7 +33,7 @@ export interface TryOnJob {
   perspectivesUsed: string[];
   errorMessage?: string;
   createdAt: string;
-  user?: { username: string; avatarUrl?: string };
+  user?: { username: string; firstName?: string; lastName?: string; avatarUrl?: string };
 }
 
 export interface PublicUser {

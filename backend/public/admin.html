@@ -349,6 +349,7 @@
                 <th>ID</th>
                 <th>User</th>
                 <th>Status</th>
+                <th>Privacy</th>
                 <th>Perspectives</th>
                 <th>Created</th>
                 <th>Actions</th>
@@ -586,6 +587,7 @@
               <td style="font-family: monospace; font-size: 0.8rem;">${j.id.slice(0, 8)}...</td>
               <td><span class="username-link" onclick="showUserDetails('${j.userId}')">${j.user?.username || j.userId.slice(0, 8)}</span></td>
               <td><span class="badge ${statusClass}">${j.status}</span></td>
+              <td><span class="badge ${j.isPrivate ? 'badge-muted' : 'badge-info'}">${j.isPrivate ? 'Private' : 'Public'}</span></td>
               <td>${(j.perspectivesUsed || []).join(', ') || '-'}</td>
               <td>${new Date(j.createdAt).toLocaleString()}</td>
               <td>
@@ -815,15 +817,23 @@
           <div style="text-align: center;">${avatarHtml}</div>
           <div class="user-field"><span class="field-label">ID:</span><span class="field-value" style="font-family: monospace; font-size: 0.85rem;">${user.id}</span></div>
           <div class="user-field"><span class="field-label">Username:</span><span class="field-value">${user.username}</span></div>
+          <div class="user-field"><span class="field-label">First Name:</span><span class="field-value">${user.firstName || '(not set)'}</span></div>
+          <div class="user-field"><span class="field-label">Last Name:</span><span class="field-value">${user.lastName || '(not set)'}</span></div>
           <div class="user-field"><span class="field-label">Email:</span><span class="field-value">${user.email}</span></div>
           <div class="user-field"><span class="field-label">Verified:</span><span class="field-value">${user.verified ? '✓ Yes' : '✗ No'}</span></div>
           <div class="user-field"><span class="field-label">Subscription:</span><span class="field-value">${user.isSubscribed ? 'Active' : 'Free'}</span></div>
           <div class="user-field"><span class="field-label">Credits:</span><span class="field-value">${user.credits}</span></div>
           <div class="user-field"><span class="field-label">Bio:</span><span class="field-value">${user.bio || '(none)'}</span></div>
+          <div class="user-field"><span class="field-label">Address:</span><span class="field-value">${user.address || '(not set)'}</span></div>
+          <div class="user-field"><span class="field-label">City:</span><span class="field-value">${user.city || '(not set)'}</span></div>
+          <div class="user-field"><span class="field-label">State:</span><span class="field-value">${user.state || '(not set)'}</span></div>
           <div class="user-field"><span class="field-label">Followers:</span><span class="field-value">${user.followersCount}</span></div>
           <div class="user-field"><span class="field-label">Following:</span><span class="field-value">${user.followingCount}</span></div>
           <div class="user-field"><span class="field-label">Likes:</span><span class="field-value">${user.likesCount}</span></div>
+          <div class="user-field"><span class="field-label">Full Body Photo:</span><span class="field-value">${user.fullBodyUrl ? '<a href="' + user.fullBodyUrl + '" target="_blank" style="color: #3742fa;">View</a>' : '(not uploaded)'}</span></div>
+          <div class="user-field"><span class="field-label">Medium Photo:</span><span class="field-value">${user.mediumBodyUrl ? '<a href="' + user.mediumBodyUrl + '" target="_blank" style="color: #3742fa;">View</a>' : '(not uploaded)'}</span></div>
           <div class="user-field"><span class="field-label">Created:</span><span class="field-value">${new Date(user.createdAt).toLocaleString()}</span></div>
+          <div class="user-field"><span class="field-label">Updated:</span><span class="field-value">${user.updatedAt ? new Date(user.updatedAt).toLocaleString() : '-'}</span></div>
           ${locationsHtml}
         `;
         

@@ -120,10 +120,12 @@ export async function submitTryOn(req: Request, res: Response): Promise<void> {
   }
 
   const jobId = uuidv4();
+  const isPrivate = req.body?.isPrivate === true || req.body?.isPrivate === 'true';
   await prisma.tryOnJob.create({
     data: {
       id: jobId,
       userId,
+      isPrivate,
       clothingPhoto1Url: clothingUrls[0],
       clothingPhoto2Url: clothingUrls[1] ?? null,
       perspectivesUsed: [],
