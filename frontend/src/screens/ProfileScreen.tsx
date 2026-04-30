@@ -140,33 +140,68 @@ export default function ProfileScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Avatar */}
+        {/* Avatar Row with Credits and Subscription */}
         <View style={styles.avatarSection}>
-          <TouchableOpacity
-            style={styles.avatarWrap}
-            onPress={() => handlePhotoUpload('avatar', '/upload/avatar', [1, 1])}
-            onLongPress={() => user.avatarUrl && handlePhotoDelete('avatar', '/upload/avatar')}
+          {/* Credits - Left */}
+          <TouchableOpacity 
+            style={styles.avatarSideItem}
+            onPress={() => navigation.navigate('Purchase')}
           >
-            {uploading === 'avatar' ? (
-              <ActivityIndicator color={Colors.gray400} />
-            ) : user.avatarUrl ? (
-              <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
-            ) : (
-              <Text style={styles.avatarPlaceholder}>{user.username[0].toUpperCase()}</Text>
-            )}
-            <View style={styles.avatarEditBadge}>
-              <Ionicons name="add" size={18} color={Colors.white} />
+            <View style={styles.creditsContainer}>
+              <Ionicons name="flash" size={18} color={Colors.white} />
+              <Text style={styles.creditsText}>{user.credits}</Text>
             </View>
+            <Text style={styles.avatarSideLabel}>Credits</Text>
           </TouchableOpacity>
 
-          <View style={styles.userInfo}>
-            {(user.firstName || user.lastName) && (
-              <Text style={styles.fullName}>
-                {[user.firstName, user.lastName].filter(Boolean).join(' ')}
-              </Text>
-            )}
-            <Text style={styles.username}>@{user.username}</Text>
+          {/* Avatar - Center */}
+          <View style={styles.avatarCenter}>
+            <TouchableOpacity
+              style={styles.avatarWrap}
+              onPress={() => handlePhotoUpload('avatar', '/upload/avatar', [1, 1])}
+              onLongPress={() => user.avatarUrl && handlePhotoDelete('avatar', '/upload/avatar')}
+            >
+              {uploading === 'avatar' ? (
+                <ActivityIndicator color={Colors.gray400} />
+              ) : user.avatarUrl ? (
+                <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.avatarPlaceholder}>{user.username[0].toUpperCase()}</Text>
+              )}
+              <View style={styles.avatarEditBadge}>
+                <Ionicons name="add" size={18} color={Colors.white} />
+              </View>
+            </TouchableOpacity>
+
+            <View style={styles.userInfo}>
+              {(user.firstName || user.lastName) && (
+                <Text style={styles.fullName}>
+                  {[user.firstName, user.lastName].filter(Boolean).join(' ')}
+                </Text>
+              )}
+              <Text style={styles.username}>@{user.username}</Text>
+            </View>
           </View>
+
+          {/* Subscription - Right */}
+          <TouchableOpacity 
+            style={styles.avatarSideItem}
+            onPress={() => navigation.navigate('Purchase')}
+          >
+            <View style={[
+              styles.subscriptionBadge,
+              user.isSubscribed ? styles.subscriptionActive : styles.subscriptionInactive
+            ]}>
+              <Ionicons 
+                name={user.isSubscribed ? "checkmark-circle" : "close-circle"} 
+                size={18} 
+                color={user.isSubscribed ? Colors.success : Colors.gray400} 
+              />
+            </View>
+            <Text style={styles.avatarSideLabel}>
+              {user.isSubscribed ? 'Subscribed' : 'Free'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Stats */}
@@ -354,7 +389,53 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   menuButton: { padding: Spacing.sm },
-  avatarSection: { alignItems: 'center', paddingVertical: Spacing.lg },
+  avatarSection: { 
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingVertical: Spacing.lg,
+    paddingHorizontal: Spacing.md,
+  },
+  avatarSideItem: {
+    alignItems: 'center',
+    width: 70,
+    paddingTop: Spacing.md,
+  },
+  creditsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.black,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+    gap: 4,
+  },
+  creditsText: {
+    color: Colors.white,
+    fontSize: Typography.fontSizeMD,
+    fontWeight: Typography.fontWeightBold,
+  },
+  subscriptionBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subscriptionActive: {
+    backgroundColor: '#E8F5E9',
+  },
+  subscriptionInactive: {
+    backgroundColor: Colors.gray100,
+  },
+  avatarSideLabel: {
+    fontSize: Typography.fontSizeXS,
+    color: Colors.gray600,
+    marginTop: 4,
+  },
+  avatarCenter: {
+    alignItems: 'center',
+  },
   avatarWrap: {
     width: 90,
     height: 90,
