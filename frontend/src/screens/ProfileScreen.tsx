@@ -23,6 +23,7 @@ import { TryOnJob } from '../types';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
 import { RootStackParams } from '../navigation';
 import TryOnDetailModal from '../components/TryOnDetailModal';
+import { processImageForUpload } from '../utils/imageUtils';
 
 type Nav = NativeStackNavigationProp<RootStackParams>;
 
@@ -81,12 +82,15 @@ export default function ProfileScreen() {
 
     setUploading(field);
     try {
+      // Convert HEIF/HEIC to JPEG for server compatibility
+      const processedImage = await processImageForUpload(result.assets[0].uri, {
+        maxWidth: field === 'avatar' ? 512 : 1536,
+        maxHeight: field === 'avatar' ? 512 : 2048,
+        compress: 0.85,
+      });
+
       const formData = new FormData();
-      formData.append('photo', {
-        uri: result.assets[0].uri,
-        type: result.assets[0].mimeType ?? 'image/jpeg',
-        name: `${field}.jpg`,
-      } as unknown as Blob);
+      formData.append('photo', processedImage as unknown as Blob);
       const { data } = await api.post<{ url: string }>(endpoint, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });

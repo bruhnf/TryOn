@@ -21,6 +21,7 @@ import { Colors, Typography, Spacing, Radius } from '../constants/theme';
 import FullScreenImageModal from '../components/FullScreenImageModal';
 import CreditDisplay from '../components/CreditDisplay';
 import { RootStackParams } from '../navigation';
+import { processImageForUpload } from '../utils/imageUtils';
 
 const POLL_INTERVAL_MS = 5000; // 5 seconds between polls
 const MAX_POLL_ERRORS = 3; // Stop polling after this many consecutive errors
@@ -118,12 +119,15 @@ export default function TryOnScreen() {
     setSubmitting(true);
     try {
       const formData = new FormData();
+      
+      // Process each photo to convert HEIF to JPEG
       for (const uri of clothingPhotos) {
-        formData.append('photos', {
-          uri,
-          type: 'image/jpeg',
-          name: 'clothing.jpg',
-        } as unknown as Blob);
+        const processedImage = await processImageForUpload(uri, {
+          maxWidth: 1536,
+          maxHeight: 2048,
+          compress: 0.85,
+        });
+        formData.append('photos', processedImage as unknown as Blob);
       }
       formData.append('isPrivate', isPrivate.toString());
 

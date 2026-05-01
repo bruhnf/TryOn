@@ -30,14 +30,26 @@ async function handleBodyPhotoUpload(
   let processedBuffer: Buffer;
   let mimeType: string;
   
-  if (field === 'avatarUrl') {
-    const processed = await resizeImageForAvatar(req.file.buffer);
-    processedBuffer = processed.buffer;
-    mimeType = processed.mimeType;
-  } else {
-    const processed = await resizeImageForTryOn(req.file.buffer);
-    processedBuffer = processed.buffer;
-    mimeType = processed.mimeType;
+  try {
+    if (field === 'avatarUrl') {
+      const processed = await resizeImageForAvatar(req.file.buffer);
+      processedBuffer = processed.buffer;
+      mimeType = processed.mimeType;
+    } else {
+      const processed = await resizeImageForTryOn(req.file.buffer);
+      processedBuffer = processed.buffer;
+      mimeType = processed.mimeType;
+    }
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : 'Image processing failed';
+    console.error(`[Upload] Image processing error: ${errorMsg}`);
+    res.status(400).json({ 
+      error: 'Image processing failed',
+      message: errorMsg.includes('HEIF') || errorMsg.includes('format') 
+        ? 'Unsupported image format. Please use JPEG or PNG.' 
+        : 'Could not process image. Please try a different photo.',
+    });
+    return;
   }
 
   // Always use .jpg extension since we convert to JPEG
