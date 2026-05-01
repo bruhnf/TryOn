@@ -22,13 +22,15 @@ logpath = /var/log/auth.log
 maxretry = 3
 
 # Block IPs that hit too many 404s (vulnerability scanners)
+# Block IPs that hit too many 404s (vulnerability scanners)
+# API 404s from mobile apps are ignored in the filter
 [nginx-404]
 enabled = true
 port = http,https
 filter = nginx-404
 logpath = /var/log/nginx/access.log
-# Ban after 10 404s in 60 seconds
-maxretry = 10
+# Ban after 15 non-API 404s in 60 seconds (scanners probe many paths)
+maxretry = 15
 findtime = 60
 # Ban for 1 hour
 bantime = 3600
@@ -43,13 +45,16 @@ maxretry = 1
 bantime = 86400
 
 # Block brute force attempts on auth endpoints
+# More lenient for mobile apps which may retry on network errors
 [nginx-auth]
 enabled = true
 port = http,https
 filter = nginx-auth
 logpath = /var/log/nginx/access.log
-maxretry = 10
+# Allow 15 failed attempts in 5 minutes (mobile apps retry)
+maxretry = 15
 findtime = 300
+# Ban for 2 hours
 bantime = 7200
 
 # Block requests for PHP files (we don't serve PHP)
