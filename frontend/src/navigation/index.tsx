@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -63,9 +63,9 @@ function CameraTabIcon({ focused }: { focused: boolean }) {
   return (
     <View
       style={{
-        width: 56,
-        height: 56,
-        borderRadius: 28,
+        width: 60,
+        height: 60,
+        borderRadius: 30,
         backgroundColor: Colors.black,
         alignItems: 'center',
         justifyContent: 'center',
@@ -77,7 +77,16 @@ function CameraTabIcon({ focused }: { focused: boolean }) {
         elevation: 5,
       }}
     >
-      <Ionicons name="camera" size={26} color={focused ? '#ccc' : Colors.white} />
+      <Text
+        style={{
+          color: focused ? '#ccc' : Colors.white,
+          fontSize: 13,
+          fontWeight: '800',
+          letterSpacing: 0.5,
+        }}
+      >
+        TryOn
+      </Text>
     </View>
   );
 }
