@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
 import { TryOnJob } from '../types';
 import api from '../config/api';
+import { downloadImageToGallery, downloadMultipleImages, shareImage } from '../utils/imageUtils';
 
 interface TryOnDetailModalProps {
   visible: boolean;
@@ -40,6 +41,7 @@ export default function TryOnDetailModal({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPrivate, setIsPrivate] = useState(job?.isPrivate ?? false);
   const [updating, setUpdating] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   // Reset state when job changes
@@ -82,6 +84,31 @@ export default function TryOnDetailModal({
     } finally {
       setUpdating(false);
     }
+  }
+
+  async function handleDownloadCurrent() {
+    if (downloading) return;
+    setDownloading(true);
+    const currentImage = images[currentIndex];
+    const result = await downloadImageToGallery(
+      currentImage.url,
+      `TryOn_${currentImage.label.replace(/\s/g, '')}_${Date.now()}.jpg`
+    );
+    setDownloading(false);
+    Alert.alert(result.success ? 'Saved!' : 'Error', result.message);
+  }
+
+  async function handleDownloadAll() {
+    if (downloading || images.length < 2) return;
+    setDownloading(true);
+    const result = await downloadMultipleImages(images);
+    setDownloading(false);
+    Alert.alert(result.success ? 'Saved!' : 'Error', result.message);
+  }
+
+  async function handleShare() {
+    const currentImage = images[currentIndex];
+    await shareImage(currentImage.url);
   }
 
   return (
@@ -144,6 +171,46 @@ export default function TryOnDetailModal({
               </View>
             </View>
           )}
+
+          {/* Action buttons */}
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={handleShare}
+              disabled={downloading}
+            >
+              <Ionicons name="share-outline" size={22} color={Colors.white} />
+              <Text style={styles.actionButtonText}>Share</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={handleDownloadCurrent}
+              disabled={downloading}
+            >
+              {downloading ? (
+                <ActivityIndicator color={Colors.white} size="small" />
+              ) : (
+                <Ionicons name="download-outline" size={22} color={Colors.white} />
+              )}
+              <Text style={styles.actionButtonText}>Save</Text>
+            </TouchableOpacity>
+
+            {images.length > 1 && (
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={handleDownloadAll}
+                disabled={downloading}
+              >
+                {downloading ? (
+                  <ActivityIndicator color={Colors.white} size="small" />
+                ) : (
+                  <Ionicons name="images-outline" size={22} color={Colors.white} />
+                )}
+                <Text style={styles.actionButtonText}>Save All</Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
           {/* Privacy toggle */}
           <View style={styles.privacyContainer}>
@@ -281,5 +348,26 @@ const styles = StyleSheet.create({
   privacyHint: {
     color: 'rgba(255, 255, 255, 0.6)',
     fontSize: Typography.fontSizeXS,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 20,
+    marginBottom: 16,
+  },
+  actionButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: Radius.md,
+    minWidth: 70,
+  },
+  actionButtonText: {
+    color: Colors.white,
+    fontSize: Typography.fontSizeXS,
+    fontWeight: Typography.fontWeightMedium,
   },
 });
