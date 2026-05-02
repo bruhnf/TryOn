@@ -1,12 +1,16 @@
 import nodemailer from 'nodemailer';
 import { env } from '../config/env';
+import { createChildLogger, logExternalCall } from './logger';
+
+const log = createChildLogger('EmailService');
 
 function createTransport() {
   // If SMTP not configured, skip email sending
   if (!env.email.smtpHost || !env.email.smtpUser) {
-    console.warn('[Email] SMTP not configured - emails will be logged to console only');
+    log.warn('SMTP not configured - emails will be logged only');
     return null;
   }
+  log.info('SMTP transport configured', { host: env.email.smtpHost, port: env.email.smtpPort });
   return nodemailer.createTransport({
     host: env.email.smtpHost,
     port: env.email.smtpPort,
@@ -19,15 +23,34 @@ const transport = createTransport();
 
 async function sendMail(options: { from: string; to: string; subject: string; html: string }) {
   if (!transport) {
-    // Log email to console when SMTP not configured
-    console.log('\n[Email - NO SMTP]');
-    console.log(`To: ${options.to}`);
-    console.log(`Subject: ${options.subject}`);
-    console.log(`Content: ${options.html.replace(/<[^>]*>/g, '')}`);
-    console.log('[End Email]\n');
+    // Log email when SMTP not configured
+    log.info('Email (no SMTP)', { 
+      to: options.to, 
+      subject: options.subject,
+      contentPreview: options.html.replace(/<[^>]*>/g, '').substring(0, 100),
+    });
     return;
   }
-  await transport.sendMail(options);
+  
+  const startTime = Date.now();
+  try {
+    await transport.sendMail(options);
+    logExternalCall('smtp', 'sendMail', {
+      durationMs: Date.now() - startTime,
+      success: true,
+      to: options.to,
+      subject: options.subject,
+    });
+  } catch (err: unknown) {
+    logExternalCall('smtp', 'sendMail', {
+      durationMs: Date.now() - startTime,
+      success: false,
+      to: options.to,
+      subject: options.subject,
+      error: (err as Error).message,
+    });
+    throw err;
+  }
 }
 
 export async function sendVerificationEmail(to: string, token: string): Promise<void> {

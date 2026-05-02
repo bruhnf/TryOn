@@ -1,5 +1,8 @@
 import { env } from '../config/env';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { createChildLogger, logExternalCall } from './logger';
+
+const log = createChildLogger('GrokService');
 
 const s3 = new S3Client({
   region: env.aws.region,
@@ -47,7 +50,7 @@ function detectImageFormat(buffer: Buffer): string | null {
 }
 
 async function fetchImageAsBase64(url: string, label: string): Promise<{ base64: string; mimeType: string }> {
-  console.log(`[fetchImage] Fetching ${label}: ${url.substring(0, 100)}...`);
+  log.debug('Fetching image', { label, url: url.substring(0, 100) });
   
   const bucket = env.aws.s3Bucket;
   let buffer: Buffer;
@@ -55,13 +58,13 @@ async function fetchImageAsBase64(url: string, label: string): Promise<{ base64:
   
   // Check if this is an S3 URL - fetch directly via SDK for reliability
   if (url.includes(bucket) || url.includes('.s3.') || url.includes('s3.amazonaws.com')) {
-    console.log(`[fetchImage] ${label}: Detected S3 URL, using SDK direct fetch`);
+    log.debug('Detected S3 URL, using SDK direct fetch', { label });
     try {
       // Extract key from URL
       const urlObj = new URL(url.split('?')[0]); // Remove query params (presigned)
       const key = urlObj.pathname.substring(1); // Remove leading /
       
-      console.log(`[fetchImage] ${label}: S3 bucket=${bucket}, key=${key}`);
+      log.debug('S3 fetch params', { label, bucket, key });
       
       const command = new GetObjectCommand({
         Bucket: bucket,
@@ -77,23 +80,27 @@ async function fetchImageAsBase64(url: string, label: string): Promise<{ base64:
       
       buffer = Buffer.from(bodyContents);
       contentType = response.ContentType || '';
-      console.log(`[fetchImage] ${label}: S3 fetch success, ${buffer.length} bytes, type: ${contentType}`);
+      log.debug('S3 fetch success', { label, bytes: buffer.length, contentType });
     } catch (s3Error: any) {
-      console.error(`[fetchImage] ${label}: S3 SDK fetch failed:`, s3Error.message);
+      log.error('S3 SDK fetch failed', { label, error: s3Error.message });
       throw new Error(`Failed to fetch ${label} from S3: ${s3Error.message}`);
     }
   } else {
     // Fallback to HTTP fetch for non-S3 URLs
-    console.log(`[fetchImage] ${label}: Using HTTP fetch`);
+    log.debug('Using HTTP fetch', { label });
     const res = await fetch(url);
     
-    console.log(`[fetchImage] ${label} response status: ${res.status} ${res.statusText}`);
-    console.log(`[fetchImage] ${label} content-type: ${res.headers.get('content-type')}`);
-    console.log(`[fetchImage] ${label} content-length: ${res.headers.get('content-length')}`);
+    log.debug('HTTP response received', { 
+      label, 
+      status: res.status, 
+      statusText: res.statusText,
+      contentType: res.headers.get('content-type'),
+      contentLength: res.headers.get('content-length'),
+    });
     
     if (!res.ok) {
       const errorBody = await res.text();
-      console.error(`[fetchImage] ${label} FAILED:`, errorBody.substring(0, 500));
+      log.error('HTTP fetch failed', { label, status: res.status, errorBody: errorBody.substring(0, 200) });
       throw new Error(`Failed to fetch ${label}: ${res.status} - ${errorBody.substring(0, 200)}`);
     }
     
@@ -101,24 +108,27 @@ async function fetchImageAsBase64(url: string, label: string): Promise<{ base64:
     buffer = Buffer.from(await res.arrayBuffer());
   }
   
-  console.log(`[fetchImage] ${label} buffer size: ${buffer.length} bytes`);
-  console.log(`[fetchImage] ${label} first 20 bytes (hex): ${buffer.slice(0, 20).toString('hex')}`);
+  log.debug('Image buffer details', { 
+    label, 
+    bufferSize: buffer.length, 
+    firstBytes: buffer.slice(0, 20).toString('hex'),
+  });
   
   // Detect actual format from magic bytes
   const detectedFormat = detectImageFormat(buffer);
-  console.log(`[fetchImage] ${label} detected format: ${detectedFormat || 'UNKNOWN'}`);
+  log.debug('Image format detected', { label, format: detectedFormat || 'UNKNOWN' });
   
   if (!detectedFormat) {
     // Log what we actually got
     const preview = buffer.slice(0, 200).toString('utf8');
-    console.error(`[fetchImage] ${label} NOT A VALID IMAGE! Preview:`, preview);
+    log.error('Invalid image data', { label, contentType, preview: preview.substring(0, 100) });
     throw new Error(`${label} is not a valid image (got ${contentType}, first bytes suggest non-image data)`);
   }
   
   const mimeType = `image/${detectedFormat}`;
   const base64 = buffer.toString('base64');
   
-  console.log(`[fetchImage] ${label} SUCCESS: ${mimeType}, ${base64.length} base64 chars`);
+  log.debug('Image fetch complete', { label, mimeType, base64Length: base64.length });
   
   return { base64, mimeType };
 }
@@ -138,12 +148,11 @@ function buildPrompt(perspective: TryOnPerspective): string {
 export async function generateTryOnImage(input: TryOnInput): Promise<string> {
   const { userBodyImageUrl, perspective, clothingImageUrls } = input;
 
-  console.log('\n========== GROK TRY-ON SERVICE START ==========');
-  console.log('Timestamp:', new Date().toISOString());
-  console.log('Perspective:', perspective);
-  console.log('Body image URL:', userBodyImageUrl);
-  console.log('Clothing image URLs:', clothingImageUrls);
-  console.log('================================================\n');
+  log.info('Try-on generation started', {
+    perspective,
+    bodyImageUrl: userBodyImageUrl.substring(0, 80),
+    clothingCount: clothingImageUrls.length,
+  });
 
   // Fetch and validate body image
   const bodyImage = await fetchImageAsBase64(userBodyImageUrl, 'body-image');
@@ -162,16 +171,12 @@ export async function generateTryOnImage(input: TryOnInput): Promise<string> {
 
   const prompt = buildPrompt(perspective);
 
-  console.log('\n========== GROK API REQUEST ==========');
-  console.log('Endpoint:', `${env.grok.apiUrl}/images/edits`);
-  console.log('Model: grok-imagine-image');
-  console.log('Prompt:', prompt);
-  console.log('Images count:', images.length);
-  console.log('Image objects (truncated):');
-  images.forEach((img, i) => {
-    console.log(`  [${i}] { url: "${img.url.substring(0, 50)}..." } (${img.url.length} chars)`);
+  log.debug('Grok API request prepared', {
+    endpoint: `${env.grok.apiUrl}/images/edits`,
+    model: 'grok-imagine-image',
+    imageCount: images.length,
+    promptLength: prompt.length,
   });
-  console.log('=======================================\n');
 
   const requestBody = {
     model: 'grok-imagine-image',
@@ -181,7 +186,6 @@ export async function generateTryOnImage(input: TryOnInput): Promise<string> {
     response_format: 'url',
   };
 
-  console.log('[Grok] Sending request...');
   const startTime = Date.now();
 
   // Set timeout for API call (2 minutes max for image generation)
@@ -201,18 +205,20 @@ export async function generateTryOnImage(input: TryOnInput): Promise<string> {
     
     clearTimeout(timeoutId);
 
-    const elapsed = Date.now() - startTime;
-    console.log(`[Grok] Response received in ${elapsed}ms`);
-    console.log(`[Grok] Status: ${response.status} ${response.statusText}`);
+    const durationMs = Date.now() - startTime;
 
     const responseBody = await response.text();
 
     if (!response.ok) {
-      console.error('\n========== GROK API ERROR ==========');
-      console.error('Status:', response.status);
-      console.error('Headers:', Object.fromEntries(response.headers.entries()));
-      console.error('Body:', responseBody);
-      console.error('=====================================\n');
+      logExternalCall('Grok', 'generateImage', {
+        method: 'POST',
+        url: `${env.grok.apiUrl}/images/edits`,
+        statusCode: response.status,
+        durationMs,
+        success: false,
+        error: responseBody.substring(0, 500),
+        perspective,
+      });
       throw new Error(`Grok API error ${response.status}: ${responseBody}`);
     }
 
@@ -220,25 +226,60 @@ export async function generateTryOnImage(input: TryOnInput): Promise<string> {
       data?: Array<{ url?: string; b64_json?: string }>;
     };
 
-    console.log('\n========== GROK API SUCCESS ==========');
-    console.log('Response:', JSON.stringify(data, null, 2));
-    console.log('=======================================\n');
-
     const imageData = data.data?.[0];
+    
     if (imageData?.url) {
-      console.log('[Grok] Returning image URL:', imageData.url);
+      logExternalCall('Grok', 'generateImage', {
+        method: 'POST',
+        url: `${env.grok.apiUrl}/images/edits`,
+        statusCode: response.status,
+        durationMs,
+        success: true,
+        perspective,
+        resultType: 'url',
+      });
+      log.info('Try-on generation completed', { perspective, durationMs, resultType: 'url' });
       return imageData.url;
     }
+    
     if (imageData?.b64_json) {
-      console.log('[Grok] Returning base64 image (length:', imageData.b64_json.length, ')');
+      logExternalCall('Grok', 'generateImage', {
+        method: 'POST',
+        url: `${env.grok.apiUrl}/images/edits`,
+        statusCode: response.status,
+        durationMs,
+        success: true,
+        perspective,
+        resultType: 'base64',
+        resultLength: imageData.b64_json.length,
+      });
+      log.info('Try-on generation completed', { perspective, durationMs, resultType: 'base64' });
       return `data:image/png;base64,${imageData.b64_json}`;
     }
 
-    console.error('[Grok] No image in response!');
+    logExternalCall('Grok', 'generateImage', {
+      method: 'POST',
+      url: `${env.grok.apiUrl}/images/edits`,
+      statusCode: response.status,
+      durationMs,
+      success: false,
+      error: 'No image content in response',
+      perspective,
+    });
     throw new Error('Grok API returned no image content');
   } catch (err: unknown) {
     clearTimeout(timeoutId);
+    const durationMs = Date.now() - startTime;
+    
     if ((err as Error).name === 'AbortError') {
+      logExternalCall('Grok', 'generateImage', {
+        method: 'POST',
+        url: `${env.grok.apiUrl}/images/edits`,
+        durationMs,
+        success: false,
+        error: 'Request timed out after 2 minutes',
+        perspective,
+      });
       throw new Error('Grok API request timed out after 2 minutes');
     }
     throw err;

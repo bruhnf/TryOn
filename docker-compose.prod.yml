@@ -43,6 +43,9 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379
+      LOG_DIR: /var/log/tryon
+    volumes:
+      - backend_logs:/var/log/tryon
     depends_on:
       postgres:
         condition: service_healthy
@@ -109,6 +112,7 @@ volumes:
   redis_data:
   nginx_logs:
   fail2ban_data:
+  backend_logs:
 
 networks:
   internal:

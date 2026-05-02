@@ -6,11 +6,14 @@ import { safeFilename } from '../middleware/uploadMiddleware';
 import { enqueueTryOn } from '../queue/tryonQueue';
 import { DAILY_TRYON_LIMIT, MAX_CLOTHING_ITEMS } from '../middleware/subscription';
 import { resizeImageForTryOn } from '../utils/imageProcessor';
+import { createChildLogger, logJob, logUpload } from '../services/logger';
+
+const log = createChildLogger('TryOnController');
 
 export async function submitTryOn(req: Request, res: Response): Promise<void> {
   if (!req.user) { res.status(401).json({ error: 'Unauthorized' }); return; }
 
-  console.log('[submitTryOn] req.user:', JSON.stringify(req.user));
+  log.debug('submitTryOn called', { user: req.user });
 
   const files = req.files as Express.Multer.File[] | undefined;
   if (!files || files.length === 0) {
@@ -20,7 +23,7 @@ export async function submitTryOn(req: Request, res: Response): Promise<void> {
 
   const { userId, isSubscribed, credits } = req.user;
   
-  console.log(`[submitTryOn] userId=${userId}, isSubscribed=${isSubscribed}, credits=${credits}`);
+  log.debug('User subscription status', { userId, isSubscribed, credits });
 
   // Check clothing item limit (same for all users)
   if (files.length > MAX_CLOTHING_ITEMS) {
@@ -32,7 +35,7 @@ export async function submitTryOn(req: Request, res: Response): Promise<void> {
 
   // Check if user can generate (needs subscription or credits)
   if (!isSubscribed && credits <= 0) {
-    console.log('[submitTryOn] SUBSCRIPTION_REQUIRED - isSubscribed:', isSubscribed, 'credits:', credits);
+    log.info('Try-on blocked: no subscription or credits', { userId, isSubscribed, credits });
     res.status(403).json({
       error: 'SUBSCRIPTION_REQUIRED',
       message: 'Please subscribe or purchase credits to use try-on.',

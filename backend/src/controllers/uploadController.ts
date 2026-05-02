@@ -4,6 +4,9 @@ import prisma from '../lib/prisma';
 import { uploadToS3, deleteFromS3, keyFromUrl } from '../services/s3Service';
 import { safeFilename } from '../middleware/uploadMiddleware';
 import { resizeImageForTryOn, resizeImageForAvatar } from '../utils/imageProcessor';
+import { createChildLogger, logUpload } from '../services/logger';
+
+const log = createChildLogger('UploadController');
 
 type BodyPhotoField = 'avatarUrl' | 'fullBodyUrl' | 'mediumBodyUrl';
 
@@ -22,7 +25,9 @@ async function handleBodyPhotoUpload(
   // Delete old photo from S3 if it exists
   const oldUrl = user[field];
   if (oldUrl) {
-    deleteFromS3(keyFromUrl(oldUrl)).catch(console.error);
+    deleteFromS3(keyFromUrl(oldUrl)).catch((err) => {
+      log.error('Failed to delete old photo from S3', { userId, field, error: err.message });
+    });
   }
 
   // Resize image before upload
@@ -42,7 +47,13 @@ async function handleBodyPhotoUpload(
     }
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Image processing failed';
-    console.error(`[Upload] Image processing error: ${errorMsg}`);
+    logUpload('failed', {
+      userId,
+      fileType: field,
+      fileName: req.file.originalname,
+      success: false,
+      error: errorMsg,
+    });
     res.status(400).json({ 
       error: 'Image processing failed',
       message: errorMsg.includes('HEIF') || errorMsg.includes('format') 

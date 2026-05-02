@@ -89,6 +89,60 @@ GitHub Actions workflow (`.github/workflows/deploy.yml`) triggers on push to `ma
 
 ---
 
+## Logging
+
+The backend uses **Winston** for structured logging with daily file rotation.
+
+### Log Levels
+- `error` - Application errors, exceptions, failed operations
+- `warn` - Warnings, deprecations, suspicious activity (e.g., suspicious login locations)
+- `info` - Key business events, state changes, successful operations
+- `http` - HTTP request/response logging
+- `debug` - Detailed debugging information (verbose in dev)
+
+### Environment Variables
+```bash
+LOG_LEVEL=debug       # Set log level (default: debug in dev, info in prod)
+LOG_DIR=/var/log/tryon  # Log file directory (default: ./logs)
+LOG_TO_FILE=true      # Enable file logging in development
+```
+
+### Log Files (Production)
+Located at `/var/log/tryon/` (Docker volume `backend_logs`):
+- `combined-YYYY-MM-DD.log` - All logs, rotated daily, 14-day retention
+- `error-YYYY-MM-DD.log` - Errors only, 30-day retention
+- `exceptions-YYYY-MM-DD.log` - Unhandled exceptions
+- `rejections-YYYY-MM-DD.log` - Unhandled promise rejections
+
+### Viewing Logs
+```bash
+# On Lightsail server
+docker compose -f docker-compose.prod.yml logs -f backend  # Live Docker logs
+docker compose -f docker-compose.prod.yml exec backend tail -f /var/log/tryon/combined-$(date +%Y-%m-%d).log
+
+# Or mount volume directly
+docker volume inspect www_backend_logs  # Find mount point
+tail -f /var/lib/docker/volumes/www_backend_logs/_data/combined-*.log
+```
+
+### Log Management Strategy
+1. **Daily rotation** prevents single files from growing too large
+2. **14-day retention** for combined logs (configurable)
+3. **30-day retention** for error logs (useful for debugging recurring issues)
+4. **Gzip compression** of rotated logs saves disk space
+5. **Correlation IDs** in `x-correlation-id` header trace requests across services
+
+### What's Logged
+- HTTP requests/responses (method, path, status, duration, user ID)
+- Authentication events (login, signup, failed attempts, token refresh)
+- External API calls (Grok/xAI, ip-api, SMTP) with timing and status
+- Job processing (try-on queue events)
+- File uploads (S3 operations)
+- Security events (rate limiting, suspicious locations)
+- Database errors and slow queries (>1s)
+
+---
+
 ## Architecture
 
 ### Website (`website/`)

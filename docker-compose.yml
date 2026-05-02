@@ -31,12 +31,15 @@ services:
     environment:
       DATABASE_URL: postgresql://tryon:tryon_dev@postgres:5432/tryon_db
       REDIS_URL: redis://redis:6379
+      LOG_LEVEL: debug
+      LOG_TO_FILE: 'true'
     depends_on:
       - postgres
       - redis
     volumes:
       - ./backend:/app
       - /app/node_modules
+      - ./backend/logs:/app/logs
 
 volumes:
   postgres_data:

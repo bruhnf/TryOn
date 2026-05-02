@@ -5,6 +5,8 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { env } from './config/env';
+import { logger, logApp, logSecurity } from './services/logger';
+import { httpLogger, errorLogger } from './middleware/httpLogger';
 
 import authRoutes from './routes/auth';
 import uploadRoutes from './routes/upload';
@@ -22,13 +24,8 @@ const app = express();
 // Trust first proxy (needed for rate limiting behind reverse proxy)
 app.set('trust proxy', 1);
 
-// Request logging (development only)
-if (env.isDev) {
-  app.use((req, _res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-    next();
-  });
-}
+// HTTP request logging (replaces console.log based logging)
+app.use(httpLogger);
 
 // Serve admin dashboard BEFORE helmet (needs inline scripts)
 app.get('/admin', (_req, res) => {
@@ -62,6 +59,10 @@ const globalLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
   skip: (req) => req.path === '/health',
+  handler: (req, res) => {
+    logSecurity('rate_limit', { ip: req.ip, path: req.path, limiter: 'global' });
+    res.status(429).json({ error: 'Too many requests, please try again later.' });
+  },
 });
 app.use(globalLimiter);
 
@@ -72,6 +73,10 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many authentication attempts, please try again later.' },
+  handler: (req, res) => {
+    logSecurity('rate_limit', { ip: req.ip, path: req.path, limiter: 'auth' });
+    res.status(429).json({ error: 'Too many authentication attempts, please try again later.' });
+  },
 });
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/signup', authLimiter);
@@ -84,6 +89,10 @@ const uploadLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Upload limit reached, please wait.' },
+  handler: (req, res) => {
+    logSecurity('rate_limit', { ip: req.ip, path: req.path, limiter: 'upload' });
+    res.status(429).json({ error: 'Upload limit reached, please wait.' });
+  },
 });
 app.use('/api/upload', uploadLimiter);
 
@@ -95,6 +104,10 @@ const tryonPostLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Try-on limit reached, please wait.' },
+  handler: (req, res) => {
+    logSecurity('rate_limit', { ip: req.ip, path: req.path, limiter: 'tryon' });
+    res.status(429).json({ error: 'Try-on limit reached, please wait.' });
+  },
 });
 app.use('/api/tryon', (req: Request, res: Response, next: NextFunction) => {
   if (req.method === 'POST') {
@@ -121,15 +134,18 @@ app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
+// Error logging middleware (before error handler)
+app.use(errorLogger);
+
 // Global error handler
 app.use(
   (
     err: Error,
-    _req: express.Request,
+    req: express.Request,
     res: express.Response,
     _next: express.NextFunction,
   ) => {
-    console.error('[Error]', err.message);
+    // Error already logged by errorLogger middleware
     
     // Don't leak error details in production
     if (env.isDev) {
@@ -141,5 +157,11 @@ app.use(
 );
 
 app.listen(env.port, () => {
-  console.log(`TryOn backend running on port ${env.port} [${env.nodeEnv}]`);
+  logApp('startup', {
+    component: 'express',
+    message: `TryOn backend running on port ${env.port}`,
+    port: env.port,
+    environment: env.nodeEnv,
+    logLevel: process.env.LOG_LEVEL || (env.isDev ? 'debug' : 'info'),
+  });
 });

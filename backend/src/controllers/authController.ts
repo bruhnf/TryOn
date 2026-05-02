@@ -13,6 +13,9 @@ import {
   sendPasswordResetEmail,
 } from '../services/emailService';
 import { recordLoginLocation } from '../services/locationService';
+import { logAuth, createChildLogger } from '../services/logger';
+
+const log = createChildLogger('AuthController');
 
 const signupSchema = z.object({
   firstName: z.string().max(50).optional(),
@@ -48,6 +51,12 @@ export async function signup(req: Request, res: Response): Promise<void> {
     where: { OR: [{ email }, { username }] },
   });
   if (existing) {
+    logAuth('signup', {
+      email,
+      success: false,
+      reason: existing.email === email ? 'email_exists' : 'username_exists',
+      ip: req.ip,
+    });
     res
       .status(409)
       .json({ error: existing.email === email ? 'Email already in use' : 'Username taken' });
@@ -63,6 +72,14 @@ export async function signup(req: Request, res: Response): Promise<void> {
   });
 
   await sendVerificationEmail(email, verifyToken);
+
+  logAuth('signup', {
+    userId: user.id,
+    email,
+    success: true,
+    ip: req.ip,
+    userAgent: req.headers['user-agent'],
+  });
 
   res.status(201).json({
     message: 'Account created. Check your email to verify your account.',
@@ -95,14 +112,29 @@ export async function login(req: Request, res: Response): Promise<void> {
     return;
   }
   const { email, password } = parse.data;
+  const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0] ?? req.ip ?? '0.0.0.0';
 
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user || !(await verifyPassword(password, user.passwordHash))) {
+    logAuth('failed_login', {
+      email,
+      success: false,
+      reason: 'invalid_credentials',
+      ip,
+      userAgent: req.headers['user-agent'],
+    });
     res.status(401).json({ error: 'Invalid email or password' });
     return;
   }
 
   if (!user.verified) {
+    logAuth('failed_login', {
+      email,
+      userId: user.id,
+      success: false,
+      reason: 'email_not_verified',
+      ip,
+    });
     res.status(403).json({ error: 'EMAIL_NOT_VERIFIED', message: 'Please verify your email before logging in.' });
     return;
   }
@@ -120,8 +152,18 @@ export async function login(req: Request, res: Response): Promise<void> {
     data: { userId: user.id, token: rawRefresh, expiresAt: refreshExpiry },
   });
 
-  const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0] ?? req.ip ?? '0.0.0.0';
-  recordLoginLocation(user.id, ip, 'login', user.email).catch(console.error);
+  // Record location in background - errors are logged by locationService
+  recordLoginLocation(user.id, ip, 'login', user.email).catch((err) => {
+    log.error('Failed to record login location', { userId: user.id, error: err.message });
+  });
+
+  logAuth('login', {
+    userId: user.id,
+    email,
+    success: true,
+    ip,
+    userAgent: req.headers['user-agent'],
+  });
 
   res.json({
     accessToken,
