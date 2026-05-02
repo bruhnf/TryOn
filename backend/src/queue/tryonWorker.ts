@@ -8,6 +8,18 @@ import { createChildLogger, logJob, logUpload } from '../services/logger';
 
 const log = createChildLogger('TryOnWorker');
 
+/**
+ * Download image from URL and return as Buffer
+ */
+async function downloadImage(url: string): Promise<Buffer> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
+  }
+  const arrayBuffer = await response.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
 const worker = new Worker<TryOnJobData>(
   'tryon',
   async (job) => {
@@ -49,32 +61,45 @@ const worker = new Worker<TryOnJobData>(
         perspective: bodyPhoto.perspective,
         resultLength: resultUrl.length,
         isBase64: resultUrl.startsWith('data:'),
+        isUrl: resultUrl.startsWith('http'),
       });
 
-      // If the result is a URL already (hosted), use as-is
-      // If it's base64, upload to S3
-      let finalUrl = resultUrl;
+      // Always upload result to S3 for permanent storage
+      // Grok returns either base64 data or a temporary URL that will expire
+      let buffer: Buffer;
+      
       if (resultUrl.startsWith('data:')) {
-        log.debug('Uploading base64 result to S3', { jobId, perspective: bodyPhoto.perspective });
+        // Base64 encoded image
+        log.debug('Converting base64 result to buffer', { jobId, perspective: bodyPhoto.perspective });
         const base64Data = resultUrl.split(',')[1];
-        const buffer = Buffer.from(base64Data, 'base64');
-        const key = await uploadToS3(
-          'tryon-results',
-          userId,
-          `${uuidv4()}.jpg`,
-          buffer,
-          'image/jpeg',
-        );
-        finalUrl = `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
-        
-        logUpload('completed', {
-          userId,
-          fileType: 'tryon-result',
-          s3Key: key,
-          fileSize: buffer.length,
-          success: true,
-        });
+        buffer = Buffer.from(base64Data, 'base64');
+      } else if (resultUrl.startsWith('http')) {
+        // URL to temporary hosted image - download it
+        log.debug('Downloading result from Grok URL', { jobId, perspective: bodyPhoto.perspective, url: resultUrl.substring(0, 60) });
+        buffer = await downloadImage(resultUrl);
+      } else {
+        throw new Error(`Unexpected result format from Grok: ${resultUrl.substring(0, 50)}`);
       }
+
+      // Upload to S3
+      log.debug('Uploading result to S3', { jobId, perspective: bodyPhoto.perspective, bufferSize: buffer.length });
+      const key = await uploadToS3(
+        'tryon-results',
+        userId,
+        `${uuidv4()}.jpg`,
+        buffer,
+        'image/jpeg',
+      );
+      const finalUrl = `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+      
+      logUpload('completed', {
+        userId,
+        fileType: 'tryon-result',
+        s3Key: key,
+        fileSize: buffer.length,
+        success: true,
+        perspective: bodyPhoto.perspective,
+      });
 
       results[bodyPhoto.perspective] = finalUrl;
     }
