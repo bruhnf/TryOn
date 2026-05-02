@@ -584,6 +584,24 @@
             'FAILED': 'badge-danger'
           }[j.status] || 'badge-muted';
           
+          // Build clothing links
+          let clothingLinks = '';
+          if (j.clothingPhoto1Url) {
+            clothingLinks += `<a href="${j.clothingPhoto1Url}" target="_blank" class="btn btn-primary" style="padding: 2px 8px;">Clothing</a> `;
+          }
+          if (j.clothingPhoto2Url) {
+            clothingLinks += `<a href="${j.clothingPhoto2Url}" target="_blank" class="btn btn-primary" style="padding: 2px 8px;">Clothing 2</a> `;
+          }
+          
+          // Build result links
+          let resultLinks = '';
+          if (j.resultFullBodyUrl) {
+            resultLinks += `<a href="${j.resultFullBodyUrl}" target="_blank" class="btn btn-secondary" style="padding: 2px 8px;">Full</a> `;
+          }
+          if (j.resultMediumUrl) {
+            resultLinks += `<a href="${j.resultMediumUrl}" target="_blank" class="btn btn-secondary" style="padding: 2px 8px;">Medium</a> `;
+          }
+          
           return `
             <tr>
               <td style="font-family: monospace; font-size: 0.8rem;">${j.id.slice(0, 8)}...</td>
@@ -593,8 +611,7 @@
               <td>${(j.perspectivesUsed || []).join(', ') || '-'}</td>
               <td>${new Date(j.createdAt).toLocaleString()}</td>
               <td>
-                ${j.resultFullBodyUrl ? `<a href="${j.resultFullBodyUrl}" target="_blank" class="btn btn-secondary" style="padding: 2px 8px;">Full</a>` : ''}
-                ${j.resultMediumUrl ? `<a href="${j.resultMediumUrl}" target="_blank" class="btn btn-secondary" style="padding: 2px 8px;">Medium</a>` : ''}
+                ${clothingLinks}${resultLinks || '-'}
               </td>
             </tr>
           `;
