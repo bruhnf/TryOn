@@ -224,4 +224,30 @@ router.get('/security/suspicious', async (req: Request, res: Response) => {
   res.json(locations);
 });
 
+// Delete a single job
+router.delete('/job/:jobId', async (req: Request, res: Response) => {
+  try {
+    await prisma.tryOnJob.delete({ where: { id: req.params.jobId } });
+    res.json({ message: 'Job deleted' });
+  } catch (error) {
+    res.status(404).json({ error: 'Job not found' });
+  }
+});
+
+// Bulk delete jobs
+router.post('/jobs/delete', async (req: Request, res: Response) => {
+  const { jobIds } = req.body as { jobIds?: string[] };
+  
+  if (!jobIds || !Array.isArray(jobIds) || jobIds.length === 0) {
+    res.status(400).json({ error: 'jobIds array is required' });
+    return;
+  }
+  
+  const result = await prisma.tryOnJob.deleteMany({
+    where: { id: { in: jobIds } },
+  });
+  
+  res.json({ deleted: result.count });
+});
+
 export default router;

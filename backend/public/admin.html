@@ -345,9 +345,14 @@
       <div id="jobs-tab" style="display: none;">
         <div class="section">
           <h2>Recent Try-On Jobs</h2>
+          <div style="margin-bottom: 15px;">
+            <button class="btn btn-danger" id="deleteSelectedBtn" onclick="deleteSelectedJobs()" style="display: none;">Delete Selected (<span id="selectedCount">0</span>)</button>
+            <span id="deleteResult" style="margin-left: 10px;"></span>
+          </div>
           <table id="jobsTable">
             <thead>
               <tr>
+                <th style="width: 40px;"><input type="checkbox" id="selectAllJobs" onchange="toggleSelectAll(this)"></th>
                 <th>ID</th>
                 <th>User</th>
                 <th>Status</th>
@@ -601,6 +606,7 @@
           
           return `
             <tr>
+              <td><input type="checkbox" class="job-checkbox" value="${j.id}" onchange="updateSelectedCount()"></td>
               <td style="font-family: monospace; font-size: 0.8rem;">${j.id.slice(0, 8)}...</td>
               <td><span class="username-link" onclick="showUserDetails('${j.userId}')">${j.user?.username || j.userId.slice(0, 8)}</span></td>
               <td><span class="badge ${statusClass}">${j.status}</span></td>
@@ -609,10 +615,15 @@
               <td>${new Date(j.createdAt).toLocaleString()}</td>
               <td>
                 ${clothingLinks}${resultLinks || '-'}
+                <button class="btn btn-danger" style="padding: 2px 8px; margin-left: 5px;" onclick="deleteJob('${j.id}')">×</button>
               </td>
             </tr>
           `;
         }).join('');
+        
+        // Reset selection state
+        document.getElementById('selectAllJobs').checked = false;
+        updateSelectedCount();
       } catch (e) {
         console.error('Failed to load jobs', e);
       }
@@ -873,6 +884,84 @@
 
     function closeUserModal() {
       document.getElementById('userModal').classList.remove('active');
+    }
+
+    // Job selection functions
+    function toggleSelectAll(checkbox) {
+      const checkboxes = document.querySelectorAll('.job-checkbox');
+      checkboxes.forEach(cb => cb.checked = checkbox.checked);
+      updateSelectedCount();
+    }
+
+    function updateSelectedCount() {
+      const checkboxes = document.querySelectorAll('.job-checkbox:checked');
+      const count = checkboxes.length;
+      document.getElementById('selectedCount').textContent = count;
+      document.getElementById('deleteSelectedBtn').style.display = count > 0 ? 'inline-block' : 'none';
+      document.getElementById('deleteResult').textContent = '';
+    }
+
+    function getSelectedJobIds() {
+      const checkboxes = document.querySelectorAll('.job-checkbox:checked');
+      return Array.from(checkboxes).map(cb => cb.value);
+    }
+
+    async function deleteJob(jobId) {
+      if (!confirm('Delete this job? This cannot be undone.')) return;
+      
+      try {
+        const res = await fetch(`${API_BASE}/job/${jobId}`, {
+          method: 'DELETE',
+          headers: { 'X-Admin-Key': apiKey }
+        });
+        
+        if (res.ok) {
+          loadJobs();
+          loadStats();
+        } else {
+          const data = await res.json();
+          alert(data.error || 'Failed to delete job');
+        }
+      } catch (e) {
+        alert('Failed to delete job');
+      }
+    }
+
+    async function deleteSelectedJobs() {
+      const jobIds = getSelectedJobIds();
+      if (jobIds.length === 0) return;
+      
+      if (!confirm(`Delete ${jobIds.length} job(s)? This cannot be undone.`)) return;
+      
+      const resultEl = document.getElementById('deleteResult');
+      resultEl.textContent = 'Deleting...';
+      resultEl.className = '';
+      
+      try {
+        const res = await fetch(`${API_BASE}/jobs/delete`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Key': apiKey
+          },
+          body: JSON.stringify({ jobIds })
+        });
+        
+        const data = await res.json();
+        
+        if (res.ok) {
+          resultEl.textContent = `Deleted ${data.deleted} job(s)`;
+          resultEl.className = 'success';
+          loadJobs();
+          loadStats();
+        } else {
+          resultEl.textContent = data.error || 'Failed to delete jobs';
+          resultEl.className = 'error';
+        }
+      } catch (e) {
+        resultEl.textContent = 'Failed to delete jobs';
+        resultEl.className = 'error';
+      }
     }
 
     // Close modals when clicking outside
