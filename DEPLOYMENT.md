@@ -230,20 +230,80 @@ Features:
 
 ## 9. Monitoring & Logs
 
-### View logs
+### Application Logging (Winston)
+
+The backend uses Winston for structured logging with daily file rotation.
+
+**Log Levels:**
+- `error` - Application errors, exceptions, failed operations
+- `warn` - Warnings, suspicious activity (e.g., suspicious login locations)
+- `info` - Key business events, successful operations
+- `http` - HTTP request/response logging
+- `debug` - Detailed debugging information
+
+**Environment Variables:**
+```bash
+LOG_LEVEL=debug       # Set log level (default: debug in dev, info in prod)
+LOG_DIR=/var/log/tryon  # Log file directory (default: ./logs)
+LOG_TO_FILE=true      # Enable file logging in development
+```
+
+**Log Files (Production):**
+
+Located at `/var/log/tryon/` (Docker volume `backend_logs`):
+- `combined-YYYY-MM-DD.log` - All logs, rotated daily, 14-day retention
+- `error-YYYY-MM-DD.log` - Errors only, 30-day retention
+- `exceptions-YYYY-MM-DD.log` - Unhandled exceptions
+- `rejections-YYYY-MM-DD.log` - Unhandled promise rejections
+
+### Viewing Logs
 
 ```bash
-# All services
+# Live Docker stdout/stderr logs (all services)
 docker compose -f docker-compose.prod.yml logs -f
 
-# Specific service
+# Specific service Docker logs
 docker compose -f docker-compose.prod.yml logs -f backend
 docker compose -f docker-compose.prod.yml logs -f nginx
 docker compose -f docker-compose.prod.yml logs -f postgres
 docker compose -f docker-compose.prod.yml logs -f fail2ban
+
+# Backend application log files (Winston)
+docker compose -f docker-compose.prod.yml exec backend tail -f /var/log/tryon/combined-$(date +%Y-%m-%d).log
+
+# View only errors
+docker compose -f docker-compose.prod.yml exec backend tail -f /var/log/tryon/error-$(date +%Y-%m-%d).log
+
+# View all log files
+docker compose -f docker-compose.prod.yml exec backend ls -la /var/log/tryon/
+
+# Access log volume directly on host
+docker volume inspect www_backend_logs  # Find mount point
+tail -f /var/lib/docker/volumes/www_backend_logs/_data/combined-*.log
 ```
 
-### Resource monitoring
+### Log Management
+
+Log files are automatically managed:
+- **Daily rotation** - New file each day, prevents large files
+- **14-day retention** - Combined logs auto-deleted after 14 days
+- **30-day retention** - Error logs kept longer for debugging
+- **Gzip compression** - Rotated logs are compressed
+
+To manually clean old logs:
+```bash
+docker compose -f docker-compose.prod.yml exec backend find /var/log/tryon -name "*.log.gz" -mtime +30 -delete
+```
+
+### Request Tracing
+
+All requests get a unique correlation ID (`x-correlation-id` header). Use this to trace a specific request through logs:
+
+```bash
+docker compose -f docker-compose.prod.yml exec backend grep "abc12345" /var/log/tryon/combined-$(date +%Y-%m-%d).log
+```
+
+### Resource Monitoring
 
 ```bash
 docker stats
