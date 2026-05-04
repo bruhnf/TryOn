@@ -1,8 +1,7 @@
 import sharp from 'sharp';
 
-// Target dimensions for portrait images (9:16 aspect ratio close to mobile phones)
-const TARGET_WIDTH = 576;
-const TARGET_HEIGHT = 1024;
+// Target size for the long edge
+const MAX_LONG_SIDE = 1024;
 
 export interface ProcessedImage {
   buffer: Buffer;
@@ -12,9 +11,8 @@ export interface ProcessedImage {
 }
 
 /**
- * Resize image to fit within target dimensions while maintaining aspect ratio.
+ * Resize image so the longest side is 1024px while maintaining aspect ratio.
  * Converts to JPEG for consistent output.
- * Target: 576x1024 portrait (9:16 aspect ratio)
  */
 export async function resizeImageForTryOn(inputBuffer: Buffer): Promise<ProcessedImage> {
   console.log(`[ImageProcessor] Input buffer size: ${inputBuffer.length} bytes`);
@@ -30,33 +28,31 @@ export async function resizeImageForTryOn(inputBuffer: Buffer): Promise<Processe
       throw new Error('HEIF/HEIC format not supported. Please convert to JPEG before uploading.');
     }
     
-    // Determine if image is portrait or landscape
-    const isPortrait = (metadata.height || 0) > (metadata.width || 0);
+    const originalWidth = metadata.width || 0;
+    const originalHeight = metadata.height || 0;
     
-    let resizedImage: sharp.Sharp;
+    // Determine resize dimensions: longest side = 1024px, maintain aspect ratio
+    let resizeWidth: number;
+    let resizeHeight: number;
     
-    if (isPortrait) {
-      // Portrait: fit within 576x1024, scale to long side = 1024
-      resizedImage = sharp(inputBuffer)
-        .resize({
-          width: TARGET_WIDTH,
-          height: TARGET_HEIGHT,
-          fit: 'inside',
-          withoutEnlargement: true,
-        });
+    if (originalWidth >= originalHeight) {
+      // Landscape or square: width is the long side
+      resizeWidth = Math.min(originalWidth, MAX_LONG_SIDE);
+      resizeHeight = Math.round((resizeWidth / originalWidth) * originalHeight);
     } else {
-      // Landscape: fit within 1024x576, scale to long side = 1024
-      resizedImage = sharp(inputBuffer)
-        .resize({
-          width: TARGET_HEIGHT,
-          height: TARGET_WIDTH,
-          fit: 'inside',
-          withoutEnlargement: true,
-        });
+      // Portrait: height is the long side
+      resizeHeight = Math.min(originalHeight, MAX_LONG_SIDE);
+      resizeWidth = Math.round((resizeHeight / originalHeight) * originalWidth);
     }
     
     // Convert to JPEG with good quality
-    const outputBuffer = await resizedImage
+    const outputBuffer = await sharp(inputBuffer)
+      .resize({
+        width: resizeWidth,
+        height: resizeHeight,
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
       .rotate() // Auto-rotate based on EXIF orientation
       .jpeg({ quality: 90 })
       .toBuffer();
