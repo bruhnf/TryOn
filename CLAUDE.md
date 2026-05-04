@@ -398,6 +398,39 @@ createdAt   DateTime @default(now())
 
 ---
 
+## Image Processing
+
+All uploaded images (body photos, clothing photos) undergo a two-stage resizing process:
+
+### Frontend Resizing (Mobile)
+- **Location**: `frontend/src/utils/imageUtils.ts` → `processImageForUpload()`
+- **Purpose**: Convert HEIF/HEIC to JPEG, reduce upload bandwidth
+- **Dimensions**:
+  - Avatar photos: 512×512 (square)
+  - Body photos: Up to 1536×2048 (max dimensions)
+  - Clothing photos: Up to 1536×2048 (max dimensions)
+- **Format**: JPEG at 85% quality
+- **Features**: HEIF/HEIC to JPEG conversion (iOS compatibility)
+
+### Backend Resizing (Server)
+- **Location**: `backend/src/utils/imageProcessor.ts`
+- **Purpose**: Standardize dimensions for AI processing and storage
+- **Dimensions**:
+  - **Body & Clothing photos**: Longest side scaled to **1024px**, aspect ratio preserved
+    - Portrait 2:3 (e.g., 2000×3000) → 683×1024
+    - Portrait 3:4 (e.g., 3000×4000) → 768×1024
+    - Landscape 4:3 (e.g., 4000×3000) → 1024×768
+    - Square (e.g., 2000×2000) → 1024×1024
+  - **Avatar photos**: 512×512 (square, center crop)
+- **Format**: JPEG at 90% quality (85% for avatars)
+- **Features**: Auto-rotation based on EXIF, HEIF/HEIC detection and rejection
+
+**Why two stages?**
+1. Frontend resize reduces network bandwidth (uploading ~3MP vs 12MP+ originals)
+2. Backend resize ensures consistent dimensions for the Grok Imagine API, regardless of upload source
+
+---
+
 ## Infrastructure
 
 - **Database**: PostgreSQL 15 (Prisma ORM)
