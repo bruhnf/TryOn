@@ -52,7 +52,15 @@
         {
           "photosPermission": "TryOn accesses your photos to let you upload body and clothing images."
         }
-      ]
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }]
     ],
     "extra": {
       "eas": {

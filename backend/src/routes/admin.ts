@@ -2,6 +2,11 @@ import { Router, Request, Response } from 'express';
 import { requireAdmin } from '../middleware/auth';
 import prisma from '../lib/prisma';
 import { hashPassword } from '../utils/password';
+import { 
+  getLatestReportSummary, 
+  runAllScans,
+} from '../services/vulnerabilityService';
+import { triggerImmediateScan } from '../queue/vulnerabilityWorker';
 
 const router = Router();
 
@@ -248,6 +253,110 @@ router.post('/jobs/delete', async (req: Request, res: Response) => {
   });
   
   res.json({ deleted: result.count });
+});
+
+// ===== VULNERABILITY MANAGEMENT ENDPOINTS =====
+
+// Get vulnerability summary
+router.get('/vulnerabilities/summary', async (_req: Request, res: Response) => {
+  try {
+    const summary = await getLatestReportSummary();
+    res.json(summary);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get detailed vulnerability reports (paginated)
+router.get('/vulnerabilities/reports', async (req: Request, res: Response) => {
+  try {
+    const scanType = req.query.scanType as string | undefined;
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+    const skip = parseInt(req.query.skip as string) || 0;
+    
+    const where = scanType ? { scanType: scanType as any } : {};
+    
+    const [reports, total] = await Promise.all([
+      prisma.vulnerabilityReport.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip,
+      }),
+      prisma.vulnerabilityReport.count({ where }),
+    ]);
+    
+    res.json({ reports, total, limit, skip });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get single vulnerability report details
+router.get('/vulnerabilities/report/:id', async (req: Request, res: Response) => {
+  try {
+    const report = await prisma.vulnerabilityReport.findUnique({
+      where: { id: req.params.id },
+    });
+    
+    if (!report) {
+      res.status(404).json({ error: 'Report not found' });
+      return;
+    }
+    
+    res.json(report);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Trigger manual vulnerability scan
+router.post('/vulnerabilities/scan', async (_req: Request, res: Response) => {
+  try {
+    await triggerImmediateScan();
+    res.json({ 
+      message: 'Vulnerability scan triggered',
+      status: 'Scan started. Check back in a few minutes for results.',
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Run immediate scan (synchronous - for testing)
+router.post('/vulnerabilities/scan/immediate', async (_req: Request, res: Response) => {
+  try {
+    await runAllScans();
+    const summary = await getLatestReportSummary();
+    res.json({ 
+      message: 'Scan completed',
+      summary,
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete old vulnerability reports
+router.delete('/vulnerabilities/cleanup', async (req: Request, res: Response) => {
+  try {
+    const daysToKeep = parseInt(req.query.days as string) || 30;
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+    
+    const result = await prisma.vulnerabilityReport.deleteMany({
+      where: {
+        createdAt: { lt: cutoffDate },
+      },
+    });
+    
+    res.json({ 
+      message: `Deleted reports older than ${daysToKeep} days`,
+      deleted: result.count,
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 export default router;

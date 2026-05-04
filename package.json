@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "babel-preset-expo": "^55.0.18"
+    "babel-preset-expo": "^55.0.18",
+    "expo-splash-screen": "^55.0.19"
   }
 }

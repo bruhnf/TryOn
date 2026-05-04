@@ -18,6 +18,8 @@ import adminRoutes from './routes/admin';
 import creditsRoutes from './routes/credits';
 
 import './queue/tryonWorker';
+import './queue/vulnerabilityWorker';
+import { scheduleVulnerabilityScans } from './queue/vulnerabilityWorker';
 
 const app = express();
 
@@ -163,5 +165,10 @@ app.listen(env.port, () => {
     port: env.port,
     environment: env.nodeEnv,
     logLevel: process.env.LOG_LEVEL || (env.isDev ? 'debug' : 'info'),
+  });
+  
+  // Schedule daily vulnerability scans
+  scheduleVulnerabilityScans().catch((err) => {
+    logger.error('Failed to schedule vulnerability scans', { error: err.message });
   });
 });

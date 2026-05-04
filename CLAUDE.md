@@ -438,6 +438,76 @@ Admin API endpoints (all require `X-Admin-Key` header):
 
 ---
 
+## Vulnerability Monitoring
+
+The system includes automated vulnerability scanning to ensure security and identify required patches.
+
+### Features
+- **Scheduled Scans**: Automatically runs daily at 2:00 AM
+- **NPM Dependencies**: Scans both backend and frontend npm packages using `npm audit`
+- **System Packages**: Checks for Ubuntu/Debian package updates (apt-based systems)
+- **Admin Dashboard**: Displays vulnerability counts by severity (Critical, High, Moderate, Low)
+- **Manual Triggers**: Admins can trigger immediate scans from the dashboard
+
+### Admin API Endpoints
+All vulnerability endpoints require `X-Admin-Key` header:
+
+- `GET /api/admin/vulnerabilities/summary` — get latest vulnerability summary
+- `GET /api/admin/vulnerabilities/reports` — paginated scan history (query: `scanType`, `limit`, `skip`)
+- `GET /api/admin/vulnerabilities/report/:id` — detailed report with full JSON output
+- `POST /api/admin/vulnerabilities/scan` — trigger async vulnerability scan (returns immediately)
+- `POST /api/admin/vulnerabilities/scan/immediate` — run synchronous scan (waits for completion)
+- `DELETE /api/admin/vulnerabilities/cleanup?days=30` — delete reports older than X days
+
+### Database Schema
+```prisma
+enum ScanType {
+  NPM_BACKEND
+  NPM_FRONTEND
+  SYSTEM_PACKAGES
+  DOCKER_IMAGES
+  SSL_CERTIFICATE
+}
+
+model VulnerabilityReport {
+  id                 String   @id @default(uuid())
+  scanType           ScanType
+  totalVulnerabilities Int    @default(0)
+  criticalCount      Int      @default(0)
+  highCount          Int      @default(0)
+  moderateCount      Int      @default(0)
+  lowCount           Int      @default(0)
+  infoCount          Int      @default(0)
+  details            String?  // Full npm audit JSON
+  systemInfo         String?  // OS/Node/Docker versions
+  packagesChecked    Int?
+  fixAvailable       Boolean  @default(false)
+  scanDurationMs     Int?
+  errorMessage       String?
+  createdAt          DateTime @default(now())
+}
+```
+
+### Scan Schedule
+- **Automatic**: Daily at 2:00 AM (configured in BullMQ)
+- **Manual**: Trigger from admin dashboard or API
+- **Retention**: Scan results stored indefinitely (can be cleaned up via API)
+
+### Responding to Vulnerabilities
+1. **Review**: Check admin dashboard "Vulnerabilities" tab
+2. **Assess**: Click "View" on any report to see full details
+3. **Fix**: Run `npm audit fix` in backend/frontend directories
+4. **System Updates**: SSH to Lightsail and run `apt-get update && apt-get upgrade`
+5. **Verify**: Trigger manual scan to confirm fixes
+
+### Implementation Files
+- `backend/src/services/vulnerabilityService.ts` — core scanning logic
+- `backend/src/queue/vulnerabilityWorker.ts` — BullMQ worker and scheduler
+- `backend/src/routes/admin.ts` — API endpoints
+- `backend/public/admin.html` — dashboard UI (Vulnerabilities tab)
+
+---
+
 ## Environment Variables
 
 Backend requires a `.env` file. Key variables:

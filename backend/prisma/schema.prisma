@@ -147,3 +147,40 @@ model CreditTransaction {
   @@index([userId, createdAt])
   @@map("credit_transactions")
 }
+
+enum ScanType {
+  NPM_BACKEND
+  NPM_FRONTEND
+  SYSTEM_PACKAGES
+  DOCKER_IMAGES
+  SSL_CERTIFICATE
+}
+
+enum VulnerabilitySeverity {
+  INFO
+  LOW
+  MODERATE
+  HIGH
+  CRITICAL
+}
+
+model VulnerabilityReport {
+  id                 String                 @id @default(uuid())
+  scanType           ScanType
+  totalVulnerabilities Int                  @default(0)
+  criticalCount      Int                    @default(0)
+  highCount          Int                    @default(0)
+  moderateCount      Int                    @default(0)
+  lowCount           Int                    @default(0)
+  infoCount          Int                    @default(0)
+  details            String?                // JSON string with full audit report
+  systemInfo         String?                // OS version, Docker version, etc.
+  packagesChecked    Int?                   // Number of packages scanned
+  fixAvailable       Boolean                @default(false)
+  scanDurationMs     Int?                   // How long the scan took
+  errorMessage       String?                // If scan failed
+  createdAt          DateTime               @default(now())
+
+  @@index([scanType, createdAt])
+  @@map("vulnerability_reports")
+}

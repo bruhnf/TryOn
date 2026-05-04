@@ -279,6 +279,7 @@
         <button onclick="showTab('users')">Users</button>
         <button onclick="showTab('jobs')">Try-On Jobs</button>
         <button onclick="showTab('security')">Security</button>
+        <button onclick="showTab('vulnerabilities')">Vulnerabilities</button>
       </div>
 
       <!-- Stats Tab -->
@@ -409,6 +410,83 @@
         </div>
       </div>
 
+      <!-- Vulnerabilities Tab -->
+      <div id="vulnerabilities-tab" style="display: none;">
+        <div class="stats-grid">
+          <div class="stat-card" style="border-left: 3px solid #ff4757;">
+            <div class="value" id="vulnCritical" style="color: #ff4757;">-</div>
+            <div class="label">Critical</div>
+          </div>
+          <div class="stat-card" style="border-left: 3px solid #ff6348;">
+            <div class="value" id="vulnHigh" style="color: #ff6348;">-</div>
+            <div class="label">High</div>
+          </div>
+          <div class="stat-card" style="border-left: 3px solid #ffa502;">
+            <div class="value" id="vulnModerate" style="color: #ffa502;">-</div>
+            <div class="label">Moderate</div>
+          </div>
+          <div class="stat-card" style="border-left: 3px solid #f1c40f;">
+            <div class="value" id="vulnLow" style="color: #f1c40f;">-</div>
+            <div class="label">Low</div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>🛡️ System Vulnerability Status</h2>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <p style="color: #666; font-size: 0.9rem;">
+              Last scan: <strong id="lastScanTime">Never</strong>
+            </p>
+            <div>
+              <button class="btn btn-primary" onclick="triggerVulnerabilityScan()">🔄 Scan Now</button>
+              <button class="btn btn-secondary" onclick="loadVulnerabilities()">Refresh</button>
+            </div>
+          </div>
+          <div id="scanStatus" style="margin-bottom: 15px;"></div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; margin-top: 20px;">
+            <!-- Backend NPM -->
+            <div style="background: #0a0a0a; padding: 15px; border-radius: 8px; border: 1px solid #333;">
+              <h3 style="color: #fff; font-size: 0.95rem; margin-bottom: 10px;">📦 Backend (NPM)</h3>
+              <div id="backendVulnSummary" style="color: #888; font-size: 0.85rem;">No data</div>
+            </div>
+
+            <!-- Frontend NPM -->
+            <div style="background: #0a0a0a; padding: 15px; border-radius: 8px; border: 1px solid #333;">
+              <h3 style="color: #fff; font-size: 0.95rem; margin-bottom: 10px;">📱 Frontend (NPM)</h3>
+              <div id="frontendVulnSummary" style="color: #888; font-size: 0.85rem;">No data</div>
+            </div>
+
+            <!-- System Packages -->
+            <div style="background: #0a0a0a; padding: 15px; border-radius: 8px; border: 1px solid #333;">
+              <h3 style="color: #fff; font-size: 0.95rem; margin-bottom: 10px;">🖥️ System Packages</h3>
+              <div id="systemVulnSummary" style="color: #888; font-size: 0.85rem;">No data</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>📊 Recent Scan History</h2>
+          <table id="vulnHistoryTable">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Total</th>
+                <th>Critical</th>
+                <th>High</th>
+                <th>Moderate</th>
+                <th>Low</th>
+                <th>Fix Available</th>
+                <th>Duration</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="vulnHistoryBody"></tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- User Details Modal -->
       <div class="modal-overlay" id="userModal">
         <div class="modal">
@@ -509,16 +587,17 @@
     }
 
     function showTab(tab) {
-      ['stats', 'users', 'jobs', 'security'].forEach(t => {
+      ['stats', 'users', 'jobs', 'security', 'vulnerabilities'].forEach(t => {
         document.getElementById(t + '-tab').style.display = t === tab ? 'block' : 'none';
       });
       document.querySelectorAll('.nav button').forEach((btn, i) => {
-        btn.classList.toggle('active', ['stats', 'users', 'jobs', 'security'][i] === tab);
+        btn.classList.toggle('active', ['stats', 'users', 'jobs', 'security', 'vulnerabilities'][i] === tab);
       });
       
       if (tab === 'users') loadUsers();
       if (tab === 'jobs') loadJobs();
       if (tab === 'security') loadSecurity();
+      if (tab === 'vulnerabilities') loadVulnerabilities();
     }
 
     async function loadStats() {
@@ -971,6 +1050,195 @@
     document.getElementById('creditsModal').addEventListener('click', function(e) {
       if (e.target === this) closeCreditsModal();
     });
+
+    // ===== VULNERABILITY FUNCTIONS =====
+    
+    async function loadVulnerabilities() {
+      try {
+        // Load summary
+        const summaryRes = await fetch(`${API_BASE}/vulnerabilities/summary`, {
+          headers: { 'X-Admin-Key': apiKey }
+        });
+        const summary = await summaryRes.json();
+        
+        // Update stats
+        document.getElementById('vulnCritical').textContent = summary.totalCritical || 0;
+        document.getElementById('vulnHigh').textContent = summary.totalHigh || 0;
+        document.getElementById('vulnModerate').textContent = summary.totalModerate || 0;
+        document.getElementById('vulnLow').textContent = summary.totalLow || 0;
+        
+        // Update last scan time
+        if (summary.lastScanTime) {
+          const lastScan = new Date(summary.lastScanTime);
+          const now = new Date();
+          const diffMs = now - lastScan;
+          const diffMins = Math.floor(diffMs / 60000);
+          const diffHours = Math.floor(diffMs / 3600000);
+          const diffDays = Math.floor(diffMs / 86400000);
+          
+          let timeAgo;
+          if (diffMins < 60) {
+            timeAgo = `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`;
+          } else if (diffHours < 24) {
+            timeAgo = `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+          } else {
+            timeAgo = `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+          }
+          
+          document.getElementById('lastScanTime').textContent = timeAgo;
+        } else {
+          document.getElementById('lastScanTime').textContent = 'Never';
+        }
+        
+        // Update component summaries
+        updateVulnComponent('backendVulnSummary', summary.backend);
+        updateVulnComponent('frontendVulnSummary', summary.frontend);
+        updateVulnComponent('systemVulnSummary', summary.system);
+        
+        // Load history
+        const historyRes = await fetch(`${API_BASE}/vulnerabilities/reports?limit=20`, {
+          headers: { 'X-Admin-Key': apiKey }
+        });
+        const historyData = await historyRes.json();
+        
+        const tbody = document.getElementById('vulnHistoryBody');
+        tbody.innerHTML = historyData.reports.map(r => {
+          const scanTypeNames = {
+            'NPM_BACKEND': 'Backend NPM',
+            'NPM_FRONTEND': 'Frontend NPM',
+            'SYSTEM_PACKAGES': 'System Packages',
+            'DOCKER_IMAGES': 'Docker Images',
+            'SSL_CERTIFICATE': 'SSL Certificate'
+          };
+          
+          return `
+            <tr>
+              <td>${new Date(r.createdAt).toLocaleString()}</td>
+              <td><span class="badge badge-muted">${scanTypeNames[r.scanType] || r.scanType}</span></td>
+              <td>${r.totalVulnerabilities}</td>
+              <td>${r.criticalCount > 0 ? `<span style="color: #ff4757;">${r.criticalCount}</span>` : '-'}</td>
+              <td>${r.highCount > 0 ? `<span style="color: #ff6348;">${r.highCount}</span>` : '-'}</td>
+              <td>${r.moderateCount > 0 ? `<span style="color: #ffa502;">${r.moderateCount}</span>` : '-'}</td>
+              <td>${r.lowCount > 0 ? `<span style="color: #f1c40f;">${r.lowCount}</span>` : '-'}</td>
+              <td>${r.fixAvailable ? '<span class="badge badge-success">Yes</span>' : '<span class="badge badge-muted">No</span>'}</td>
+              <td>${r.scanDurationMs ? `${(r.scanDurationMs / 1000).toFixed(1)}s` : '-'}</td>
+              <td>
+                <button class="btn btn-secondary" onclick="viewVulnDetails('${r.id}')">View</button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+        
+      } catch (e) {
+        console.error('Failed to load vulnerabilities', e);
+        document.getElementById('scanStatus').innerHTML = '<span class="error">Failed to load vulnerability data</span>';
+      }
+    }
+    
+    function updateVulnComponent(elementId, data) {
+      const el = document.getElementById(elementId);
+      if (!data) {
+        el.innerHTML = 'No scan data available';
+        return;
+      }
+      
+      if (data.errorMessage) {
+        el.innerHTML = `<span style="color: #ff4757;">Error: ${data.errorMessage}</span>`;
+        return;
+      }
+      
+      const total = data.totalVulnerabilities || 0;
+      const critical = data.criticalCount || 0;
+      const high = data.highCount || 0;
+      const moderate = data.moderateCount || 0;
+      const low = data.lowCount || 0;
+      
+      if (total === 0) {
+        el.innerHTML = '<span style="color: #2ed573;">✓ No vulnerabilities</span>';
+        return;
+      }
+      
+      let html = `<div style="line-height: 1.6;">`;
+      html += `<strong>Total: ${total}</strong><br>`;
+      if (critical > 0) html += `<span style="color: #ff4757;">Critical: ${critical}</span><br>`;
+      if (high > 0) html += `<span style="color: #ff6348;">High: ${high}</span><br>`;
+      if (moderate > 0) html += `<span style="color: #ffa502;">Moderate: ${moderate}</span><br>`;
+      if (low > 0) html += `<span style="color: #f1c40f;">Low: ${low}</span><br>`;
+      if (data.packagesChecked) html += `<span style="color: #666; font-size: 0.8rem;">${data.packagesChecked} packages checked</span>`;
+      html += `</div>`;
+      
+      el.innerHTML = html;
+    }
+    
+    async function triggerVulnerabilityScan() {
+      const statusEl = document.getElementById('scanStatus');
+      statusEl.innerHTML = '<span class="success">⏳ Vulnerability scan triggered. This may take 1-2 minutes...</span>';
+      
+      try {
+        const res = await fetch(`${API_BASE}/vulnerabilities/scan`, {
+          method: 'POST',
+          headers: { 'X-Admin-Key': apiKey }
+        });
+        
+        const data = await res.json();
+        
+        if (res.ok) {
+          statusEl.innerHTML = `<span class="success">${data.message}. Refresh in a minute to see results.</span>`;
+          
+          // Auto-refresh after 90 seconds
+          setTimeout(() => {
+            loadVulnerabilities();
+            statusEl.innerHTML = '';
+          }, 90000);
+        } else {
+          statusEl.innerHTML = `<span class="error">Failed to trigger scan: ${data.error}</span>`;
+        }
+      } catch (e) {
+        statusEl.innerHTML = `<span class="error">Error: ${e.message}</span>`;
+      }
+    }
+    
+    async function viewVulnDetails(reportId) {
+      try {
+        const res = await fetch(`${API_BASE}/vulnerabilities/report/${reportId}`, {
+          headers: { 'X-Admin-Key': apiKey }
+        });
+        const report = await res.json();
+        
+        if (res.ok) {
+          // Show details in a modal or alert
+          let details = `Vulnerability Report\n\n`;
+          details += `Type: ${report.scanType}\n`;
+          details += `Scanned: ${new Date(report.createdAt).toLocaleString()}\n`;
+          details += `Total Vulnerabilities: ${report.totalVulnerabilities}\n`;
+          details += `Critical: ${report.criticalCount}\n`;
+          details += `High: ${report.highCount}\n`;
+          details += `Moderate: ${report.moderateCount}\n`;
+          details += `Low: ${report.lowCount}\n`;
+          if (report.packagesChecked) details += `Packages Checked: ${report.packagesChecked}\n`;
+          if (report.errorMessage) details += `\nError: ${report.errorMessage}\n`;
+          
+          if (report.details) {
+            details += `\n\nFull JSON Report:\n${report.details}`;
+          }
+          
+          if (report.systemInfo) {
+            details += `\n\nSystem Info:\n${report.systemInfo}`;
+          }
+          
+          // Copy to clipboard
+          navigator.clipboard.writeText(details).then(() => {
+            alert('Report details copied to clipboard!\n\n' + details.substring(0, 500) + '...');
+          }).catch(() => {
+            alert(details);
+          });
+        } else {
+          alert('Failed to load report details');
+        }
+      } catch (e) {
+        alert('Error loading report: ' + e.message);
+      }
+    }
   </script>
 </body>
 </html>
