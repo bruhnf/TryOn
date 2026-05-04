@@ -25,6 +25,54 @@ docker compose -f docker-compose.prod.yml exec backend npx prisma migrate deploy
 
 ---
 
+## Database Migrations Explained
+
+### What Are Migrations?
+
+Prisma migrations are SQL scripts that update your database schema (tables, columns, indexes) to match changes in `backend/prisma/schema.prisma`. They're stored in `backend/prisma/migrations/`.
+
+### When to Run Migrations
+
+Run `npx prisma migrate deploy` whenever:
+
+| Scenario | Command |
+|----------|---------|
+| **First-time setup** (fresh database) | Required — creates all tables |
+| **After `git pull`** with schema changes | Required — applies new migrations |
+| **After adding new fields/models** | Required — adds columns/tables |
+| **Routine deploy with no schema changes** | Safe to run (no-op if nothing new) |
+
+### What Happens If You Skip It?
+
+The backend will crash with errors like:
+```
+PrismaClientKnownRequestError: The table `public.users` does not exist
+```
+
+### Migration Commands
+
+```bash
+# Production (Lightsail) — apply existing migrations
+docker compose -f docker-compose.prod.yml exec backend npx prisma migrate deploy
+
+# Local Docker — apply existing migrations  
+docker compose exec backend npx prisma migrate deploy
+
+# Local development (no Docker) — create + apply migrations
+cd backend && npx prisma migrate dev
+```
+
+### Current Migrations
+
+| Migration | Purpose |
+|-----------|---------|
+| `20260427213923_init` | Initial schema (Users, TryOnJobs, Follows, etc.) |
+| `20260428193554_subscription_to_credits` | Add credits system, CreditTransaction model |
+| `20260428210000_add_user_names` | Add firstName, lastName to Users |
+| `20260429220000_add_tryon_privacy` | Add isPrivate field to TryOnJobs |
+
+---
+
 ## Prerequisites
 
 - AWS Lightsail instance running Ubuntu 22.04

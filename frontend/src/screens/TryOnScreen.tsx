@@ -115,6 +115,17 @@ export default function TryOnScreen() {
       Alert.alert('No Clothing Photo', 'Please add at least one clothing photo.');
       return;
     }
+    if (!user?.isSubscribed && (user?.credits ?? 0) <= 0) {
+      Alert.alert(
+        'Credits Required',
+        'You need credits or a subscription to use try-on.',
+        [
+          { text: 'Not Now', style: 'cancel' },
+          { text: 'Get Credits', onPress: () => navigation.navigate('Purchase') },
+        ],
+      );
+      return;
+    }
 
     setSubmitting(true);
     try {

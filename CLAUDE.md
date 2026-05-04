@@ -66,23 +66,62 @@ const LOCAL_URL = 'http://localhost:3000/api';
 const LIVE_URL = 'https://api.evofaceflow.com/api';
 ```
 
-**Local Development Setup:**
+**Local Development Setup (Emulator/Simulator):**
 1. Set `USE_LOCAL = true` in `frontend/src/config/api.ts`
 2. Start backend: `cd backend && npm run dev`
 3. Start frontend: `cd frontend && npx expo start`
+4. Press `a` for Android emulator or `i` for iOS simulator
 
-**Live Server Testing:**
+**Local Development Setup (Physical Device - iPhone/Android):**
+
+Testing on a physical device with local backend requires exposing your local backend to the internet. There are two approaches:
+
+**Option A: Use Live Backend (Recommended for quick testing)**
 1. Set `USE_LOCAL = false` in `frontend/src/config/api.ts`
 2. Start frontend: `cd frontend && npx expo start --tunnel`
-3. Backend is already running on Lightsail
+3. Scan QR code with Expo Go app on your phone
+4. Backend is already running on Lightsail
+
+**Option B: Use Local Backend with ngrok (Full local stack)**
+1. Install ngrok: https://ngrok.com/download
+2. Start backend services: `docker-compose up -d` (or `cd backend && npm run dev`)
+3. Expose backend with ngrok: `ngrok http 3000`
+4. Copy the ngrok URL (e.g., `https://abc123.ngrok-free.app`)
+5. Update `frontend/src/config/api.ts`:
+   ```typescript
+   const LOCAL_URL = 'https://abc123.ngrok-free.app/api';  // Your ngrok URL
+   const USE_LOCAL = true;
+   ```
+6. Start frontend with tunnel: `cd frontend && npx expo start --tunnel`
+7. Scan QR code with Expo Go app on your phone
+
+> **Note:** The frontend already includes the `ngrok-skip-browser-warning` header to bypass ngrok's browser warning page.
 
 **Important:** Always set `USE_LOCAL = false` before committing to ensure production builds use the live server.
 
-### Docker (full stack locally)
+### Docker (Backend Services Only)
+
+Docker Compose runs the **backend infrastructure only** (PostgreSQL, Redis, and the Express API). The frontend must always be started separately with Expo.
+
 ```bash
-docker-compose up --build                              # Dev environment (PostgreSQL + Redis + backend)
-docker-compose -f docker-compose.prod.yml up --build  # Production-like
+# Start backend services (PostgreSQL + Redis + Backend API on port 3000)
+docker-compose up --build
+
+# Then in a separate terminal, start the frontend:
+cd frontend && npx expo start
+
+# For production-like environment (includes nginx, fail2ban):
+docker-compose -f docker-compose.prod.yml up --build
 ```
+
+**What Docker Compose includes:**
+- `postgres` — PostgreSQL 15 database on port 5432
+- `redis` — Redis 7 for BullMQ job queue on port 6379
+- `backend` — Express API on port 3000 with hot reload
+
+**What Docker Compose does NOT include:**
+- Frontend (React Native/Expo) — always run separately
+- ngrok tunnel — set up separately if needed for physical device testing
 
 ### CI/CD
 GitHub Actions workflow (`.github/workflows/deploy.yml`) triggers on push to `main`. It runs a TypeScript build check and Prisma migration check, then SSHs into AWS Lightsail to pull and restart containers via `docker-compose.prod.yml`.
@@ -165,7 +204,7 @@ Static landing page for evoFaceFlow with web authentication.
 Express app with JWT authentication and BullMQ job queue for async AI image generation.
 
 - **Entry point**: `index.ts` — mounts all middleware (Helmet, CORS, rate limiting) and routes
-- **Routes**: `routes/` — `auth`, `upload`, `tryon`, `admin`, `friends`, `feed`, `profile`
+- **Routes**: `routes/` — `auth`, `upload`, `tryon`, `admin`, `friends`, `feed`, `profile`, `credits`
 - **Controllers**: `controllers/` — one per route group
 - **Services**: `services/grokService.ts` — calls xAI Grok Imagine API for AI image generation
 - **Services**: `services/locationService.ts` — geo-IP lookup and suspicious-location detection
@@ -200,17 +239,20 @@ React Native app using Expo with React Navigation and Zustand for state.
   - `ProfileScreen` — avatar, full body photo, medium photo, stats, videos/results grid
   - `EditProfileScreen` — edit bio, username, body photos
   - `FriendsScreen` — Following / Followers tabs + search
+  - `ShopScreen` — browse clothing items (tab in bottom navigation)
   - `InboxScreen` — notifications and messages
   - `SettingsScreen` — account, notifications, privacy, subscription
-- **Components**: `components/` — shared UI (BodyPhotoUploadCard, TryOnResultCard, SubscriptionBadge, etc.)
+  - `AdminConsoleScreen` — admin dashboard for managing users and jobs
+  - `PurchaseScreen` — credit purchase flow
+- **Components**: `components/` — shared UI (BodyPhotoCard, CreditDisplay, TryOnResultCard, TryOnDetailModal, FullScreenImageModal, HeaderMenu)
 - **State**: `store/useUserStore.ts` — Zustand store holding authenticated user and body photo status
 - **API config**: `config/api.ts` — base URL switching between dev and production
 - **Hooks**: `hooks/useTryOn.ts`, `hooks/useBodyPhotos.ts`
 
 **Navigation structure:**
 - Unauthenticated stack: Login → Signup → Onboarding (skippable)
-- Authenticated tabs: Home | Friends | [Camera FAB — TryOn] | Inbox | Profile
-- Hamburger/overflow menu on Profile: Settings, Edit Profile, Manage Body Photos, Logout
+- Authenticated tabs: Home | Shop | [Camera FAB — TryOn] | Inbox | Profile
+- Modal screens: Settings, EditProfile, AdminConsole, Purchase, Friends
 
 **UI style:** Clean white/minimal design (see design screenshots). Black-and-white accent palette. Bottom tab bar with prominent centered camera FAB for quick try-on access. Typography: bold headers, light body text. Rounded pill-shaped toggle buttons for option selection.
 
@@ -226,8 +268,13 @@ email         String   @unique
 passwordHash  String
 verified      Boolean  @default(false)
 verifyToken   String?
+verifyTokenExpiry DateTime?
+passwordResetToken       String?
+passwordResetTokenExpiry DateTime?
 isSubscribed  Boolean  @default(false)   // true = active subscriber
 credits       Int      @default(0)        // bonus credits for extra try-ons
+firstName     String?
+lastName      String?
 bio           String?
 avatarUrl     String?   // close-up / profile photo (used as profile avatar only)
 fullBodyUrl   String?   // full-body front view (used for try-on)
@@ -242,11 +289,21 @@ createdAt     DateTime @default(now())
 updatedAt     DateTime @updatedAt
 ```
 
+### RefreshToken
+```
+id        String   @id @default(uuid())
+userId    String
+token     String   @unique
+expiresAt DateTime
+createdAt DateTime @default(now())
+```
+
 ### TryOnJobs
 ```
 id               String   @id @default(uuid())
 userId           String
 status           JobStatus  // PENDING | PROCESSING | COMPLETE | FAILED
+isPrivate        Boolean  @default(false)
 clothingPhoto1Url String
 clothingPhoto2Url String?
 resultFullBodyUrl  String?   // result image for full body perspective
@@ -374,6 +431,8 @@ Admin API endpoints (all require `X-Admin-Key` header):
 - `PATCH /api/admin/user/:id/subscription` — toggle subscription
 - `PATCH /api/admin/user/:id/credits` — adjust credits
 - `GET /api/admin/jobs` — list try-on jobs
+- `DELETE /api/admin/job/:jobId` — delete a single job
+- `POST /api/admin/jobs/delete` — bulk delete jobs
 - `GET /api/admin/security/stats` — suspicious login statistics
 - `GET /api/admin/security/suspicious` — list suspicious logins
 

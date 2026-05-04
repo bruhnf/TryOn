@@ -21,9 +21,7 @@ export async function submitTryOn(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const { userId, isSubscribed, credits } = req.user;
-  
-  log.debug('User subscription status', { userId, isSubscribed, credits });
+  const { userId } = req.user;
 
   // Check clothing item limit (same for all users)
   if (files.length > MAX_CLOTHING_ITEMS) {
@@ -32,6 +30,17 @@ export async function submitTryOn(req: Request, res: Response): Promise<void> {
     });
     return;
   }
+
+  // Fetch fresh subscription, credit, and body photo state from DB — never trust JWT claims for these
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { isSubscribed: true, credits: true, fullBodyUrl: true, mediumBodyUrl: true },
+  });
+  if (!user) { res.status(404).json({ error: 'User not found' }); return; }
+
+  const { isSubscribed, credits } = user;
+
+  log.debug('User subscription status (live)', { userId, isSubscribed, credits });
 
   // Check if user can generate (needs subscription or credits)
   if (!isSubscribed && credits <= 0) {
@@ -88,13 +97,6 @@ export async function submitTryOn(req: Request, res: Response): Promise<void> {
       }),
     ]);
   }
-
-  // Determine which body photos are available (full body takes priority, never avatar/close-up)
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { fullBodyUrl: true, mediumBodyUrl: true },
-  });
-  if (!user) { res.status(404).json({ error: 'User not found' }); return; }
 
   const bodyPhotos: Array<{ perspective: 'full_body' | 'medium'; url: string }> = [];
   if (user.fullBodyUrl) bodyPhotos.push({ perspective: 'full_body', url: user.fullBodyUrl });
