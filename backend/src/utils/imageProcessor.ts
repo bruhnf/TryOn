@@ -28,32 +28,14 @@ export async function resizeImageForTryOn(inputBuffer: Buffer): Promise<Processe
       throw new Error('HEIF/HEIC format not supported. Please convert to JPEG before uploading.');
     }
     
-    const originalWidth = metadata.width || 0;
-    const originalHeight = metadata.height || 0;
-    
-    // Determine resize dimensions: longest side = 1024px, maintain aspect ratio
-    let resizeWidth: number;
-    let resizeHeight: number;
-    
-    if (originalWidth >= originalHeight) {
-      // Landscape or square: width is the long side
-      resizeWidth = Math.min(originalWidth, MAX_LONG_SIDE);
-      resizeHeight = Math.round((resizeWidth / originalWidth) * originalHeight);
-    } else {
-      // Portrait: height is the long side
-      resizeHeight = Math.min(originalHeight, MAX_LONG_SIDE);
-      resizeWidth = Math.round((resizeHeight / originalHeight) * originalWidth);
-    }
-    
-    // Convert to JPEG with good quality
+    // Resize so the longest side is 1024px, aspect ratio preserved
+    // Sharp will automatically calculate the other dimension
     const outputBuffer = await sharp(inputBuffer)
-      .resize({
-        width: resizeWidth,
-        height: resizeHeight,
+      .rotate() // Auto-rotate based on EXIF orientation first
+      .resize(MAX_LONG_SIDE, MAX_LONG_SIDE, {
         fit: 'inside',
         withoutEnlargement: true,
       })
-      .rotate() // Auto-rotate based on EXIF orientation
       .jpeg({ quality: 90 })
       .toBuffer();
     
