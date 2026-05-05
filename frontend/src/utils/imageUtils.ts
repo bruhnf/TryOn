@@ -7,7 +7,7 @@ import { Platform, Alert } from 'react-native';
 /**
  * Process an image for upload:
  * - Converts HEIF/HEIC to JPEG (iOS default format not supported by all backends)
- * - Resizes large images to reasonable dimensions
+ * - Resizes large images to reasonable dimensions while preserving aspect ratio
  * - Compresses to reduce upload size
  */
 export async function processImageForUpload(
@@ -20,17 +20,30 @@ export async function processImageForUpload(
 ): Promise<{ uri: string; type: string; name: string }> {
   const { maxWidth = 2048, maxHeight = 2048, compress = 0.85 } = options ?? {};
 
-  // Use ImageManipulator to convert to JPEG and resize if needed
+  // Get original image dimensions
+  const imageInfo = await ImageManipulator.manipulateAsync(uri, [], {});
+  const originalWidth = imageInfo.width;
+  const originalHeight = imageInfo.height;
+
+  // Calculate resize dimensions to fit within max bounds while preserving aspect ratio
+  let resizeWidth = originalWidth;
+  let resizeHeight = originalHeight;
+
+  if (originalWidth > maxWidth || originalHeight > maxHeight) {
+    const widthRatio = maxWidth / originalWidth;
+    const heightRatio = maxHeight / originalHeight;
+    const ratio = Math.min(widthRatio, heightRatio);
+    
+    resizeWidth = Math.round(originalWidth * ratio);
+    resizeHeight = Math.round(originalHeight * ratio);
+  }
+
+  // Resize and convert to JPEG
   const result = await ImageManipulator.manipulateAsync(
     uri,
-    [
-      {
-        resize: {
-          width: maxWidth,
-          height: maxHeight,
-        },
-      },
-    ],
+    resizeWidth !== originalWidth || resizeHeight !== originalHeight
+      ? [{ resize: { width: resizeWidth, height: resizeHeight } }]
+      : [],
     {
       compress,
       format: ImageManipulator.SaveFormat.JPEG,
