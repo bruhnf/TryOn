@@ -127,7 +127,7 @@ function FeedCard({
   const resultImages: string[] = [];
   if (job.resultFullBodyUrl) resultImages.push(job.resultFullBodyUrl);
   if (job.resultMediumUrl) resultImages.push(job.resultMediumUrl);
-  
+
   const displayUrl = resultImages[0];
   const fullName = [job.user.firstName, job.user.lastName].filter(Boolean).join(' ');
 
@@ -174,16 +174,19 @@ function FeedCard({
             <ActivityIndicator color={Colors.gray400} />
           </View>
         )}
-        <TouchableOpacity
-          onPress={() => onClothingPress(job.clothingPhoto1Url)}
-          activeOpacity={0.9}
-        >
-          <Image
-            source={{ uri: job.clothingPhoto1Url }}
-            style={styles.clothingThumb}
-            resizeMode="cover"
-          />
-        </TouchableOpacity>
+
+        <View style={styles.thumbColumn}>
+          {job.bodyPhotoUrl ? (
+            <TouchableOpacity onPress={() => onClothingPress(job.bodyPhotoUrl!)} activeOpacity={0.9}>
+              <Image source={{ uri: job.bodyPhotoUrl }} style={styles.sideThumb} resizeMode="cover" />
+            </TouchableOpacity>
+          ) : (
+            <View style={[styles.sideThumb, styles.sideThumbPlaceholder]} />
+          )}
+          <TouchableOpacity onPress={() => onClothingPress(job.clothingPhoto1Url)} activeOpacity={0.9}>
+            <Image source={{ uri: job.clothingPhoto1Url }} style={styles.sideThumb} resizeMode="cover" />
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -250,10 +253,18 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSizeXS,
     fontWeight: Typography.fontWeightSemiBold,
   },
-  clothingThumb: {
+  thumbColumn: {
+    width: 90,
+    gap: Spacing.sm,
+    justifyContent: 'flex-start',
+  },
+  sideThumb: {
     width: 90,
     aspectRatio: 3 / 4,
     borderRadius: Radius.md,
+    backgroundColor: Colors.gray100,
+  },
+  sideThumbPlaceholder: {
     backgroundColor: Colors.gray100,
   },
   footer: { padding: Spacing.lg },

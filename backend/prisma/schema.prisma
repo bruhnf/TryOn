@@ -83,6 +83,8 @@ model TryOnJob {
   clothingPhoto2Url String?
   resultFullBodyUrl String?
   resultMediumUrl   String?
+  // primary body photo used as input (full body preferred, medium as fallback)
+  bodyPhotoUrl      String?
   // which user body photo perspectives were used as inputs
   perspectivesUsed  String[]
   errorMessage      String?

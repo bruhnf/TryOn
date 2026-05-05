@@ -102,6 +102,9 @@ export async function submitTryOn(req: Request, res: Response): Promise<void> {
   if (user.fullBodyUrl) bodyPhotos.push({ perspective: 'full_body', url: user.fullBodyUrl });
   if (user.mediumBodyUrl) bodyPhotos.push({ perspective: 'medium', url: user.mediumBodyUrl });
 
+  // Primary body photo for display: full body preferred, medium as fallback
+  const bodyPhotoUrl = user.fullBodyUrl ?? user.mediumBodyUrl ?? null;
+
   if (bodyPhotos.length === 0) {
     res.status(422).json({
       error: 'NO_BODY_PHOTOS',
@@ -133,6 +136,7 @@ export async function submitTryOn(req: Request, res: Response): Promise<void> {
       isPrivate,
       clothingPhoto1Url: clothingUrls[0],
       clothingPhoto2Url: clothingUrls[1] ?? null,
+      bodyPhotoUrl,
       perspectivesUsed: [],
     },
   });

@@ -30,6 +30,7 @@ export interface TryOnJob {
   clothingPhoto2Url?: string;
   resultFullBodyUrl?: string;
   resultMediumUrl?: string;
+  bodyPhotoUrl?: string;
   perspectivesUsed: string[];
   errorMessage?: string;
   createdAt: string;
