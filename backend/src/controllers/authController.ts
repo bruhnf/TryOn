@@ -87,6 +87,8 @@ export async function signup(req: Request, res: Response): Promise<void> {
   });
 }
 
+const SIGNUP_CREDIT_GRANT = 10;
+
 export async function verifyEmail(req: Request, res: Response): Promise<void> {
   const { token } = req.params;
   const user = await prisma.user.findFirst({ where: { verifyToken: token } });
@@ -96,10 +98,25 @@ export async function verifyEmail(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { verified: true, verifyToken: null, verifyTokenExpiry: null },
-  });
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: user.id },
+      data: {
+        verified: true,
+        verifyToken: null,
+        verifyTokenExpiry: null,
+        credits: { increment: SIGNUP_CREDIT_GRANT },
+      },
+    }),
+    prisma.creditTransaction.create({
+      data: {
+        userId: user.id,
+        type: 'GRANT',
+        amount: SIGNUP_CREDIT_GRANT,
+        description: 'Welcome bonus — email verified',
+      },
+    }),
+  ]);
 
   // Deep link back into the app
   res.redirect(`tryon://verified`);
@@ -142,7 +159,7 @@ export async function login(req: Request, res: Response): Promise<void> {
   const accessToken = signAccessToken({
     userId: user.id,
     email: user.email,
-    isSubscribed: user.isSubscribed,
+    tier: user.tier,
     credits: user.credits,
   });
   const rawRefresh = signRefreshToken(user.id);
@@ -172,8 +189,9 @@ export async function login(req: Request, res: Response): Promise<void> {
       id: user.id,
       username: user.username,
       email: user.email,
-      isSubscribed: user.isSubscribed,
+      tier: user.tier,
       credits: user.credits,
+      tryOnCount: user.tryOnCount,
       verified: user.verified,
       bio: user.bio,
       avatarUrl: user.avatarUrl,
@@ -210,7 +228,7 @@ export async function refreshToken(req: Request, res: Response): Promise<void> {
     const accessToken = signAccessToken({
       userId: user.id,
       email: user.email,
-      isSubscribed: user.isSubscribed,
+      tier: user.tier,
       credits: user.credits,
     });
 

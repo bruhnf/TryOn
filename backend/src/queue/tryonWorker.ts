@@ -106,15 +106,22 @@ const worker = new Worker<TryOnJobData>(
 
     const durationMs = Date.now() - startTime;
 
-    await prisma.tryOnJob.update({
-      where: { id: jobId },
-      data: {
-        status: 'COMPLETE',
-        resultFullBodyUrl: results.full_body,
-        resultMediumUrl: results.medium,
-        perspectivesUsed: bodyPhotos.map((p) => p.perspective),
-      },
-    });
+    await prisma.$transaction([
+      prisma.tryOnJob.update({
+        where: { id: jobId },
+        data: {
+          status: 'COMPLETE',
+          resultFullBodyUrl: results.full_body,
+          resultMediumUrl: results.medium,
+          perspectivesUsed: bodyPhotos.map((p) => p.perspective),
+        },
+      }),
+      // Increment lifetime try-on counter only on successful completion
+      prisma.user.update({
+        where: { id: userId },
+        data: { tryOnCount: { increment: 1 } },
+      }),
+    ]);
 
     logJob('completed', {
       jobId,

@@ -27,10 +27,8 @@ export async function getProfile(req: Request, res: Response): Promise<void> {
       lastName: true,
       bio: true,
       avatarUrl: true,
-      fullBodyUrl: true,
-      mediumBodyUrl: true,
-      isSubscribed: true,
-      credits: true,
+      // Body photos intentionally omitted from public profile responses
+      tryOnCount: true,
       followingCount: true,
       followersCount: true,
       likesCount: true,
@@ -41,7 +39,35 @@ export async function getProfile(req: Request, res: Response): Promise<void> {
     res.status(404).json({ error: 'User not found' });
     return;
   }
-  res.json(user);
+
+  // Public, completed try-on sessions (private sessions are omitted)
+  const jobs = await prisma.tryOnJob.findMany({
+    where: { userId: user.id, status: 'COMPLETE', isPrivate: false },
+    orderBy: { createdAt: 'desc' },
+    take: 30,
+    select: {
+      id: true,
+      resultFullBodyUrl: true,
+      resultMediumUrl: true,
+      likesCount: true,
+      createdAt: true,
+    },
+  });
+
+  // If the request is authenticated, surface whether the viewer follows this user
+  let isFollowing = false;
+  let isSelf = false;
+  if (req.user) {
+    isSelf = req.user.userId === user.id;
+    if (!isSelf) {
+      const f = await prisma.follow.findUnique({
+        where: { followerId_followingId: { followerId: req.user.userId, followingId: user.id } },
+      });
+      isFollowing = !!f;
+    }
+  }
+
+  res.json({ ...user, jobs, isFollowing, isSelf });
 }
 
 export async function updateProfile(req: Request, res: Response): Promise<void> {
@@ -78,8 +104,9 @@ export async function updateProfile(req: Request, res: Response): Promise<void> 
       avatarUrl: true,
       fullBodyUrl: true,
       mediumBodyUrl: true,
-      isSubscribed: true,
+      tier: true,
       credits: true,
+      tryOnCount: true,
       followingCount: true,
       followersCount: true,
       city: true,
@@ -105,8 +132,9 @@ export async function getMyProfile(req: Request, res: Response): Promise<void> {
       avatarUrl: true,
       fullBodyUrl: true,
       mediumBodyUrl: true,
-      isSubscribed: true,
+      tier: true,
       credits: true,
+      tryOnCount: true,
       followingCount: true,
       followersCount: true,
       likesCount: true,

@@ -23,6 +23,13 @@ export async function follow(req: Request, res: Response): Promise<void> {
     prisma.follow.create({ data: { followerId, followingId } }),
     prisma.user.update({ where: { id: followerId }, data: { followingCount: { increment: 1 } } }),
     prisma.user.update({ where: { id: followingId }, data: { followersCount: { increment: 1 } } }),
+    prisma.notification.create({
+      data: {
+        userId: followingId,
+        actorId: followerId,
+        type: 'FOLLOW',
+      },
+    }),
   ]);
 
   res.json({ following: true });
@@ -73,6 +80,19 @@ export async function getFollowers(req: Request, res: Response): Promise<void> {
     orderBy: { createdAt: 'desc' },
   });
   res.json(rows.map((r) => r.follower));
+}
+
+export async function getFollowStatus(req: Request, res: Response): Promise<void> {
+  if (!req.user) { res.status(401).json({ error: 'Unauthorized' }); return; }
+  const { userId: targetId } = req.params;
+  if (req.user.userId === targetId) {
+    res.json({ following: false, self: true });
+    return;
+  }
+  const existing = await prisma.follow.findUnique({
+    where: { followerId_followingId: { followerId: req.user.userId, followingId: targetId } },
+  });
+  res.json({ following: !!existing, self: false });
 }
 
 export async function searchUsers(req: Request, res: Response): Promise<void> {

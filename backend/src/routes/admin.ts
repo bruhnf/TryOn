@@ -19,8 +19,9 @@ router.get('/users', async (_req: Request, res: Response) => {
       username: true,
       email: true,
       verified: true,
-      isSubscribed: true,
+      tier: true,
       credits: true,
+      tryOnCount: true,
       createdAt: true,
     },
     orderBy: { createdAt: 'desc' },
@@ -70,8 +71,9 @@ router.get('/user/:userId', async (req: Request, res: Response) => {
       username: true,
       email: true,
       verified: true,
-      isSubscribed: true,
+      tier: true,
       credits: true,
+      tryOnCount: true,
       firstName: true,
       lastName: true,
       bio: true,
@@ -130,15 +132,15 @@ router.patch('/user/:userId/verify', async (req: Request, res: Response) => {
 });
 
 router.patch('/user/:userId/subscription', async (req: Request, res: Response) => {
-  const { isSubscribed } = req.body as { isSubscribed?: boolean };
-  if (typeof isSubscribed !== 'boolean') {
-    res.status(400).json({ error: 'isSubscribed must be a boolean' });
+  const { tier } = req.body as { tier?: 'FREE' | 'BASIC' | 'PREMIUM' };
+  if (!tier || !['FREE', 'BASIC', 'PREMIUM'].includes(tier)) {
+    res.status(400).json({ error: 'tier must be FREE, BASIC, or PREMIUM' });
     return;
   }
   const user = await prisma.user.update({
     where: { id: req.params.userId },
-    data: { isSubscribed },
-    select: { id: true, username: true, email: true, isSubscribed: true, credits: true },
+    data: { tier },
+    select: { id: true, username: true, email: true, tier: true, credits: true },
   });
   res.json(user);
 });
@@ -170,18 +172,21 @@ router.patch('/user/:userId/credits', async (req: Request, res: Response) => {
 });
 
 router.get('/stats', async (_req: Request, res: Response) => {
-  const [userCount, jobCount, completedJobs, subscriberCount, totalCredits] = await Promise.all([
+  const [userCount, jobCount, completedJobs, basicCount, premiumCount, totalCredits] = await Promise.all([
     prisma.user.count(),
     prisma.tryOnJob.count(),
     prisma.tryOnJob.count({ where: { status: 'COMPLETE' } }),
-    prisma.user.count({ where: { isSubscribed: true } }),
+    prisma.user.count({ where: { tier: 'BASIC' } }),
+    prisma.user.count({ where: { tier: 'PREMIUM' } }),
     prisma.user.aggregate({ _sum: { credits: true } }),
   ]);
-  res.json({ 
-    userCount, 
-    jobCount, 
-    completedJobs, 
-    subscriberCount,
+  res.json({
+    userCount,
+    jobCount,
+    completedJobs,
+    subscriberCount: basicCount + premiumCount,
+    basicCount,
+    premiumCount,
     totalCreditsOutstanding: totalCredits._sum.credits || 0,
   });
 });

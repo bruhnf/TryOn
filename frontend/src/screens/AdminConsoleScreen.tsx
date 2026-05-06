@@ -19,13 +19,16 @@ import { RootStackParams } from '../navigation';
 
 type Props = { navigation: NativeStackNavigationProp<RootStackParams, 'AdminConsole'> };
 
+type AdminTier = 'FREE' | 'BASIC' | 'PREMIUM';
+
 interface AdminUser {
   id: string;
   username: string;
   email: string;
   verified: boolean;
-  isSubscribed: boolean;
+  tier: AdminTier;
   credits: number;
+  tryOnCount?: number;
   createdAt: string;
 }
 
@@ -100,17 +103,24 @@ export default function AdminConsoleScreen({ navigation }: Props) {
     }
   }
 
-  async function toggleSubscription(user: AdminUser) {
+  async function changeTier(user: AdminUser, tier: AdminTier) {
     try {
-      const { data } = await adminApi.patch(`/admin/user/${user.id}/subscription`, {
-        isSubscribed: !user.isSubscribed,
-      });
+      const { data } = await adminApi.patch(`/admin/user/${user.id}/subscription`, { tier });
       setUsers((prev) =>
-        prev.map((u) => (u.id === user.id ? { ...u, isSubscribed: data.isSubscribed } : u))
+        prev.map((u) => (u.id === user.id ? { ...u, tier: data.tier } : u))
       );
     } catch {
-      Alert.alert('Error', 'Failed to update subscription');
+      Alert.alert('Error', 'Failed to update tier');
     }
+  }
+
+  function showTierOptions(user: AdminUser) {
+    Alert.alert(`Tier (current: ${user.tier})`, 'Choose new tier', [
+      { text: 'Free', onPress: () => changeTier(user, 'FREE') },
+      { text: 'Basic', onPress: () => changeTier(user, 'BASIC') },
+      { text: 'Premium', onPress: () => changeTier(user, 'PREMIUM') },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   }
 
   async function adjustCredits(user: AdminUser, amount: number) {
@@ -166,10 +176,10 @@ export default function AdminConsoleScreen({ navigation }: Props) {
           <Text style={styles.username}>{item.username}</Text>
           <View style={styles.badgeRow}>
             <TouchableOpacity
-              style={[styles.subscriptionBadge, item.isSubscribed ? styles.subActive : styles.subInactive]}
-              onPress={() => toggleSubscription(item)}
+              style={[styles.subscriptionBadge, item.tier !== 'FREE' ? styles.subActive : styles.subInactive]}
+              onPress={() => showTierOptions(item)}
             >
-              <Text style={styles.subscriptionText}>{item.isSubscribed ? 'Subscribed' : 'Free'}</Text>
+              <Text style={styles.subscriptionText}>{item.tier}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.creditsBadge}

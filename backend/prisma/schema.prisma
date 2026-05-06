@@ -21,6 +21,18 @@ enum CreditTransactionType {
   REFUND
 }
 
+enum UserTier {
+  FREE
+  BASIC
+  PREMIUM
+}
+
+enum NotificationType {
+  FOLLOW
+  LIKE
+  TRYON_COMPLETE
+}
+
 model User {
   id                String            @id @default(uuid())
   username          String            @unique
@@ -31,10 +43,12 @@ model User {
   verifyTokenExpiry DateTime?
   passwordResetToken       String?
   passwordResetTokenExpiry DateTime?
-  // Subscription: true = active subscriber, false = free user
-  isSubscribed      Boolean           @default(false)
-  // Credits: bonus credits that can be used beyond daily limit
+  tier              UserTier          @default(FREE)
   credits           Int               @default(0)
+  // Lifetime count of try-on sessions generated
+  tryOnCount        Int               @default(0)
+  // Tracks when this FREE-tier user last received the monthly free-credit grant
+  lastFreeCreditGrantAt DateTime?
   firstName         String?
   lastName          String?
   bio               String?
@@ -58,6 +72,9 @@ model User {
   followers          Follow[]            @relation("Following")
   refreshTokens      RefreshToken[]
   creditTransactions CreditTransaction[]
+  likes              Like[]
+  notifications      Notification[]      @relation("NotificationRecipient")
+  actorNotifications Notification[]      @relation("NotificationActor")
 
   @@map("users")
 }
@@ -87,11 +104,15 @@ model TryOnJob {
   bodyPhotoUrl      String?
   // which user body photo perspectives were used as inputs
   perspectivesUsed  String[]
+  // denormalized like count for feed performance
+  likesCount        Int       @default(0)
   errorMessage      String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  likes          Like[]
+  notifications  Notification[]
 
   @@map("tryon_jobs")
 }
@@ -148,6 +169,40 @@ model CreditTransaction {
 
   @@index([userId, createdAt])
   @@map("credit_transactions")
+}
+
+model Like {
+  id        String   @id @default(uuid())
+  userId    String
+  jobId     String
+  createdAt DateTime @default(now())
+
+  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job  TryOnJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jobId])
+  @@index([jobId])
+  @@map("likes")
+}
+
+model Notification {
+  id          String           @id @default(uuid())
+  // recipient of the notification
+  userId      String
+  type        NotificationType
+  // user who triggered the notification (e.g., the follower or liker)
+  actorId     String?
+  // optional related try-on job (e.g., for LIKE or TRYON_COMPLETE)
+  jobId       String?
+  read        Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+
+  user  User      @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  actor User?     @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  job   TryOnJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@map("notifications")
 }
 
 enum ScanType {

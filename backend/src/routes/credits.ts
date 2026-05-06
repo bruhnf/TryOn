@@ -1,21 +1,26 @@
 import { Router, Request, Response } from 'express';
+import { UserTier } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import prisma from '../lib/prisma';
+import { TIER_CONFIG, grantMonthlyFreeCreditsIfDue } from '../services/tierService';
 
 const router = Router();
 
 router.use(requireAuth);
 
-// Get current user's credit balance and daily usage
+// Get current user's credit balance, tier, and daily usage
 router.get('/balance', async (req: Request, res: Response) => {
   if (!req.user) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
 
+  // Lazy monthly grant for FREE-tier users
+  await grantMonthlyFreeCreditsIfDue(req.user.userId);
+
   const user = await prisma.user.findUnique({
     where: { id: req.user.userId },
-    select: { credits: true, isSubscribed: true },
+    select: { credits: true, tier: true, tryOnCount: true },
   });
 
   if (!user) {
@@ -31,17 +36,20 @@ router.get('/balance', async (req: Request, res: Response) => {
     where: {
       userId: req.user.userId,
       createdAt: { gte: startOfDay },
+      status: { not: 'FAILED' },
     },
   });
 
-  const DAILY_LIMIT = 15;
+  const config = TIER_CONFIG[user.tier];
 
   res.json({
     credits: user.credits,
-    isSubscribed: user.isSubscribed,
+    tier: user.tier,
+    tryOnCount: user.tryOnCount,
     dailyUsed: todayJobCount,
-    dailyLimit: user.isSubscribed ? DAILY_LIMIT : 0,
-    dailyRemaining: user.isSubscribed ? Math.max(0, DAILY_LIMIT - todayJobCount) : 0,
+    dailyLimit: config.dailyLimit,
+    dailyRemaining: Math.max(0, config.dailyLimit - todayJobCount),
+    creditPrice: config.creditPrice,
   });
 });
 
@@ -65,117 +73,109 @@ router.get('/history', async (req: Request, res: Response) => {
   res.json({ transactions, page, limit });
 });
 
-// Credit packages configuration
-const CREDIT_PACKAGES: Record<string, { credits: number; price: number }> = {
-  credits_10: { credits: 10, price: 5 },
-  credits_50: { credits: 50, price: 45 },
-  credits_100: { credits: 100, price: 85 },
-};
-
-// Purchase credits by package
+// Purchase credits — price computed from caller's tier
 router.post('/purchase', async (req: Request, res: Response) => {
   if (!req.user) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
 
-  const { packageId, credits, paymentToken } = req.body as { 
-    packageId?: string; 
+  const { credits, paymentToken } = req.body as {
     credits?: number;
     paymentToken?: string;
   };
 
-  // Support package-based purchases
-  let creditsToAdd: number;
-  let description: string;
-
-  if (packageId && CREDIT_PACKAGES[packageId]) {
-    const pkg = CREDIT_PACKAGES[packageId];
-    creditsToAdd = pkg.credits;
-    description = `Purchased ${pkg.credits} credits for $${pkg.price}`;
-  } else if (credits && credits >= 1 && credits <= 1000) {
-    // Legacy support for direct credit amounts
-    creditsToAdd = credits;
-    description = `Purchased ${credits} credits`;
-  } else {
-    res.status(400).json({ error: 'Invalid package or credit amount' });
+  if (!credits || credits < 1 || credits > 1000 || !Number.isInteger(credits)) {
+    res.status(400).json({ error: 'credits must be an integer between 1 and 1000' });
     return;
   }
 
-  // TODO: Integrate with Stripe/RevenueCat to verify payment
-  // For development, we'll grant credits without payment verification
-  // In production, validate paymentToken before proceeding
+  const current = await prisma.user.findUnique({
+    where: { id: req.user.userId },
+    select: { tier: true },
+  });
+  if (!current) {
+    res.status(404).json({ error: 'User not found' });
+    return;
+  }
+
+  const pricePerCredit = TIER_CONFIG[current.tier].creditPrice;
+  const totalPrice = +(credits * pricePerCredit).toFixed(2);
+
+  // TODO: Integrate with Stripe/RevenueCat to verify paymentToken before granting credits.
 
   const [user] = await prisma.$transaction([
     prisma.user.update({
       where: { id: req.user.userId },
-      data: { credits: { increment: creditsToAdd } },
-      select: { credits: true, isSubscribed: true },
+      data: { credits: { increment: credits } },
+      select: { credits: true, tier: true },
     }),
     prisma.creditTransaction.create({
       data: {
         userId: req.user.userId,
         type: 'PURCHASE',
-        amount: creditsToAdd,
-        description,
+        amount: credits,
+        description: `Purchased ${credits} credits at $${pricePerCredit.toFixed(2)} each ($${totalPrice.toFixed(2)})`,
       },
     }),
   ]);
 
-  res.json({ 
-    credits: user.credits, 
-    purchased: creditsToAdd,
-    isSubscribed: user.isSubscribed,
+  res.json({
+    credits: user.credits,
+    purchased: credits,
+    pricePerCredit,
+    totalPrice,
+    tier: user.tier,
   });
 });
 
-// Subscribe user (placeholder - would integrate with payment provider)
+// Change subscription tier (placeholder — would integrate with payment provider)
 router.post('/subscribe', async (req: Request, res: Response) => {
   if (!req.user) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
 
-  // TODO: Integrate with Stripe/RevenueCat to handle subscription payment
-  // For development, we'll just toggle the subscription flag
-  // In production, this would:
-  // 1. Create a Stripe subscription
-  // 2. Store the subscription ID
-  // 3. Set up webhook handlers for renewals/cancellations
+  const { tier } = req.body as { tier?: UserTier };
+  if (!tier || !['FREE', 'BASIC', 'PREMIUM'].includes(tier)) {
+    res.status(400).json({ error: 'tier must be FREE, BASIC, or PREMIUM' });
+    return;
+  }
+
+  // TODO: validate payment for upgrade to BASIC/PREMIUM via Stripe/RevenueCat.
 
   const user = await prisma.user.update({
     where: { id: req.user.userId },
-    data: { isSubscribed: true },
-    select: { credits: true, isSubscribed: true },
+    data: { tier },
+    select: { credits: true, tier: true },
   });
 
-  res.json({ 
+  res.json({
     success: true,
-    isSubscribed: user.isSubscribed,
+    tier: user.tier,
     credits: user.credits,
-    message: 'Subscription activated',
+    message: `Tier set to ${user.tier}`,
   });
 });
 
-// Cancel subscription (placeholder)
+// Cancel subscription — drops user back to FREE
 router.post('/unsubscribe', async (req: Request, res: Response) => {
   if (!req.user) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
 
-  // TODO: Integrate with Stripe to cancel subscription
-  // In production, this would cancel at period end, not immediately
+  // TODO: cancel Stripe subscription at period end.
 
   const user = await prisma.user.update({
     where: { id: req.user.userId },
-    data: { isSubscribed: false },
-    select: { credits: true, isSubscribed: true },
+    data: { tier: 'FREE' },
+    select: { credits: true, tier: true },
   });
 
-  res.json({ 
+  res.json({
     success: true,
-    isSubscribed: user.isSubscribed,
+    tier: user.tier,
     credits: user.credits,
     message: 'Subscription cancelled',
   });

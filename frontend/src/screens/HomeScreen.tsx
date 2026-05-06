@@ -10,21 +10,30 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import api from '../config/api';
 import { useUserStore } from '../store/useUserStore';
 import { TryOnJob } from '../types';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
+import { RootStackParams } from '../navigation';
 import FullScreenImageModal from '../components/FullScreenImageModal';
 import CreditDisplay from '../components/CreditDisplay';
 import HeaderMenu from '../components/HeaderMenu';
 
+type Nav = NativeStackNavigationProp<RootStackParams>;
+
 interface FeedJob extends TryOnJob {
   user: { username: string; firstName?: string; lastName?: string; avatarUrl?: string };
+  liked?: boolean;
+  likesCount?: number;
 }
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { refreshUser } = useUserStore();
+  const navigation = useNavigation<Nav>();
+  const { user, refreshUser } = useUserStore();
   const [jobs, setJobs] = useState<FeedJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -59,6 +68,37 @@ export default function HomeScreen() {
     if (hasMore && !loading) fetchFeed(page + 1);
   };
 
+  // Optimistic toggle of `liked` state on a feed item
+  async function toggleLike(jobId: string) {
+    const target = jobs.find((j) => j.id === jobId);
+    if (!target) return;
+    // Don't allow self-likes (server enforces too)
+    if (user && target.user.username === user.username) return;
+
+    const wasLiked = !!target.liked;
+    setJobs((prev) =>
+      prev.map((j) =>
+        j.id === jobId
+          ? { ...j, liked: !wasLiked, likesCount: Math.max(0, (j.likesCount ?? 0) + (wasLiked ? -1 : 1)) }
+          : j,
+      ),
+    );
+
+    try {
+      if (wasLiked) await api.delete(`/likes/${jobId}`);
+      else await api.post(`/likes/${jobId}`);
+    } catch {
+      // Roll back on failure
+      setJobs((prev) =>
+        prev.map((j) =>
+          j.id === jobId
+            ? { ...j, liked: wasLiked, likesCount: Math.max(0, (j.likesCount ?? 0) + (wasLiked ? 1 : -1)) }
+            : j,
+        ),
+      );
+    }
+  }
+
   if (loading) {
     return (
       <View style={styles.centered}>
@@ -69,9 +109,18 @@ export default function HomeScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <HeaderMenu 
-        title="TryOn" 
+      <HeaderMenu
+        title="TryOn"
         leftComponent={<CreditDisplay />}
+        rightComponent={
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Friends', { initialTab: 'following', openSearch: true })}
+            style={styles.searchIconButton}
+            accessibilityLabel="Search users"
+          >
+            <Ionicons name="search" size={22} color={Colors.black} />
+          </TouchableOpacity>
+        }
       />
       <FlatList
         data={jobs}
@@ -87,6 +136,10 @@ export default function HomeScreen() {
               setFullScreenImages([url]);
               setFullScreenInitialIndex(0);
             }}
+            onUsernamePress={() =>
+              navigation.navigate('PublicProfile', { username: item.user.username })
+            }
+            onLikePress={() => toggleLike(item.id)}
           />
         )}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -118,10 +171,14 @@ function FeedCard({
   job,
   onResultPress,
   onClothingPress,
+  onUsernamePress,
+  onLikePress,
 }: {
   job: FeedJob;
   onResultPress: (urls: string[], index: number) => void;
   onClothingPress: (url: string) => void;
+  onUsernamePress: () => void;
+  onLikePress: () => void;
 }) {
   // Collect all available result images
   const resultImages: string[] = [];
@@ -134,25 +191,44 @@ function FeedCard({
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
-        <View style={styles.avatar}>
-          {job.user.avatarUrl ? (
-            <Image source={{ uri: job.user.avatarUrl }} style={styles.avatarImg} />
-          ) : (
-            <Text style={styles.avatarInitial}>
-              {job.user.username[0].toUpperCase()}
-            </Text>
-          )}
-        </View>
-        <View>
-          {fullName ? (
-            <>
-              <Text style={styles.displayName}>{fullName}</Text>
-              <Text style={styles.username}>@{job.user.username}</Text>
-            </>
-          ) : (
-            <Text style={styles.displayName}>@{job.user.username}</Text>
-          )}
-        </View>
+        <TouchableOpacity
+          style={styles.headerUserRow}
+          onPress={onUsernamePress}
+          activeOpacity={0.7}
+        >
+          <View style={styles.avatar}>
+            {job.user.avatarUrl ? (
+              <Image source={{ uri: job.user.avatarUrl }} style={styles.avatarImg} />
+            ) : (
+              <Text style={styles.avatarInitial}>
+                {job.user.username[0].toUpperCase()}
+              </Text>
+            )}
+          </View>
+          <View>
+            {fullName ? (
+              <>
+                <Text style={styles.displayName}>{fullName}</Text>
+                <Text style={styles.username}>@{job.user.username}</Text>
+              </>
+            ) : (
+              <Text style={styles.displayName}>@{job.user.username}</Text>
+            )}
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.likeButton}
+          onPress={onLikePress}
+          accessibilityLabel={job.liked ? 'Unlike' : 'Like'}
+          hitSlop={10}
+        >
+          <Ionicons
+            name={job.liked ? 'heart' : 'heart-outline'}
+            size={24}
+            color={job.liked ? Colors.danger : Colors.black}
+          />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.resultsRow}>
@@ -188,6 +264,12 @@ function FeedCard({
           </TouchableOpacity>
         </View>
       </View>
+
+      {(job.likesCount ?? 0) > 0 && (
+        <Text style={styles.likesCount}>
+          {job.likesCount} {job.likesCount === 1 ? 'like' : 'likes'}
+        </Text>
+      )}
     </View>
   );
 }
@@ -195,6 +277,10 @@ function FeedCard({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.white },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  searchIconButton: {
+    padding: Spacing.sm,
+    marginRight: Spacing.xs,
+  },
   card: {
     marginHorizontal: Spacing.md,
     marginBottom: Spacing.lg,
@@ -207,8 +293,15 @@ const styles = StyleSheet.create({
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     padding: Spacing.md,
     gap: Spacing.sm,
+  },
+  headerUserRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    flex: 1,
   },
   avatar: {
     width: 36,
@@ -227,6 +320,14 @@ const styles = StyleSheet.create({
   },
   displayName: { fontSize: Typography.fontSizeMD, fontWeight: Typography.fontWeightSemiBold, color: Colors.black },
   username: { fontSize: Typography.fontSizeSM, color: Colors.gray600 },
+  likeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   resultsRow: { flexDirection: 'row', gap: Spacing.sm, padding: Spacing.md, paddingTop: 0 },
   resultImageContainer: {
     flex: 1,
@@ -266,6 +367,13 @@ const styles = StyleSheet.create({
   },
   sideThumbPlaceholder: {
     backgroundColor: Colors.gray100,
+  },
+  likesCount: {
+    fontSize: Typography.fontSizeSM,
+    fontWeight: Typography.fontWeightSemiBold,
+    color: Colors.black,
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.md,
   },
   footer: { padding: Spacing.lg },
   emptyContainer: { flex: 1 },

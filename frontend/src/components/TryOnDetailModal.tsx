@@ -29,7 +29,7 @@ interface TryOnDetailModalProps {
   onPrivacyChanged?: (jobId: string, isPrivate: boolean) => void;
 }
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function TryOnDetailModal({
   visible,
@@ -130,7 +130,10 @@ export default function TryOnDetailModal({
           <Ionicons name="close" size={24} color={Colors.white} />
         </TouchableOpacity>
 
-        {/* Image carousel */}
+        {/* Spacer for safe area + close button row so the image starts below it */}
+        <View style={{ height: insets.top + 60 }} />
+
+        {/* Image carousel — fills remaining vertical space between header and controls */}
         <ScrollView
           ref={scrollRef}
           horizontal
@@ -138,8 +141,7 @@ export default function TryOnDetailModal({
           showsHorizontalScrollIndicator={false}
           onScroll={handleScroll}
           scrollEventThrottle={16}
-          style={[styles.carousel, { marginTop: insets.top + 60 }]}
-          contentContainerStyle={styles.carouselContent}
+          style={styles.carousel}
         >
           {images.map((img, index) => (
             <View key={index} style={styles.imageContainer}>
@@ -241,13 +243,6 @@ export default function TryOnDetailModal({
             )}
           </View>
         </View>
-
-        {/* Tap to close (background) */}
-        <TouchableOpacity
-          style={styles.tapArea}
-          onPress={onClose}
-          activeOpacity={1}
-        />
       </View>
     </Modal>
   );
@@ -272,34 +267,19 @@ const styles = StyleSheet.create({
   carousel: {
     flex: 1,
   },
-  carouselContent: {
-    alignItems: 'center',
-  },
   imageContainer: {
     width: SCREEN_WIDTH,
     justifyContent: 'center',
     alignItems: 'center',
   },
   image: {
-    width: SCREEN_WIDTH - 40,
-    height: SCREEN_HEIGHT * 0.55,
+    width: SCREEN_WIDTH - 32,
+    height: '100%',
     borderRadius: Radius.lg,
   },
-  tapArea: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: -1,
-  },
   controls: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     paddingHorizontal: 20,
-    zIndex: 10,
+    paddingTop: 12,
   },
   pagination: {
     alignItems: 'center',

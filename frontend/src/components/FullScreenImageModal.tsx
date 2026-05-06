@@ -22,7 +22,7 @@ interface FullScreenImageModalProps {
   onClose: () => void;
 }
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function FullScreenImageModal({
   visible,
@@ -64,6 +64,9 @@ export default function FullScreenImageModal({
           <Text style={styles.closeText}>✕</Text>
         </TouchableOpacity>
 
+        {/* Spacer below safe area + close button so the image starts where the controls end */}
+        <View style={{ height: insets.top + 60 }} />
+
         <ScrollView
           ref={scrollRef}
           horizontal
@@ -72,6 +75,7 @@ export default function FullScreenImageModal({
           onScroll={handleScroll}
           scrollEventThrottle={16}
           contentOffset={{ x: initialIndex * SCREEN_WIDTH, y: 0 }}
+          style={styles.carousel}
         >
           {imageUrls.map((url, index) => (
             <View key={index} style={styles.imageContainer}>
@@ -83,6 +87,9 @@ export default function FullScreenImageModal({
             </View>
           ))}
         </ScrollView>
+
+        {/* Bottom spacer so the image doesn't sit underneath the pagination dots */}
+        <View style={{ height: insets.bottom + (imageUrls.length > 1 ? 80 : 20) }} />
 
         {imageUrls.length > 1 && (
           <View style={[styles.pagination, { bottom: insets.bottom + 40 }]}>
@@ -117,8 +124,9 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.95)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  },
+  carousel: {
+    flex: 1,
   },
   closeButton: {
     position: 'absolute',
@@ -138,13 +146,12 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
     justifyContent: 'center',
     alignItems: 'center',
   },
   image: {
     width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT * 0.8,
+    height: '100%',
   },
   tapArea: {
     position: 'absolute',

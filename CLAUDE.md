@@ -94,6 +94,7 @@ Testing on a physical device with local backend requires exposing your local bac
    ```
 6. Start frontend with tunnel: `cd frontend && npx expo start --tunnel`
 7. Scan QR code with Expo Go app on your phone
+8. Connect to the Admin Dashboard using http://localhost:3000/admin 
 
 > **Note:** The frontend already includes the `ngrok-skip-browser-warning` header to bypass ngrok's browser warning page.
 

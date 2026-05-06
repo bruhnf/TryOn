@@ -331,7 +331,7 @@
                 <th>Username</th>
                 <th>Email</th>
                 <th>Verified</th>
-                <th>Subscription</th>
+                <th>Tier</th>
                 <th>Credits</th>
                 <th>Created</th>
                 <th>Actions</th>
@@ -634,8 +634,13 @@
               ${!u.verified ? `<button class="btn btn-secondary" style="margin-left: 5px; padding: 2px 8px;" onclick="verifyUser('${u.id}', true)">Verify</button>` : ''}
             </td>
             <td>
-              <span class="badge ${u.isSubscribed ? 'badge-info' : 'badge-muted'}">${u.isSubscribed ? 'Active' : 'Free'}</span>
-              <button class="btn btn-secondary" style="margin-left: 5px; padding: 2px 8px;" onclick="toggleSubscription('${u.id}', ${!u.isSubscribed})">${u.isSubscribed ? 'Remove' : 'Add'}</button>
+              <span class="badge ${u.tier === 'PREMIUM' ? 'badge-info' : u.tier === 'BASIC' ? 'badge-success' : 'badge-muted'}">${u.tier}</span>
+              <select onchange="setTier('${u.id}', this.value)" style="margin-left: 5px; padding: 2px;">
+                <option value="">Change…</option>
+                <option value="FREE">FREE</option>
+                <option value="BASIC">BASIC</option>
+                <option value="PREMIUM">PREMIUM</option>
+              </select>
             </td>
             <td>
               ${u.credits}
@@ -828,7 +833,8 @@
       }
     }
 
-    async function toggleSubscription(userId, isSubscribed) {
+    async function setTier(userId, tier) {
+      if (!tier) return;
       try {
         await fetch(`${API_BASE}/user/${userId}/subscription`, {
           method: 'PATCH',
@@ -836,12 +842,12 @@
             'Content-Type': 'application/json',
             'X-Admin-Key': apiKey
           },
-          body: JSON.stringify({ isSubscribed })
+          body: JSON.stringify({ tier })
         });
         loadUsers();
         loadStats();
       } catch (e) {
-        alert('Failed to update subscription');
+        alert('Failed to update tier');
       }
     }
 
@@ -937,8 +943,9 @@
           <div class="user-field"><span class="field-label">Last Name:</span><span class="field-value">${user.lastName || '(not set)'}</span></div>
           <div class="user-field"><span class="field-label">Email:</span><span class="field-value">${user.email}</span></div>
           <div class="user-field"><span class="field-label">Verified:</span><span class="field-value">${user.verified ? '✓ Yes' : '✗ No'}</span></div>
-          <div class="user-field"><span class="field-label">Subscription:</span><span class="field-value">${user.isSubscribed ? 'Active' : 'Free'}</span></div>
+          <div class="user-field"><span class="field-label">Tier:</span><span class="field-value">${user.tier}</span></div>
           <div class="user-field"><span class="field-label">Credits:</span><span class="field-value">${user.credits}</span></div>
+          <div class="user-field"><span class="field-label">Lifetime Try-Ons:</span><span class="field-value">${user.tryOnCount ?? 0}</span></div>
           <div class="user-field"><span class="field-label">Bio:</span><span class="field-value">${user.bio || '(none)'}</span></div>
           <div class="user-field"><span class="field-label">Address:</span><span class="field-value">${user.address || '(not set)'}</span></div>
           <div class="user-field"><span class="field-label">City:</span><span class="field-value">${user.city || '(not set)'}</span></div>

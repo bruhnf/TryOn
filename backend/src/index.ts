@@ -16,6 +16,8 @@ import friendsRoutes from './routes/friends';
 import feedRoutes from './routes/feed';
 import adminRoutes from './routes/admin';
 import creditsRoutes from './routes/credits';
+import notificationsRoutes from './routes/notifications';
+import likesRoutes from './routes/likes';
 
 import './queue/tryonWorker';
 import './queue/vulnerabilityWorker';
@@ -127,6 +129,8 @@ app.use('/api/friends', friendsRoutes);
 app.use('/api/feed', feedRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/credits', creditsRoutes);
+app.use('/api/notifications', notificationsRoutes);
+app.use('/api/likes', likesRoutes);
 
 // Health check (no auth required)
 app.get('/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));

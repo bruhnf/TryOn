@@ -11,7 +11,8 @@ import {
   Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRoute, RouteProp } from '@react-navigation/native';
+import { useRoute, RouteProp, useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../config/api';
 import { PublicUser } from '../types';
@@ -24,9 +25,10 @@ type FriendsRouteProp = RouteProp<RootStackParams, 'Friends'>;
 export default function FriendsScreen() {
   const insets = useSafeAreaInsets();
   const route = useRoute<FriendsRouteProp>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParams>>();
   const initialTab = route.params?.initialTab ?? 'following';
   const [tab, setTab] = useState<Tab>(initialTab);
-  const [searchMode, setSearchMode] = useState(false);
+  const [searchMode, setSearchMode] = useState(route.params?.openSearch ?? false);
   const [query, setQuery] = useState('');
   const [following, setFollowing] = useState<PublicUser[]>([]);
   const [followers, setFollowers] = useState<PublicUser[]>([]);
@@ -142,6 +144,7 @@ export default function FriendsScreen() {
               isFollowing={followingIds.has(item.id)}
               onFollow={() => followUser(item.id)}
               onUnfollow={() => unfollowUser(item.id)}
+              onPress={() => navigation.navigate('PublicProfile', { username: item.username })}
             />
           )}
           ListEmptyComponent={
@@ -167,15 +170,17 @@ function UserRow({
   isFollowing,
   onFollow,
   onUnfollow,
+  onPress,
 }: {
   user: PublicUser;
   isFollowing: boolean;
   onFollow: () => void;
   onUnfollow: () => void;
+  onPress: () => void;
 }) {
   const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ');
   return (
-    <View style={styles.userRow}>
+    <TouchableOpacity style={styles.userRow} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.userAvatar}>
         {user.avatarUrl ? (
           <Image source={{ uri: user.avatarUrl }} style={styles.userAvatarImg} />
@@ -202,7 +207,7 @@ function UserRow({
           {isFollowing ? 'Following' : 'Follow'}
         </Text>
       </TouchableOpacity>
-    </View>
+    </TouchableOpacity>
   );
 }
 

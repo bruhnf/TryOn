@@ -9,14 +9,13 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
 
   const page = Math.max(1, parseInt(req.query.page as string ?? '1', 10));
   const limit = 20;
+  const userId = req.user.userId;
 
-  // Show random mix of public completed try-on jobs from all users
-  // Uses a random offset to provide variety on each page load
+  // Show public completed try-on jobs from all users
   const totalPublicJobs = await prisma.tryOnJob.count({
     where: { status: 'COMPLETE', isPrivate: false },
   });
 
-  // Get random jobs by ordering by a combination of createdAt and random offset
   const jobs = await prisma.tryOnJob.findMany({
     where: { status: 'COMPLETE', isPrivate: false },
     orderBy: { createdAt: 'desc' },
@@ -24,11 +23,20 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
     take: limit,
     include: {
       user: { select: { username: true, firstName: true, lastName: true, avatarUrl: true } },
+      likes: {
+        where: { userId },
+        select: { id: true },
+      },
     },
   });
 
-  // Shuffle the results for variety within the page
-  const shuffled = jobs.sort(() => Math.random() - 0.5);
+  // Map likes[] to a simple `liked` boolean per job for the current user
+  const decorated = jobs.map((j) => {
+    const { likes, ...rest } = j;
+    return { ...rest, liked: likes.length > 0 };
+  });
+
+  const shuffled = decorated.sort(() => Math.random() - 0.5);
 
   res.json({ jobs: shuffled, page, hasMore: totalPublicJobs > page * limit });
 });

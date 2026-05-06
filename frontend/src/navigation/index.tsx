@@ -5,6 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useUserStore } from '../store/useUserStore';
+import { useNotificationStore } from '../store/useNotificationStore';
 import { Colors } from '../constants/theme';
 
 import LoginScreen from '../screens/LoginScreen';
@@ -20,6 +21,7 @@ import SettingsScreen from '../screens/SettingsScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import AdminConsoleScreen from '../screens/AdminConsoleScreen';
 import PurchaseScreen from '../screens/PurchaseScreen';
+import PublicProfileScreen from '../screens/PublicProfileScreen';
 
 export type AuthStackParams = {
   Login: undefined;
@@ -42,7 +44,8 @@ export type RootStackParams = {
   EditProfile: undefined;
   AdminConsole: undefined;
   Purchase: undefined;
-  Friends: { initialTab?: 'following' | 'followers' };
+  Friends: { initialTab?: 'following' | 'followers'; openSearch?: boolean };
+  PublicProfile: { username: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParams>();
@@ -92,6 +95,14 @@ function CameraTabIcon({ focused }: { focused: boolean }) {
 }
 
 function MainTabs() {
+  const { unreadCount, fetchUnreadCount } = useNotificationStore();
+
+  useEffect(() => {
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -141,6 +152,8 @@ function MainTabs() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="mail-outline" size={size} color={color} />
           ),
+          tabBarBadge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : undefined,
+          tabBarBadgeStyle: { backgroundColor: Colors.black, color: Colors.white, fontSize: 10 },
         }}
       />
       <Tab.Screen
@@ -201,6 +214,11 @@ export default function AppNavigator() {
               name="Friends"
               component={FriendsScreen}
               options={{ presentation: 'modal', headerShown: true, title: 'Friends' }}
+            />
+            <Stack.Screen
+              name="PublicProfile"
+              component={PublicProfileScreen}
+              options={{ presentation: 'card', headerShown: false }}
             />
           </>
         ) : (

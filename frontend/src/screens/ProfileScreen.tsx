@@ -200,23 +200,23 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          {/* Subscription - Right */}
-          <TouchableOpacity 
+          {/* Tier - Right */}
+          <TouchableOpacity
             style={styles.avatarSideItem}
             onPress={() => navigation.navigate('Purchase')}
           >
             <View style={[
               styles.subscriptionBadge,
-              user.isSubscribed ? styles.subscriptionActive : styles.subscriptionInactive
+              user.tier !== 'FREE' ? styles.subscriptionActive : styles.subscriptionInactive,
             ]}>
-              <Ionicons 
-                name={user.isSubscribed ? "checkmark-circle" : "close-circle"} 
-                size={18} 
-                color={user.isSubscribed ? Colors.success : Colors.gray400} 
+              <Ionicons
+                name={user.tier === 'PREMIUM' ? 'star' : user.tier === 'BASIC' ? 'checkmark-circle' : 'close-circle'}
+                size={18}
+                color={user.tier !== 'FREE' ? Colors.success : Colors.gray400}
               />
             </View>
             <Text style={styles.avatarSideLabel}>
-              {user.isSubscribed ? 'Subscribed' : 'Free'}
+              {user.tier === 'PREMIUM' ? 'Premium' : user.tier === 'BASIC' ? 'Basic' : 'Free'}
             </Text>
           </TouchableOpacity>
         </View>

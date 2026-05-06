@@ -4,7 +4,8 @@ import prisma from '../lib/prisma';
 import { uploadToS3, keyFromUrl } from '../services/s3Service';
 import { safeFilename } from '../middleware/uploadMiddleware';
 import { enqueueTryOn } from '../queue/tryonQueue';
-import { DAILY_TRYON_LIMIT, MAX_CLOTHING_ITEMS } from '../middleware/subscription';
+import { MAX_CLOTHING_ITEMS } from '../middleware/subscription';
+import { TIER_CONFIG } from '../services/tierService';
 import { resizeImageForTryOn } from '../utils/imageProcessor';
 import { createChildLogger, logJob, logUpload } from '../services/logger';
 
@@ -31,52 +32,51 @@ export async function submitTryOn(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  // Fetch fresh subscription, credit, and body photo state from DB — never trust JWT claims for these
+  // Fetch fresh tier, credit, and body photo state from DB — never trust JWT claims for these
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { isSubscribed: true, credits: true, fullBodyUrl: true, mediumBodyUrl: true },
+    select: { tier: true, credits: true, fullBodyUrl: true, mediumBodyUrl: true },
   });
   if (!user) { res.status(404).json({ error: 'User not found' }); return; }
 
-  const { isSubscribed, credits } = user;
+  const { tier, credits } = user;
+  const dailyLimit = TIER_CONFIG[tier].dailyLimit;
 
-  log.debug('User subscription status (live)', { userId, isSubscribed, credits });
+  log.debug('User tier status (live)', { userId, tier, credits, dailyLimit });
 
-  // Check if user can generate (needs subscription or credits)
-  if (!isSubscribed && credits <= 0) {
-    log.info('Try-on blocked: no subscription or credits', { userId, isSubscribed, credits });
+  // FREE tier (no daily allowance) needs credits
+  if (dailyLimit <= 0 && credits <= 0) {
+    log.info('Try-on blocked: no daily allowance or credits', { userId, tier, credits });
     res.status(403).json({
       error: 'SUBSCRIPTION_REQUIRED',
-      message: 'Please subscribe or purchase credits to use try-on.',
+      message: 'Please upgrade or purchase credits to use try-on.',
     });
     return;
   }
 
-  // Check daily limit for subscribers
+  // Count today's non-failed jobs to enforce daily limit
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const todayCount = await prisma.tryOnJob.count({
     where: { userId, createdAt: { gte: todayStart }, status: { not: 'FAILED' } },
   });
 
-  // Subscribers get daily limit, non-subscribers must use credits
+  // If user has any daily allowance left, use it (free); otherwise fall back to credits
   let useCredit = false;
-  if (isSubscribed) {
-    if (todayCount >= DAILY_TRYON_LIMIT) {
-      // Subscriber exceeded daily limit - check if they have credits
-      if (credits <= 0) {
-        res.status(429).json({
-          error: 'DAILY_LIMIT_REACHED',
-          message: `Daily limit of ${DAILY_TRYON_LIMIT} reached. Purchase credits for more try-ons.`,
-          dailyUsed: todayCount,
-          dailyLimit: DAILY_TRYON_LIMIT,
-        });
-        return;
-      }
-      useCredit = true;
-    }
+  if (dailyLimit > 0 && todayCount < dailyLimit) {
+    useCredit = false;
   } else {
-    // Non-subscriber must use credits
+    if (credits <= 0) {
+      res.status(429).json({
+        error: 'DAILY_LIMIT_REACHED',
+        message: dailyLimit > 0
+          ? `Daily limit of ${dailyLimit} reached. Purchase credits for more try-ons.`
+          : 'No credits remaining. Purchase credits to use try-on.',
+        dailyUsed: todayCount,
+        dailyLimit,
+      });
+      return;
+    }
     useCredit = true;
   }
 

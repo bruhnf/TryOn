@@ -101,7 +101,7 @@ export default function SettingsScreen() {
       <SectionHeader label="Account" />
       <SettingRow label="Email" value={user?.email} />
       <SettingRow label="Username" value={`@${user?.username}`} />
-      <SettingRow label="Subscription" value={user?.isSubscribed ? 'Active' : 'Free'} />
+      <SettingRow label="Tier" value={user?.tier ?? 'FREE'} />
       <SettingRow label="Credits" value={String(user?.credits ?? 0)} />
 
       <SectionHeader label="Privacy & Data" />

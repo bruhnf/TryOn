@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth';
-import { follow, unfollow, getFollowing, getFollowers, searchUsers } from '../controllers/friendsController';
+import { follow, unfollow, getFollowing, getFollowers, searchUsers, getFollowStatus } from '../controllers/friendsController';
 
 const router = Router();
 
@@ -11,5 +11,6 @@ router.delete('/unfollow/:userId', unfollow);
 router.get('/following', getFollowing);
 router.get('/followers', getFollowers);
 router.get('/search', searchUsers);
+router.get('/status/:userId', getFollowStatus);
 
 export default router;

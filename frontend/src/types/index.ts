@@ -1,12 +1,15 @@
 export type JobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETE' | 'FAILED';
 
+export type UserTier = 'FREE' | 'BASIC' | 'PREMIUM';
+
 export interface User {
   id: string;
   username: string;
   email: string;
   verified: boolean;
-  isSubscribed: boolean;
+  tier: UserTier;
   credits: number;
+  tryOnCount: number;
   firstName?: string;
   lastName?: string;
   bio?: string;
@@ -32,6 +35,8 @@ export interface TryOnJob {
   resultMediumUrl?: string;
   bodyPhotoUrl?: string;
   perspectivesUsed: string[];
+  likesCount?: number;
+  liked?: boolean;
   errorMessage?: string;
   createdAt: string;
   user?: { username: string; firstName?: string; lastName?: string; avatarUrl?: string };
@@ -44,4 +49,28 @@ export interface PublicUser {
   lastName?: string;
   avatarUrl?: string;
   bio?: string;
+}
+
+export type NotificationType = 'FOLLOW' | 'LIKE' | 'TRYON_COMPLETE';
+
+export interface Notification {
+  id: string;
+  userId: string;
+  type: NotificationType;
+  actorId?: string | null;
+  jobId?: string | null;
+  read: boolean;
+  createdAt: string;
+  actor?: {
+    id: string;
+    username: string;
+    firstName?: string;
+    lastName?: string;
+    avatarUrl?: string;
+  } | null;
+  job?: {
+    id: string;
+    resultFullBodyUrl?: string;
+    resultMediumUrl?: string;
+  } | null;
 }

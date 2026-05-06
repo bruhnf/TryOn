@@ -1,11 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { env } from '../config/env';
+import type { UserTier } from '@prisma/client';
 
 interface AccessTokenPayload {
   userId: string;
   email: string;
-  isSubscribed: boolean;
+  tier: UserTier;
   credits: number;
 }
 
@@ -23,6 +24,27 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   } catch {
     res.status(401).json({ error: 'Invalid or expired token' });
   }
+}
+
+/**
+ * Populates req.user if a valid Bearer token is present, but does not block requests
+ * that are missing or have an invalid token. Use for routes that vary their response
+ * based on whether a viewer is signed in (e.g., public profile shows isFollowing).
+ */
+export function optionalAuth(req: Request, _res: Response, next: NextFunction): void {
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) {
+    next();
+    return;
+  }
+  const token = header.slice(7);
+  try {
+    const payload = jwt.verify(token, env.jwtSecret) as AccessTokenPayload;
+    req.user = payload;
+  } catch {
+    // Ignore — proceed without auth
+  }
+  next();
 }
 
 export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
