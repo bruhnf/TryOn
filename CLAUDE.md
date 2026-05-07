@@ -205,7 +205,7 @@ Static landing page for evoFaceFlow with web authentication.
 Express app with JWT authentication and BullMQ job queue for async AI image generation.
 
 - **Entry point**: `index.ts` — mounts all middleware (Helmet, CORS, rate limiting) and routes
-- **Routes**: `routes/` — `auth`, `upload`, `tryon`, `admin`, `friends`, `feed`, `profile`, `credits`
+- **Routes**: `routes/` — `auth`, `upload`, `tryon`, `admin`, `friends`, `feed`, `profile`, `credits`, `notifications`, `likes`, `appleWebhook`
 - **Controllers**: `controllers/` — one per route group
 - **Services**: `services/grokService.ts` — calls xAI Grok Imagine API for AI image generation
 - **Services**: `services/locationService.ts` — geo-IP lookup and suspicious-location detection
@@ -263,31 +263,70 @@ React Native app using Expo with React Navigation and Zustand for state.
 
 ### Users
 ```
-id            String   @id @default(uuid())
-username      String   @unique
-email         String   @unique
-passwordHash  String
-verified      Boolean  @default(false)
-verifyToken   String?
-verifyTokenExpiry DateTime?
+id                       String    @id @default(uuid())
+username                 String    @unique
+email                    String    @unique
+passwordHash             String
+verified                 Boolean   @default(false)
+verifyToken              String?
+verifyTokenExpiry        DateTime?
 passwordResetToken       String?
 passwordResetTokenExpiry DateTime?
-isSubscribed  Boolean  @default(false)   // true = active subscriber
-credits       Int      @default(0)        // bonus credits for extra try-ons
-firstName     String?
-lastName      String?
-bio           String?
-avatarUrl     String?   // close-up / profile photo (used as profile avatar only)
-fullBodyUrl   String?   // full-body front view (used for try-on)
-mediumBodyUrl String?   // waist-up view (used for try-on fallback)
-followingCount Int      @default(0)
-followersCount Int      @default(0)
-likesCount     Int      @default(0)
-address       String?
-city          String?
-state         String?
-createdAt     DateTime @default(now())
-updatedAt     DateTime @updatedAt
+tier                     UserTier  @default(FREE)   // FREE | BASIC | PREMIUM
+credits                  Int       @default(0)
+tryOnCount               Int       @default(0)      // lifetime successful try-ons
+lastFreeCreditGrantAt    DateTime?                  // last monthly grant (FREE tier only)
+firstName                String?
+lastName                 String?
+bio                      String?
+avatarUrl                String?   // close-up — profile display only, never sent to Grok
+fullBodyUrl              String?   // full-body front — primary Grok input
+mediumBodyUrl            String?   // waist-up — fallback Grok input
+followingCount           Int       @default(0)
+followersCount           Int       @default(0)
+likesCount               Int       @default(0)
+address                  String?
+city                     String?
+state                    String?
+createdAt                DateTime  @default(now())
+updatedAt                DateTime  @updatedAt
+```
+
+### ApplePurchase
+One row per StoreKit transaction. `originalTransactionId` ties renewals together so the active entitlement can be resolved.
+```
+id                    String    @id @default(uuid())
+userId                String
+transactionId         String    @unique  // unique per renewal
+originalTransactionId String              // stable across renewals
+productId             String              // e.g. com.evofaceflow.tryon.basic.monthly
+tier                  UserTier            // tier this purchase grants
+expiresAt             DateTime?           // null for non-subscription IAPs
+rawReceipt            String?             // signed JWS payload, kept for audit
+revokedAt             DateTime?           // set on REFUND / REVOKE
+createdAt             DateTime  @default(now())
+updatedAt             DateTime  @updatedAt
+```
+
+### Like
+```
+id        String   @id @default(uuid())
+userId    String
+jobId     String   // TryOnJob being liked
+createdAt DateTime @default(now())
+@@unique([userId, jobId])
+```
+
+### Notification
+In-app notifications shown on the Inbox screen. Distinct from Apple Server Notifications.
+```
+id        String           @id @default(uuid())
+userId    String           // recipient
+type      NotificationType // FOLLOW | LIKE | TRYON_COMPLETE
+actorId   String?          // who triggered it
+jobId     String?          // related TryOnJob, if any
+read      Boolean          @default(false)
+createdAt DateTime         @default(now())
 ```
 
 ### RefreshToken
@@ -380,14 +419,24 @@ createdAt   DateTime @default(now())
 - Body photo upload is also accessible at any time from Profile > Manage Body Photos.
 
 ### Subscription & Credits
-- **Flat subscription model**: Users are either subscribed (`isSubscribed: true`) or free users.
-- **Subscribers** get 15 try-ons per day included with their subscription.
-- **Free users** must have credits to use the try-on feature.
-- **Credits** can be purchased or granted by the app (promotional).
-- When a subscriber exceeds their daily limit, credits are used automatically.
-- All users upload 1 clothing item per try-on.
-- Credit balance is displayed in the top-left corner of the app.
-- Credit transactions are tracked in the `CreditTransaction` model (PURCHASE, GRANT, USAGE, REFUND).
+- **Tiered subscription model**: Each user has a `tier` of `FREE`, `BASIC`, or `PREMIUM` (see `UserTier` enum). There is **no** `isSubscribed` flag — check `tier !== 'FREE'` to gate subscriber-only features.
+- **Tier configuration** lives in `backend/src/services/tierService.ts` (`TIER_CONFIG`). Current values:
+  - `FREE`: 0 daily try-ons, $0.60/credit, 10 free credits granted monthly (lazy, on `/api/credits/balance` hit).
+  - `BASIC`: 2 daily try-ons, $0.50/credit, no free monthly credits.
+  - `PREMIUM`: 4 daily try-ons, $0.25/credit, no free monthly credits.
+- When a tiered user exhausts their daily included try-ons, additional try-ons spend credits.
+- Credit balance is displayed in the top-left corner of the app and tapping it opens `PurchaseScreen`.
+- Credit transactions are tracked in the `CreditTransaction` model (`PURCHASE`, `GRANT`, `USAGE`, `REFUND`).
+- Lifetime try-on count per user is tracked in `User.tryOnCount` (incremented on successful job completion).
+- Monthly free-credit grants for FREE-tier users are recorded via `User.lastFreeCreditGrantAt` and granted by `grantMonthlyFreeCreditsIfDue()` in `tierService.ts`.
+
+### Apple In-App Purchases
+- Subscription state is sourced from Apple via **App Store Server Notifications V2**. See `backend/src/routes/appleWebhook.ts` and `backend/src/queue/appleNotificationWorker.ts`.
+- StoreKit transactions are persisted in the `ApplePurchase` model (`transactionId` unique per renewal, `originalTransactionId` stable across the subscription lifetime, `productId`, `tier`, `expiresAt`, `revokedAt`).
+- Product IDs follow the pattern `com.evofaceflow.tryon.<tier>.<period>` (e.g. `com.evofaceflow.tryon.basic.monthly`). The product → tier mapping lives in `backend/src/config/appleIap.ts`.
+- The mobile app sets `appAccountToken` (= our `User.id` as UUID) on every StoreKit purchase so notifications can be mapped back to a user. Fallback identification is by `originalTransactionId` against existing `ApplePurchase` rows.
+- `POST /api/credits/restore-purchases` re-applies the most recent unexpired, non-revoked `ApplePurchase` to `User.tier`. App Store Review Guideline 3.1.1 requires this affordance in the UI.
+- iOS bundle identifier is `com.evofaceflow.tryon.app` (see `frontend/app.json`).
 
 ### Geo / Location Tracking
 - Location is recorded on every login and token refresh.
@@ -560,6 +609,10 @@ GROK_API_KEY          # xAI API key for Grok Imagine
 ALLOWED_ORIGINS       # comma-separated CORS whitelist
 SES_FROM_ADDRESS      # verified SES sender address
 GEOIP_API_KEY         # if using a paid geo-IP provider
+APPLE_BUNDLE_ID       # iOS bundle identifier (com.evofaceflow.tryon.app)
+APPLE_APP_APPLE_ID    # numeric App Store ID from App Store Connect
+APPLE_ENVIRONMENT     # "Production" or "Sandbox" — environment Apple sends from
+APPLE_ROOT_CERTS_DIR  # path to dir holding Apple root CA .cer files (defaults to ./certs/apple)
 ```
 
 ---

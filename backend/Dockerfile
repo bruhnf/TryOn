@@ -70,6 +70,10 @@ COPY --from=builder /app/dist ./dist
 # Copy public static files (admin dashboard, etc.)
 COPY public ./public
 
+# Copy Apple StoreKit root CA certificates (public certs from apple.com/certificateauthority).
+# Used by the App Store Server Notifications V2 verifier — see services/appleNotificationService.ts.
+COPY certs ./certs
+
 # Set ownership
 RUN chown -R nodejs:nodejs /app
 

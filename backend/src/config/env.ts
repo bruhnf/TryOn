@@ -48,4 +48,18 @@ export const env = {
 
   appUrl: optional('APP_URL', 'http://localhost:3000'),
   frontendDeepLink: optional('FRONTEND_DEEP_LINK', 'tryon://'),
+
+  apple: {
+    // iOS bundle identifier — must match the receipt's bundleId.
+    bundleId: optional('APPLE_BUNDLE_ID', 'com.evofaceflow.tryon.app'),
+    // Numeric App Store ID for this app (find in App Store Connect URL).
+    appAppleId: parseInt(optional('APPLE_APP_APPLE_ID', '0'), 10),
+    // Which Apple environment this server is configured to verify notifications from.
+    // "Production" or "Sandbox". Sandbox notifications carry environment="Sandbox" and
+    // we only accept those when this is also set to Sandbox (or unset in dev).
+    environment: optional('APPLE_ENVIRONMENT', 'Sandbox'),
+    // Directory containing Apple's root CA .cer files used for JWS verification.
+    // Download from https://www.apple.com/certificateauthority/ — at minimum AppleRootCA-G3.cer.
+    rootCertsDir: optional('APPLE_ROOT_CERTS_DIR', './certs/apple'),
+  },
 };
