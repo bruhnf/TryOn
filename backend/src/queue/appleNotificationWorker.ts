@@ -244,6 +244,10 @@ const worker = new Worker<AppleNotificationJobData>(
       subtype: decoded.subtype,
       environment: decoded.data?.environment,
     });
+    if (!decoded.notificationType) {
+      log.warn('Apple notification missing notificationType — skipping', { notificationUUID });
+      return;
+    }
     await handleNotification(decoded.notificationType, decoded.subtype, signedPayload);
   },
   { connection, concurrency: 4 },
