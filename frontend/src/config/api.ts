@@ -8,7 +8,7 @@ import { storage } from '../utils/storage';
 //   - true  = Local development (ngrok tunnel to localhost:3000)
 //   - false = Live server (api.evofaceflow.com)
 // ============================================
-const USE_LOCAL = true;
+const USE_LOCAL = false;
 
 const LOCAL_URL = 'https://alden-unconcludable-camilo.ngrok-free.dev/api';
 const LIVE_URL = 'https://api.evofaceflow.com/api';
