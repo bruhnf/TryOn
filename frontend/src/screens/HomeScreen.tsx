@@ -111,7 +111,7 @@ export default function HomeScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <HeaderMenu
         title="Discover"
-        leftComponent={<CreditDisplay />}
+        leftComponent={<CreditDisplay onPress={() => navigation.navigate('Purchase')} />}
         rightComponent={
           <TouchableOpacity
             onPress={() => navigation.navigate('Friends', { initialTab: 'following', openSearch: true })}

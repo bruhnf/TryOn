@@ -67,11 +67,14 @@
     "extra": {
       "eas": {
         "projectId": "209e84f3-f3fa-458f-a26a-8b76023b2197",
-        "productId": "621215711f318a4fc1813a7dff937ef2",
+        "credits10Id": "621215711f318a4fc1813a7dff937ef2",
+        "credits25Id": "4964e60bf506b1d82efe966ec71d1421",
+        "credits50Id": "333424bfef0ca60466e258ffbe20ea90",
+        "credits100Id": "47501df29b5777086fb59b628932368f",
         "basicTier": "9d99727cc5d1b37563ff2175d63880e9",
         "premiumTier": "ed387b679d97548b2ff33b5f20aee52a"
       }
     },
-    "owner": "bruhnf"
+    "owner": "bruhnfreeman"
   }
 }
