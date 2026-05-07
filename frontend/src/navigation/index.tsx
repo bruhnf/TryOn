@@ -213,7 +213,7 @@ export default function AppNavigator() {
             <Stack.Screen
               name="Friends"
               component={FriendsScreen}
-              options={{ presentation: 'modal', headerShown: true, title: 'Friends' }}
+              options={{ headerShown: true, title: 'Friends' }}
             />
             <Stack.Screen
               name="PublicProfile"

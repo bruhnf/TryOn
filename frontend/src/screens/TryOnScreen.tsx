@@ -287,23 +287,6 @@ export default function TryOnScreen() {
             )}
           </View>
 
-          <Text style={styles.helpText}>
-            Take a photo of the clothing tag, the item on a rack, or on a hanger. The AI works
-            best with clear, well-lit shots.
-          </Text>
-
-          <View style={styles.divider} />
-
-          <Text style={styles.sectionLabel}>Body Photos Used</Text>
-          <View style={styles.bodyPhotoStatus}>
-            <StatusPill
-              label="Full Body"
-              active={!!user?.fullBodyUrl}
-              primary
-            />
-            <StatusPill label="Waist Up" active={!!user?.mediumBodyUrl} />
-          </View>
-
           <View style={styles.privacyRow}>
             <View style={styles.privacyInfo}>
               <Text style={styles.privacyLabel}>Keep Private</Text>

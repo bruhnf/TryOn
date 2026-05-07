@@ -75,8 +75,39 @@ model User {
   likes              Like[]
   notifications      Notification[]      @relation("NotificationRecipient")
   actorNotifications Notification[]      @relation("NotificationActor")
+  applePurchases     ApplePurchase[]
 
   @@map("users")
+}
+
+// Records of Apple In-App Purchase / StoreKit subscription receipts.
+// One row per StoreKit transaction; the `originalTransactionId` ties together
+// renewals of the same subscription so we can resolve the active entitlement.
+model ApplePurchase {
+  id                    String   @id @default(uuid())
+  userId                String
+  // Apple StoreKit transaction identifier (unique per renewal/purchase).
+  transactionId         String   @unique
+  // Original transaction id — stable across renewals of the same subscription.
+  originalTransactionId String
+  // App Store product identifier (e.g. com.evofaceflow.tryon.basic.monthly).
+  productId             String
+  // Subscription tier this purchase grants on our side.
+  tier                  UserTier
+  // Subscription expiration date as reported by Apple (null for non-subscription IAPs).
+  expiresAt             DateTime?
+  // Raw signed receipt / JWS payload for audit + re-verification.
+  rawReceipt            String?
+  // Set when StoreKit reports the user revoked/refunded the purchase.
+  revokedAt             DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([originalTransactionId])
+  @@map("apple_purchases")
 }
 
 model RefreshToken {

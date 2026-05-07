@@ -138,6 +138,7 @@ export default function FriendsScreen() {
         <FlatList
           data={displayList}
           keyExtractor={(item) => item.id}
+          keyboardShouldPersistTaps="handled"
           renderItem={({ item }) => (
             <UserRow
               user={item}
@@ -180,25 +181,33 @@ function UserRow({
 }) {
   const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ');
   return (
-    <TouchableOpacity style={styles.userRow} onPress={onPress} activeOpacity={0.7}>
-      <View style={styles.userAvatar}>
-        {user.avatarUrl ? (
-          <Image source={{ uri: user.avatarUrl }} style={styles.userAvatarImg} />
-        ) : (
-          <Text style={styles.userAvatarInitial}>{user.username[0].toUpperCase()}</Text>
-        )}
-      </View>
-      <View style={styles.userInfo}>
-        {fullName ? (
-          <>
-            <Text style={styles.userName}>{fullName}</Text>
-            <Text style={styles.userHandle}>@{user.username}</Text>
-          </>
-        ) : (
-          <Text style={styles.userName}>@{user.username}</Text>
-        )}
-        {user.bio ? <Text style={styles.userBio} numberOfLines={1}>{user.bio}</Text> : null}
-      </View>
+    <View style={styles.userRow}>
+      <TouchableOpacity
+        style={styles.userRowTap}
+        onPress={onPress}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${user.username}'s profile`}
+      >
+        <View style={styles.userAvatar}>
+          {user.avatarUrl ? (
+            <Image source={{ uri: user.avatarUrl }} style={styles.userAvatarImg} />
+          ) : (
+            <Text style={styles.userAvatarInitial}>{user.username[0].toUpperCase()}</Text>
+          )}
+        </View>
+        <View style={styles.userInfo}>
+          {fullName ? (
+            <>
+              <Text style={styles.userName}>{fullName}</Text>
+              <Text style={styles.userHandle}>@{user.username}</Text>
+            </>
+          ) : (
+            <Text style={styles.userName}>@{user.username}</Text>
+          )}
+          {user.bio ? <Text style={styles.userBio} numberOfLines={1}>{user.bio}</Text> : null}
+        </View>
+      </TouchableOpacity>
       <TouchableOpacity
         style={[styles.followBtn, isFollowing && styles.followingBtn]}
         onPress={isFollowing ? onUnfollow : onFollow}
@@ -207,7 +216,7 @@ function UserRow({
           {isFollowing ? 'Following' : 'Follow'}
         </Text>
       </TouchableOpacity>
-    </TouchableOpacity>
+    </View>
   );
 }
 
@@ -258,6 +267,12 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     borderBottomWidth: 1,
     borderColor: Colors.gray100,
+    gap: Spacing.md,
+  },
+  userRowTap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.md,
   },
   userAvatar: {

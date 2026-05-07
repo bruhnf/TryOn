@@ -11,9 +11,9 @@ export interface TierConfig {
 }
 
 export const TIER_CONFIG: Record<UserTier, TierConfig> = {
-  FREE: { dailyLimit: 0, creditPrice: 0.5, monthlyFreeCredits: 10 },
-  BASIC: { dailyLimit: 4, creditPrice: 0.4, monthlyFreeCredits: 0 },
-  PREMIUM: { dailyLimit: 6, creditPrice: 0.3, monthlyFreeCredits: 0 },
+  FREE: { dailyLimit: 0, creditPrice: 0.6, monthlyFreeCredits: 10 },
+  BASIC: { dailyLimit: 2, creditPrice: 0.5, monthlyFreeCredits: 0 },
+  PREMIUM: { dailyLimit: 4, creditPrice: 0.25, monthlyFreeCredits: 0 },
 };
 
 export function getTierConfig(tier: UserTier): TierConfig {

@@ -22,6 +22,7 @@ interface TierInfo {
   tagline: string;
   features: string[];
   creditPrice: number;
+  monthlyPrice?: number;
   badge?: string;
 }
 
@@ -31,33 +32,35 @@ const TIERS: TierInfo[] = [
     name: 'Free',
     tagline: 'Get started with monthly free credits',
     features: [
-      '10 free credits at the start of every month',
-      'Buy more credits at $0.50 each',
+      '5 free credits when you sign up',
+      'Buy more credits at $0.60 each',
       'Full access to community feed',
     ],
-    creditPrice: 0.5,
+    creditPrice: 0.6,
   },
   {
     id: 'BASIC',
     name: 'Basic',
-    tagline: '4 try-ons every day',
+    tagline: '2 try-ons every day',
     features: [
-      '4 daily try-on sessions included',
-      'Buy more credits at $0.40 each',
+      '2 daily try-on sessions included',
+      'Buy more credits at $0.50 each',
       'Priority queue',
     ],
-    creditPrice: 0.4,
+    creditPrice: 0.5,
+    monthlyPrice: 9.99,
   },
   {
     id: 'PREMIUM',
     name: 'Premium',
-    tagline: '6 try-ons every day, best per-credit pricing',
+    tagline: '4 try-ons every day, best per-credit pricing',
     features: [
-      '6 daily try-on sessions included',
-      'Buy more credits at $0.30 each',
+      '4 daily try-on sessions included',
+      'Buy more credits at $0.25 each',
       'Top-priority queue',
     ],
-    creditPrice: 0.3,
+    creditPrice: 0.25,
+    monthlyPrice: 19.99,
     badge: 'BEST VALUE',
   },
 ];
@@ -105,6 +108,30 @@ export default function PurchaseScreen() {
         },
       },
     ]);
+  }
+
+  const [restoring, setRestoring] = useState(false);
+
+  async function handleRestorePurchases() {
+    setRestoring(true);
+    try {
+      const { data } = await api.post<{ restored: boolean; tier: UserTier; expiresAt?: string | null; message?: string }>(
+        '/credits/restore-purchases',
+      );
+      await refreshUser();
+      if (data.restored) {
+        Alert.alert(
+          'Purchases Restored',
+          `Your ${data.tier} subscription has been restored${data.expiresAt ? ` (renews ${new Date(data.expiresAt).toLocaleDateString()})` : ''}.`,
+        );
+      } else {
+        Alert.alert('No Purchases Found', data.message ?? 'We did not find any prior subscriptions for this account.');
+      }
+    } catch {
+      Alert.alert('Error', 'Could not restore purchases. Please try again.');
+    } finally {
+      setRestoring(false);
+    }
   }
 
   async function handlePurchaseCredits(amount: number) {
@@ -183,6 +210,14 @@ export default function PurchaseScreen() {
                   ) : null}
 
                   <Text style={styles.tierName}>{tier.name}</Text>
+                  <View style={styles.tierPriceRow}>
+                    <Text style={styles.tierPriceAmount}>
+                      ${tier.monthlyPrice != null ? tier.monthlyPrice.toFixed(2) : '0'}
+                    </Text>
+                    {tier.monthlyPrice != null ? (
+                      <Text style={styles.tierPricePer}>/month</Text>
+                    ) : null}
+                  </View>
                   <Text style={styles.tierTagline}>{tier.tagline}</Text>
 
                   <View style={styles.tierFeatureList}>
@@ -210,6 +245,57 @@ export default function PurchaseScreen() {
                 </View>
               );
             })}
+
+            <TouchableOpacity
+              style={styles.restoreButton}
+              onPress={handleRestorePurchases}
+              disabled={restoring}
+            >
+              {restoring ? (
+                <ActivityIndicator color={Colors.black} />
+              ) : (
+                <Text style={styles.restoreButtonText}>Restore Purchases</Text>
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.disclosureBlock}>
+              <Text style={styles.disclosureHeader}>Subscription Terms</Text>
+              <Text style={styles.disclosureText}>
+                <Text style={styles.disclosureBold}>Basic:</Text> $9.99 per month, billed monthly.
+              </Text>
+              <Text style={styles.disclosureText}>
+                <Text style={styles.disclosureBold}>Premium:</Text> $19.99 per month, billed monthly.
+              </Text>
+              <Text style={styles.disclosureText}>
+                Payment will be charged to your Apple ID account at confirmation of purchase.
+                Subscription automatically renews unless it is canceled at least 24 hours
+                before the end of the current period. Your account will be charged for
+                renewal within 24 hours prior to the end of the current period.
+              </Text>
+              <Text style={styles.disclosureText}>
+                You can manage and cancel your subscription at any time by going to your
+                Apple ID account settings on the App Store after purchase. No cancellation
+                of the current subscription is allowed during the active period.
+              </Text>
+              <Text style={styles.disclosureText}>
+                Free trials (if offered) automatically convert to a paid subscription unless
+                canceled at least 24 hours before the trial ends. Any unused portion of a
+                free trial period is forfeited when you purchase a subscription.
+              </Text>
+              <View style={styles.disclosureLinks}>
+                <TouchableOpacity
+                  onPress={() => Alert.alert('Terms of Service', 'Open ToS URL: https://evofaceflow.com/terms')}
+                >
+                  <Text style={styles.disclosureLink}>Terms of Service</Text>
+                </TouchableOpacity>
+                <Text style={styles.disclosureLinkSep}>·</Text>
+                <TouchableOpacity
+                  onPress={() => Alert.alert('Privacy Policy', 'Open Privacy URL: https://evofaceflow.com/privacy')}
+                >
+                  <Text style={styles.disclosureLink}>Privacy Policy</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         ) : (
           <View>
@@ -356,6 +442,22 @@ const styles = StyleSheet.create({
     fontWeight: Typography.fontWeightBold,
     color: Colors.black,
   },
+  tierPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginTop: 2,
+    marginBottom: Spacing.xs,
+  },
+  tierPriceAmount: {
+    fontSize: Typography.fontSizeXXL,
+    fontWeight: Typography.fontWeightBold,
+    color: Colors.black,
+  },
+  tierPricePer: {
+    fontSize: Typography.fontSizeSM,
+    color: Colors.gray600,
+    marginLeft: 2,
+  },
   tierTagline: {
     fontSize: Typography.fontSizeMD,
     color: Colors.gray600,
@@ -420,5 +522,58 @@ const styles = StyleSheet.create({
     color: Colors.gray600,
     marginLeft: Spacing.sm,
     lineHeight: 20,
+  },
+  restoreButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.md,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.md,
+    borderRadius: Radius.full,
+    borderWidth: 1.5,
+    borderColor: Colors.black,
+    backgroundColor: Colors.white,
+  },
+  restoreButtonText: {
+    fontSize: Typography.fontSizeMD,
+    fontWeight: Typography.fontWeightSemiBold,
+    color: Colors.black,
+  },
+  disclosureBlock: {
+    backgroundColor: Colors.white,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    marginTop: Spacing.sm,
+  },
+  disclosureHeader: {
+    fontSize: Typography.fontSizeMD,
+    fontWeight: Typography.fontWeightBold,
+    color: Colors.black,
+    marginBottom: Spacing.sm,
+  },
+  disclosureText: {
+    fontSize: Typography.fontSizeXS,
+    color: Colors.gray600,
+    lineHeight: 18,
+    marginBottom: Spacing.sm,
+  },
+  disclosureBold: {
+    fontWeight: Typography.fontWeightSemiBold,
+    color: Colors.black,
+  },
+  disclosureLinks: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: Spacing.xs,
+  },
+  disclosureLink: {
+    fontSize: Typography.fontSizeXS,
+    color: Colors.black,
+    textDecorationLine: 'underline',
+  },
+  disclosureLinkSep: {
+    fontSize: Typography.fontSizeXS,
+    color: Colors.gray400,
+    marginHorizontal: Spacing.xs,
   },
 });

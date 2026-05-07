@@ -20,8 +20,31 @@ type SettingsNavProp = NativeStackNavigationProp<RootStackParams, 'Settings'>;
 
 export default function SettingsScreen() {
   const navigation = useNavigation<SettingsNavProp>();
-  const { user, logout } = useUserStore();
+  const { user, logout, refreshUser } = useUserStore();
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+
+  async function handleRestorePurchases() {
+    setRestoring(true);
+    try {
+      const { data } = await api.post<{ restored: boolean; tier?: string; expiresAt?: string | null; message?: string }>(
+        '/credits/restore-purchases',
+      );
+      await refreshUser();
+      if (data.restored) {
+        Alert.alert(
+          'Purchases Restored',
+          `Your ${data.tier} subscription has been restored${data.expiresAt ? ` (renews ${new Date(data.expiresAt).toLocaleDateString()})` : ''}.`,
+        );
+      } else {
+        Alert.alert('No Purchases Found', data.message ?? 'We did not find any prior subscriptions for this account.');
+      }
+    } catch {
+      Alert.alert('Error', 'Could not restore purchases. Please try again.');
+    } finally {
+      setRestoring(false);
+    }
+  }
 
   function handleLogout() {
     Alert.alert('Log Out', 'Are you sure?', [
@@ -103,6 +126,13 @@ export default function SettingsScreen() {
       <SettingRow label="Username" value={`@${user?.username}`} />
       <SettingRow label="Tier" value={user?.tier ?? 'FREE'} />
       <SettingRow label="Credits" value={String(user?.credits ?? 0)} />
+
+      <SectionHeader label="Subscription" />
+      <SettingButton
+        label={restoring ? 'Restoring…' : 'Restore Purchases'}
+        onPress={handleRestorePurchases}
+        disabled={restoring}
+      />
 
       <SectionHeader label="Privacy & Data" />
       <SettingButton label="Delete All Body Photos" onPress={handleDeletePhotos} />

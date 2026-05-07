@@ -158,6 +158,59 @@ router.post('/subscribe', async (req: Request, res: Response) => {
   });
 });
 
+// Restore Apple In-App Purchases for the authenticated user.
+//
+// Apple App Store Review Guideline 3.1.1 requires apps with auto-renewing
+// subscriptions to expose a "Restore Purchases" affordance. This endpoint
+// re-reads the user's prior `ApplePurchase` records and re-applies the
+// most recent unexpired, non-revoked entitlement to their User.tier.
+//
+// In a fully wired implementation the client would post the latest StoreKit
+// receipt / JWS here and we would verify it against Apple's servers before
+// upserting an `ApplePurchase` row. For now we restore based on records we
+// already have on file (e.g. previously verified via App Store Server
+// Notifications V2).
+router.post('/restore-purchases', async (req: Request, res: Response) => {
+  if (!req.user) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+
+  const now = new Date();
+
+  const activePurchase = await prisma.applePurchase.findFirst({
+    where: {
+      userId: req.user.userId,
+      revokedAt: null,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    },
+    orderBy: [{ expiresAt: 'desc' }, { createdAt: 'desc' }],
+  });
+
+  if (!activePurchase) {
+    res.json({
+      restored: false,
+      message: 'No active purchases were found for this account.',
+    });
+    return;
+  }
+
+  const user = await prisma.user.update({
+    where: { id: req.user.userId },
+    data: { tier: activePurchase.tier },
+    select: { tier: true, credits: true },
+  });
+
+  res.json({
+    restored: true,
+    tier: user.tier,
+    expiresAt: activePurchase.expiresAt,
+    productId: activePurchase.productId,
+    originalTransactionId: activePurchase.originalTransactionId,
+    credits: user.credits,
+  });
+});
+
 // Cancel subscription — drops user back to FREE
 router.post('/unsubscribe', async (req: Request, res: Response) => {
   if (!req.user) {

@@ -110,7 +110,7 @@ export default function HomeScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <HeaderMenu
-        title="TryOn"
+        title="Discover"
         leftComponent={<CreditDisplay />}
         rightComponent={
           <TouchableOpacity
