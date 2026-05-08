@@ -14,6 +14,7 @@ import {
 } from '../services/emailService';
 import { recordLoginLocation } from '../services/locationService';
 import { logAuth, createChildLogger } from '../services/logger';
+import { isAdminEmail } from '../utils/admin';
 
 const log = createChildLogger('AuthController');
 
@@ -200,6 +201,7 @@ export async function login(req: Request, res: Response): Promise<void> {
       followingCount: user.followingCount,
       followersCount: user.followersCount,
       likesCount: user.likesCount,
+      isAdmin: isAdminEmail(user.email),
     },
   });
 }

@@ -22,6 +22,13 @@ export const env = {
   jwtRefreshExpiresIn: '30d',
 
   adminApiKey: required('ADMIN_API_KEY'),
+  // Comma-separated list of email addresses with admin UI access in the app.
+  // Backend admin routes also require ADMIN_API_KEY; this list controls
+  // whether the Admin Console button is even shown in Settings.
+  adminEmails: optional('ADMIN_EMAILS', '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean),
   allowedOrigins: optional('ALLOWED_ORIGINS', 'http://localhost:8081').split(','),
 
   aws: {

@@ -16,6 +16,7 @@ import { useUserStore } from '../store/useUserStore';
 import * as WebBrowser from 'expo-web-browser';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
+import Constants from 'expo-constants';
 import { Colors, Typography, Spacing } from '../constants/theme';
 import { RootStackParams } from '../navigation';
 import { MANAGE_SUBSCRIPTIONS_URL, restorePurchases } from '../services/iap';
@@ -181,8 +182,12 @@ export default function SettingsScreen() {
       <SettingButton label="Privacy Policy" onPress={() => WebBrowser.openBrowserAsync(PRIVACY_POLICY_URL)} />
       <SettingButton label="Terms of Service" onPress={() => WebBrowser.openBrowserAsync(TERMS_OF_SERVICE_URL)} />
 
-      <SectionHeader label="Developer" />
-      <SettingButton label="Admin Console" onPress={() => navigation.navigate('AdminConsole')} />
+      {user?.isAdmin ? (
+        <>
+          <SectionHeader label="Admin" />
+          <SettingButton label="Admin Console" onPress={() => navigation.navigate('AdminConsole')} />
+        </>
+      ) : null}
 
       <SectionHeader label="Session" />
       <SettingButton label="Log Out" onPress={handleLogout} />
@@ -197,7 +202,10 @@ export default function SettingsScreen() {
         />
       </View>
 
-      <Text style={styles.version}>TryOn v1.0.0</Text>
+      <Text style={styles.version}>
+        TryOn v{Constants.expoConfig?.version ?? ''}
+        {Constants.expoConfig?.ios?.buildNumber ? ` (${Constants.expoConfig.ios.buildNumber})` : ''}
+      </Text>
     </ScrollView>
   );
 }

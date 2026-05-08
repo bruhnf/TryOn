@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../lib/prisma';
+import { isAdminEmail } from '../utils/admin';
 
 const updateSchema = z.object({
   firstName: z.string().max(50).optional(),
@@ -145,7 +146,7 @@ export async function getMyProfile(req: Request, res: Response): Promise<void> {
   });
 
   if (!user) { res.status(404).json({ error: 'User not found' }); return; }
-  res.json(user);
+  res.json({ ...user, isAdmin: isAdminEmail(user.email) });
 }
 
 export async function deleteAccount(req: Request, res: Response): Promise<void> {

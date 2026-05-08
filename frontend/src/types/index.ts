@@ -22,6 +22,8 @@ export interface User {
   city?: string;
   state?: string;
   createdAt: string;
+  // Server-derived: true if this user's email is in the backend ADMIN_EMAILS allowlist.
+  isAdmin?: boolean;
 }
 
 export interface TryOnJob {
