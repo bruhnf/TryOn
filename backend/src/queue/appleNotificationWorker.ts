@@ -224,10 +224,6 @@ async function handleNotification(
       });
       break;
 
-    case NotificationTypeV2.TEST:
-      log.info('Apple TEST notification received', { userId });
-      break;
-
     default:
       log.info('Unhandled Apple notification type', { notificationType, subtype, userId });
   }
@@ -246,6 +242,12 @@ const worker = new Worker<AppleNotificationJobData>(
     });
     if (!decoded.notificationType) {
       log.warn('Apple notification missing notificationType — skipping', { notificationUUID });
+      return;
+    }
+    // TEST notifications have no signedTransactionInfo, so they'd be filtered out
+    // by decodeNotificationPayload(). Handle them here before that path runs.
+    if (decoded.notificationType === NotificationTypeV2.TEST) {
+      log.info('Apple TEST notification received', { notificationUUID });
       return;
     }
     await handleNotification(decoded.notificationType, decoded.subtype, signedPayload);
