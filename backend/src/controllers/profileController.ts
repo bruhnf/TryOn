@@ -153,3 +153,75 @@ export async function deleteAccount(req: Request, res: Response): Promise<void> 
   await prisma.user.delete({ where: { id: req.user.userId } });
   res.json({ message: 'Account deleted' });
 }
+
+// Export the authenticated user's personal data (GDPR / CCPA right of access).
+// Returns a JSON document the client can save or share. Sensitive fields like
+// the password hash and refresh tokens are intentionally omitted.
+export async function exportData(req: Request, res: Response): Promise<void> {
+  if (!req.user) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
+  const userId = req.user.userId;
+
+  const [user, tryOnJobs, locations, follows, followers, creditTransactions, applePurchases, likes, notifications] =
+    await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true, username: true, email: true, verified: true, tier: true, credits: true,
+          tryOnCount: true, lastFreeCreditGrantAt: true, firstName: true, lastName: true,
+          bio: true, avatarUrl: true, fullBodyUrl: true, mediumBodyUrl: true,
+          followingCount: true, followersCount: true, likesCount: true,
+          address: true, city: true, state: true, createdAt: true, updatedAt: true,
+        },
+      }),
+      prisma.tryOnJob.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true, status: true, isPrivate: true, clothingPhoto1Url: true, clothingPhoto2Url: true,
+          resultFullBodyUrl: true, resultMediumUrl: true, bodyPhotoUrl: true,
+          perspectivesUsed: true, likesCount: true, createdAt: true, updatedAt: true,
+        },
+      }),
+      prisma.userLocation.findMany({
+        where: { userId },
+        orderBy: { timestamp: 'desc' },
+      }),
+      prisma.follow.findMany({ where: { followerId: userId } }),
+      prisma.follow.findMany({ where: { followingId: userId } }),
+      prisma.creditTransaction.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } }),
+      prisma.applePurchase.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true, transactionId: true, originalTransactionId: true, productId: true,
+          tier: true, expiresAt: true, revokedAt: true, createdAt: true, updatedAt: true,
+          // rawReceipt intentionally omitted — large and not user-meaningful
+        },
+      }),
+      prisma.like.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } }),
+      prisma.notification.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } }),
+    ]);
+
+  if (!user) { res.status(404).json({ error: 'User not found' }); return; }
+
+  const exportPayload = {
+    exportedAt: new Date().toISOString(),
+    schemaVersion: 1,
+    user,
+    tryOnJobs,
+    locations,
+    follows: { following: follows, followers },
+    creditTransactions,
+    applePurchases,
+    likes,
+    notifications,
+  };
+
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="tryon-export-${user.username}-${new Date().toISOString().slice(0, 10)}.json"`,
+  );
+  res.json(exportPayload);
+}

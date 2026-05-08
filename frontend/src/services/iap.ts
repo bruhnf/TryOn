@@ -107,32 +107,41 @@ export async function fetchProducts(): Promise<{
  */
 export async function purchaseSubscription(sku: string, userId: string): Promise<void> {
   await initIap();
+  // Cast: Android subscriptions need subscriptionOffers, which we don't ship yet.
+  // App is iOS-only at submission time. Revisit when adding Android support.
   await IAP.requestPurchase({
-    request: {
-      ios: { sku, appAccountToken: userId },
-      android: { skus: [sku] },
-    },
+    request: { ios: { sku, appAccountToken: userId } },
     type: 'subs',
-  });
+  } as never);
 }
 
 export async function purchaseCreditPack(sku: string, userId: string): Promise<void> {
   await initIap();
   await IAP.requestPurchase({
-    request: {
-      ios: { sku, appAccountToken: userId },
-      android: { skus: [sku] },
-    },
+    request: { ios: { sku, appAccountToken: userId } },
     type: 'inapp',
-  });
+  } as never);
 }
 
 interface PurchaseLike {
-  productId: string;
+  productId?: string;
   transactionId?: string;
   id?: string;
+  // Field names vary by expo-iap version and platform — we try them in order.
   jwsRepresentationIos?: string;
+  purchaseToken?: string;
   transactionReceipt?: string;
+}
+
+// Pull the JWS / receipt out of a purchase object regardless of which field
+// name the installed expo-iap version uses.
+function extractReceipt(purchase: PurchaseLike): string | null {
+  return (
+    purchase.jwsRepresentationIos ??
+    purchase.purchaseToken ??
+    purchase.transactionReceipt ??
+    null
+  );
 }
 
 /**
@@ -140,25 +149,50 @@ interface PurchaseLike {
  * StoreKit transaction as finished. Only finish AFTER the backend confirms
  * the entitlement was applied — finishing earlier would let the entitlement
  * silently fail if our DB write didn't land.
+ *
+ * If no JWS field is present on the purchase object (library version drift),
+ * we log the available keys and skip verify-receipt. The webhook on the
+ * backend is the safety net that grants entitlement either way; we still
+ * finish the transaction so StoreKit doesn't keep retrying.
  */
 export async function verifyAndFinish(purchase: PurchaseLike): Promise<{
   tier?: string;
   credits?: number;
   alreadyProcessed?: boolean;
+  fastPathSkipped?: boolean;
 }> {
-  const jwsRepresentation = purchase.jwsRepresentationIos ?? purchase.transactionReceipt;
-  if (!jwsRepresentation) throw new Error('Purchase missing JWS representation');
+  const jwsRepresentation = extractReceipt(purchase);
 
-  const { data } = await api.post<{
-    success?: boolean;
-    alreadyProcessed?: boolean;
+  let result: {
     tier?: string;
     credits?: number;
-  }>('/credits/verify-receipt', { jwsRepresentation });
+    alreadyProcessed?: boolean;
+    fastPathSkipped?: boolean;
+  } = {};
 
-  // Only acknowledge to StoreKit after backend has applied entitlement.
+  if (jwsRepresentation) {
+    try {
+      const { data } = await api.post<{
+        success?: boolean;
+        alreadyProcessed?: boolean;
+        tier?: string;
+        credits?: number;
+      }>('/credits/verify-receipt', { jwsRepresentation });
+      result = data;
+    } catch {
+      // Backend verification failed — fall through to finishTransaction so
+      // StoreKit doesn't retry forever. The webhook will reconcile state.
+      result.fastPathSkipped = true;
+    }
+  } else {
+    // Surface what fields ARE on the object so we can update the extractor.
+    // eslint-disable-next-line no-console
+    console.warn('[iap] Purchase missing JWS — fields available:', Object.keys(purchase));
+    result.fastPathSkipped = true;
+  }
+
   await IAP.finishTransaction({ purchase: purchase as never, isConsumable: undefined });
-  return data;
+  return result;
 }
 
 /**

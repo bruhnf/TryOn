@@ -14,7 +14,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import * as IAP from 'expo-iap';
+import * as WebBrowser from 'expo-web-browser';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
+import { PRIVACY_POLICY_URL, TERMS_OF_SERVICE_URL } from '../constants/legal';
 import { useUserStore } from '../store/useUserStore';
 import { UserTier } from '../types';
 import {
@@ -112,7 +114,16 @@ export default function PurchaseScreen() {
       try {
         const result = await verifyAndFinish(purchase as never);
         await refreshUser();
-        if (result.alreadyProcessed) {
+
+        if (result.fastPathSkipped) {
+          // Backend webhook is the source of truth. Poll a few times to pick up
+          // the credit/tier update once Apple delivers the webhook.
+          Alert.alert('Purchase confirmed', 'Your account is being updated — this can take a few seconds.');
+          for (let i = 0; i < 5; i += 1) {
+            await new Promise((r) => setTimeout(r, 2000));
+            await refreshUser();
+          }
+        } else if (result.alreadyProcessed) {
           Alert.alert('Already on file', 'This purchase was already applied to your account.');
         } else {
           Alert.alert('Purchase complete', 'Your account has been updated.');
@@ -302,8 +313,21 @@ export default function PurchaseScreen() {
                       <Text style={styles.subscribeDisclosure}>
                         Auto-renews monthly at {localizedPrice || tier.name + ' price'}. Cancel anytime in
                         Settings &gt; Apple ID &gt; Subscriptions; cancellation takes effect at the end
-                        of the current period. By subscribing you agree to our Terms of Service and
-                        Privacy Policy.
+                        of the current period. By subscribing you agree to our{' '}
+                        <Text
+                          style={styles.disclosureLink}
+                          onPress={() => WebBrowser.openBrowserAsync(TERMS_OF_SERVICE_URL)}
+                        >
+                          Terms of Service
+                        </Text>
+                        {' '}and{' '}
+                        <Text
+                          style={styles.disclosureLink}
+                          onPress={() => WebBrowser.openBrowserAsync(PRIVACY_POLICY_URL)}
+                        >
+                          Privacy Policy
+                        </Text>
+                        .
                       </Text>
                     </>
                   ) : (
@@ -526,6 +550,10 @@ const styles = StyleSheet.create({
     color: Colors.gray600,
     lineHeight: 16,
     marginTop: Spacing.sm,
+  },
+  disclosureLink: {
+    color: Colors.black,
+    textDecorationLine: 'underline',
   },
   creditCard: {
     backgroundColor: Colors.white,

@@ -12,9 +12,11 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import * as WebBrowser from 'expo-web-browser';
 import api from '../config/api';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
 import { AuthStackParams } from '../navigation';
+import { PRIVACY_POLICY_URL, TERMS_OF_SERVICE_URL } from '../constants/legal';
 
 type Props = { navigation: NativeStackNavigationProp<AuthStackParams, 'Signup'> };
 
@@ -172,10 +174,20 @@ export default function SignupScreen({ navigation }: Props) {
             </View>
             <Text style={styles.checkLabel}>
               I agree to the{' '}
-              <Text style={styles.linkText}>Terms of Service</Text>
+              <Text
+                style={styles.linkText}
+                onPress={() => WebBrowser.openBrowserAsync(TERMS_OF_SERVICE_URL)}
+              >
+                Terms of Service
+              </Text>
               {' '}and{' '}
-              <Text style={styles.linkText}>Privacy Policy</Text>, including the processing
-              of body photos by AI services.
+              <Text
+                style={styles.linkText}
+                onPress={() => WebBrowser.openBrowserAsync(PRIVACY_POLICY_URL)}
+              >
+                Privacy Policy
+              </Text>
+              , including the processing of body photos by AI services.
             </Text>
           </TouchableOpacity>
 

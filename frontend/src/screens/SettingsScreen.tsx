@@ -13,9 +13,13 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import api from '../config/api';
 import { useUserStore } from '../store/useUserStore';
+import * as WebBrowser from 'expo-web-browser';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import { Colors, Typography, Spacing } from '../constants/theme';
 import { RootStackParams } from '../navigation';
 import { MANAGE_SUBSCRIPTIONS_URL, restorePurchases } from '../services/iap';
+import { PRIVACY_POLICY_URL, TERMS_OF_SERVICE_URL } from '../constants/legal';
 
 type SettingsNavProp = NativeStackNavigationProp<RootStackParams, 'Settings'>;
 
@@ -81,16 +85,41 @@ export default function SettingsScreen() {
     );
   }
 
-  function handleExportData() {
+  const [exporting, setExporting] = useState(false);
+
+  async function handleExportData() {
     Alert.alert(
       'Export Your Data',
-      'We will email you a copy of your personal data including your profile, body photo metadata, and try-on history within 72 hours.',
+      'A JSON file containing your profile, try-on history, location records, credit transactions, and other account data will be generated. You can save it or share it with another app.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Request Export',
-          onPress: () =>
-            Alert.alert('Request Submitted', 'You will receive an email within 72 hours.'),
+          text: 'Export',
+          onPress: async () => {
+            setExporting(true);
+            try {
+              const { data } = await api.get('/profile/me/export', { responseType: 'json' });
+              const filename = `tryon-export-${user?.username ?? 'me'}-${new Date().toISOString().slice(0, 10)}.json`;
+              const fileUri = `${FileSystem.documentDirectory}${filename}`;
+              await FileSystem.writeAsStringAsync(fileUri, JSON.stringify(data, null, 2), {
+                encoding: FileSystem.EncodingType.UTF8,
+              });
+              const canShare = await Sharing.isAvailableAsync();
+              if (canShare) {
+                await Sharing.shareAsync(fileUri, {
+                  mimeType: 'application/json',
+                  dialogTitle: 'Save your TryOn data export',
+                  UTI: 'public.json',
+                });
+              } else {
+                Alert.alert('Saved', `Export written to ${fileUri}`);
+              }
+            } catch {
+              Alert.alert('Error', 'Could not export your data. Please try again later.');
+            } finally {
+              setExporting(false);
+            }
+          },
         },
       ],
     );
@@ -142,11 +171,15 @@ export default function SettingsScreen() {
 
       <SectionHeader label="Privacy & Data" />
       <SettingButton label="Delete All Body Photos" onPress={handleDeletePhotos} />
-      <SettingButton label="Export My Data (GDPR/CCPA)" onPress={handleExportData} />
+      <SettingButton
+        label={exporting ? 'Exporting…' : 'Export My Data (GDPR/CCPA)'}
+        onPress={handleExportData}
+        disabled={exporting}
+      />
 
       <SectionHeader label="Legal" />
-      <SettingButton label="Privacy Policy" onPress={() => Alert.alert('Privacy Policy', 'Open privacy policy URL')} />
-      <SettingButton label="Terms of Service" onPress={() => Alert.alert('Terms of Service', 'Open ToS URL')} />
+      <SettingButton label="Privacy Policy" onPress={() => WebBrowser.openBrowserAsync(PRIVACY_POLICY_URL)} />
+      <SettingButton label="Terms of Service" onPress={() => WebBrowser.openBrowserAsync(TERMS_OF_SERVICE_URL)} />
 
       <SectionHeader label="Developer" />
       <SettingButton label="Admin Console" onPress={() => navigation.navigate('AdminConsole')} />
