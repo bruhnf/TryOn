@@ -21,6 +21,7 @@ import { Colors, Typography, Spacing, Radius } from '../constants/theme';
 import { TryOnJob } from '../types';
 import api from '../config/api';
 import { downloadImageToGallery, downloadMultipleImages, shareImage } from '../utils/imageUtils';
+import AiGeneratedBadge from './AiGeneratedBadge';
 
 interface TryOnDetailModalProps {
   visible: boolean;
@@ -150,6 +151,7 @@ export default function TryOnDetailModal({
                 style={styles.image}
                 resizeMode="contain"
               />
+              <AiGeneratedBadge />
             </View>
           ))}
         </ScrollView>

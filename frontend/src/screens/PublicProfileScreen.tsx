@@ -15,10 +15,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import { ActionSheetIOS, Platform } from 'react-native';
 import api from '../config/api';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
 import { RootStackParams } from '../navigation';
 import FullScreenImageModal from '../components/FullScreenImageModal';
+import ReportSheet, { ReportTargetType } from '../components/ReportSheet';
 
 type Nav = NativeStackNavigationProp<RootStackParams, 'PublicProfile'>;
 type Route = RouteProp<RootStackParams, 'PublicProfile'>;
@@ -37,6 +39,7 @@ interface PublicProfileData {
   createdAt: string;
   isFollowing: boolean;
   isSelf: boolean;
+  viewerHasBlocked?: boolean;
   jobs: Array<{
     id: string;
     resultFullBodyUrl?: string;
@@ -58,6 +61,78 @@ export default function PublicProfileScreen() {
   const [followBusy, setFollowBusy] = useState(false);
   const [fullScreenImages, setFullScreenImages] = useState<string[]>([]);
   const [fullScreenIndex, setFullScreenIndex] = useState(0);
+  const [reportTarget, setReportTarget] = useState<{ type: ReportTargetType; id: string } | null>(null);
+  const [blockBusy, setBlockBusy] = useState(false);
+
+  async function handleBlock() {
+    if (!profile || profile.isSelf) return;
+    Alert.alert(
+      `Block @${profile.username}?`,
+      'You will no longer see their posts and they will not be able to see yours. You can unblock from Settings.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: async () => {
+            setBlockBusy(true);
+            try {
+              await api.post(`/users/${profile.id}/block`);
+              navigation.goBack();
+            } catch {
+              Alert.alert('Error', 'Could not block this user. Please try again.');
+            } finally {
+              setBlockBusy(false);
+            }
+          },
+        },
+      ],
+    );
+  }
+
+  async function handleUnblock() {
+    if (!profile) return;
+    setBlockBusy(true);
+    try {
+      await api.delete(`/users/${profile.id}/block`);
+      await load();
+    } catch {
+      Alert.alert('Error', 'Could not unblock this user.');
+    } finally {
+      setBlockBusy(false);
+    }
+  }
+
+  function showActionSheet() {
+    if (!profile || profile.isSelf) return;
+    const options = profile.viewerHasBlocked
+      ? ['Unblock User', 'Cancel']
+      : ['Report User', 'Block User', 'Cancel'];
+    const cancelButtonIndex = options.length - 1;
+    const destructiveButtonIndex = profile.viewerHasBlocked ? -1 : 1;
+
+    const handleSelection = (index: number) => {
+      if (profile.viewerHasBlocked) {
+        if (index === 0) handleUnblock();
+        return;
+      }
+      if (index === 0) setReportTarget({ type: 'USER', id: profile.id });
+      else if (index === 1) handleBlock();
+    };
+
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options, cancelButtonIndex, destructiveButtonIndex },
+        handleSelection,
+      );
+    } else {
+      Alert.alert('Actions', '', options.slice(0, -1).map((label, i) => ({
+        text: label,
+        style: i === destructiveButtonIndex ? ('destructive' as const) : ('default' as const),
+        onPress: () => handleSelection(i),
+      })).concat([{ text: 'Cancel', style: 'default' as const, onPress: () => {} }]));
+    }
+  }
 
   async function load() {
     try {
@@ -127,7 +202,13 @@ export default function PublicProfileScreen() {
           <Ionicons name="chevron-back" size={28} color={Colors.black} />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>@{profile.username}</Text>
-        <View style={styles.backButton} />
+        {profile.isSelf ? (
+          <View style={styles.backButton} />
+        ) : (
+          <TouchableOpacity onPress={showActionSheet} style={styles.backButton} accessibilityLabel="More actions">
+            <Ionicons name="ellipsis-horizontal" size={24} color={Colors.black} />
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView
@@ -184,6 +265,22 @@ export default function PublicProfileScreen() {
           </TouchableOpacity>
         )}
 
+        {profile.viewerHasBlocked ? (
+          <View style={styles.blockedNotice}>
+            <Ionicons name="ban-outline" size={32} color={Colors.gray400} />
+            <Text style={styles.blockedTitle}>You blocked this user</Text>
+            <Text style={styles.blockedSubtitle}>
+              Their content is hidden. Unblock to see their profile.
+            </Text>
+            <TouchableOpacity style={styles.unblockButton} onPress={handleUnblock} disabled={blockBusy}>
+              {blockBusy ? (
+                <ActivityIndicator color={Colors.white} />
+              ) : (
+                <Text style={styles.unblockButtonText}>Unblock</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        ) : (
         <View style={styles.gridSection}>
           <Text style={styles.sectionTitle}>Public Try-Ons</Text>
           {profile.jobs.length === 0 ? (
@@ -214,13 +311,21 @@ export default function PublicProfileScreen() {
             />
           )}
         </View>
+        )}
       </ScrollView>
 
       <FullScreenImageModal
         visible={fullScreenImages.length > 0}
         imageUrls={fullScreenImages}
         initialIndex={fullScreenIndex}
+        aiGenerated
         onClose={() => setFullScreenImages([])}
+      />
+      <ReportSheet
+        visible={reportTarget !== null}
+        targetType={reportTarget?.type ?? 'USER'}
+        targetId={reportTarget?.id ?? ''}
+        onClose={() => setReportTarget(null)}
       />
     </View>
   );
@@ -320,6 +425,35 @@ const styles = StyleSheet.create({
     color: Colors.white,
   },
   followingBtnText: { color: Colors.black },
+  blockedNotice: {
+    padding: Spacing.xl,
+    marginTop: Spacing.md,
+    borderTopWidth: 1,
+    borderColor: Colors.gray200,
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  blockedTitle: {
+    fontSize: Typography.fontSizeLG,
+    fontWeight: Typography.fontWeightBold,
+    color: Colors.black,
+  },
+  blockedSubtitle: {
+    fontSize: Typography.fontSizeSM,
+    color: Colors.gray600,
+    textAlign: 'center',
+    marginBottom: Spacing.sm,
+  },
+  unblockButton: {
+    backgroundColor: Colors.black,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.full,
+  },
+  unblockButtonText: {
+    color: Colors.white,
+    fontWeight: Typography.fontWeightBold,
+  },
   gridSection: {
     padding: Spacing.md,
     marginTop: Spacing.md,

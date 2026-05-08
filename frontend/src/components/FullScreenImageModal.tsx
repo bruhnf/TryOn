@@ -14,12 +14,16 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/theme';
+import AiGeneratedBadge from './AiGeneratedBadge';
 
 interface FullScreenImageModalProps {
   visible: boolean;
   imageUrls: string[];
   initialIndex?: number;
   onClose: () => void;
+  // True when imageUrls are AI-generated try-on results (shows disclosure badge).
+  // Leave false/unset for clothing photos, body photos, or other source imagery.
+  aiGenerated?: boolean;
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -29,6 +33,7 @@ export default function FullScreenImageModal({
   imageUrls,
   initialIndex = 0,
   onClose,
+  aiGenerated = false,
 }: FullScreenImageModalProps) {
   const insets = useSafeAreaInsets();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
@@ -84,6 +89,7 @@ export default function FullScreenImageModal({
                 style={styles.image}
                 resizeMode="contain"
               />
+              {aiGenerated ? <AiGeneratedBadge /> : null}
             </View>
           ))}
         </ScrollView>

@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { ReportStatus } from '@prisma/client';
 import { requireAdmin } from '../middleware/auth';
 import prisma from '../lib/prisma';
 import { hashPassword } from '../utils/password';
@@ -355,13 +356,95 @@ router.delete('/vulnerabilities/cleanup', async (req: Request, res: Response) =>
       },
     });
     
-    res.json({ 
+    res.json({
       message: `Deleted reports older than ${daysToKeep} days`,
       deleted: result.count,
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
+});
+
+// ============================================================================
+// Content moderation — review and resolve user-submitted reports.
+// Required by App Store Review Guideline 1.2 (timely admin response).
+// ============================================================================
+
+router.get('/moderation/reports', async (req: Request, res: Response) => {
+  const status = (req.query.status as string | undefined) as ReportStatus | undefined;
+  const limit = Math.min(100, parseInt((req.query.limit as string) ?? '50', 10));
+  const skip = Math.max(0, parseInt((req.query.skip as string) ?? '0', 10));
+
+  const reports = await prisma.report.findMany({
+    where: status ? { status } : undefined,
+    orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+    take: limit,
+    skip,
+    include: {
+      reporter: { select: { id: true, username: true, email: true } },
+    },
+  });
+
+  // Hydrate the target so the admin sees who/what was reported.
+  const hydrated = await Promise.all(
+    reports.map(async (r) => {
+      if (r.targetType === 'TRYON_JOB') {
+        const job = await prisma.tryOnJob.findUnique({
+          where: { id: r.targetId },
+          select: {
+            id: true, userId: true, isPrivate: true, status: true,
+            resultFullBodyUrl: true, resultMediumUrl: true,
+            user: { select: { id: true, username: true } },
+          },
+        });
+        return { ...r, target: job };
+      }
+      const user = await prisma.user.findUnique({
+        where: { id: r.targetId },
+        select: { id: true, username: true, email: true, bio: true, avatarUrl: true },
+      });
+      return { ...r, target: user };
+    }),
+  );
+
+  res.json({ reports: hydrated, limit, skip });
+});
+
+router.patch('/moderation/reports/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { status, resolverNote, removeContent } = req.body as {
+    status?: ReportStatus;
+    resolverNote?: string;
+    removeContent?: boolean;
+  };
+
+  if (status && !['OPEN', 'REVIEWING', 'RESOLVED_REMOVED', 'RESOLVED_NO_ACTION'].includes(status)) {
+    res.status(400).json({ error: 'Invalid status' });
+    return;
+  }
+
+  const report = await prisma.report.findUnique({ where: { id } });
+  if (!report) { res.status(404).json({ error: 'Report not found' }); return; }
+
+  // If admin chose to remove the offending content, do that atomically
+  // alongside resolving the report.
+  if (removeContent && report.targetType === 'TRYON_JOB') {
+    await prisma.tryOnJob.update({
+      where: { id: report.targetId },
+      data: { isPrivate: true },
+    }).catch(() => null);
+  }
+
+  const updated = await prisma.report.update({
+    where: { id },
+    data: {
+      status: status ?? (removeContent ? 'RESOLVED_REMOVED' : 'REVIEWING'),
+      resolverNote: resolverNote ?? null,
+      resolvedAt: status?.startsWith('RESOLVED') || removeContent ? new Date() : null,
+    },
+  });
+
+  res.json(updated);
 });
 
 export default router;

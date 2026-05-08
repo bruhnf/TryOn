@@ -394,6 +394,7 @@ function ResultView({ job, onReset }: { job: TryOnJob; onReset: () => void }) {
         visible={fullScreenImages.length > 0}
         imageUrls={fullScreenImages}
         initialIndex={fullScreenIndex}
+        aiGenerated
         onClose={() => setFullScreenImages([])}
       />
     </View>

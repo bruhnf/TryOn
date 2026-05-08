@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import { ActionSheetIOS, Alert, Platform } from 'react-native';
 import api from '../config/api';
 import { useUserStore } from '../store/useUserStore';
 import { TryOnJob } from '../types';
@@ -21,6 +22,8 @@ import { RootStackParams } from '../navigation';
 import FullScreenImageModal from '../components/FullScreenImageModal';
 import CreditDisplay from '../components/CreditDisplay';
 import HeaderMenu from '../components/HeaderMenu';
+import AiGeneratedBadge from '../components/AiGeneratedBadge';
+import ReportSheet, { ReportTargetType } from '../components/ReportSheet';
 
 type Nav = NativeStackNavigationProp<RootStackParams>;
 
@@ -41,6 +44,65 @@ export default function HomeScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [fullScreenImages, setFullScreenImages] = useState<string[]>([]);
   const [fullScreenInitialIndex, setFullScreenInitialIndex] = useState(0);
+  const [fullScreenAiGenerated, setFullScreenAiGenerated] = useState(false);
+  const [reportTarget, setReportTarget] = useState<{ type: ReportTargetType; id: string } | null>(null);
+
+  // Show platform-native action sheet on iOS, basic Alert on Android, with
+  // Report and Block options. Required by App Store Review Guideline 1.2.
+  const handleMoreActions = useCallback(
+    (job: FeedJob) => {
+      const isOwnPost = job.userId === user?.id;
+      const options = isOwnPost
+        ? ['Cancel']
+        : ['Report Post', 'Report User', `Block @${job.user.username}`, 'Cancel'];
+      const cancelButtonIndex = options.length - 1;
+      const destructiveButtonIndex = isOwnPost ? -1 : 2;
+
+      const handleSelection = async (index: number) => {
+        if (isOwnPost || index === cancelButtonIndex) return;
+        if (index === 0) setReportTarget({ type: 'TRYON_JOB', id: job.id });
+        else if (index === 1) setReportTarget({ type: 'USER', id: job.userId });
+        else if (index === 2) {
+          Alert.alert(
+            `Block @${job.user.username}?`,
+            'You will no longer see their posts and they will not be able to see yours. You can unblock anyone from Settings.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Block',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await api.post(`/users/${job.userId}/block`);
+                    setJobs((prev) => prev.filter((j) => j.userId !== job.userId));
+                  } catch {
+                    Alert.alert('Error', 'Could not block this user. Please try again.');
+                  }
+                },
+              },
+            ],
+          );
+        }
+      };
+
+      if (Platform.OS === 'ios') {
+        ActionSheetIOS.showActionSheetWithOptions(
+          { options, cancelButtonIndex, destructiveButtonIndex },
+          handleSelection,
+        );
+      } else {
+        // Minimal Android fallback. The app is iOS-first; Android UX can be improved later.
+        if (isOwnPost) return;
+        Alert.alert('Actions', '', [
+          { text: 'Report Post', onPress: () => handleSelection(0) },
+          { text: 'Report User', onPress: () => handleSelection(1) },
+          { text: `Block @${job.user.username}`, style: 'destructive', onPress: () => handleSelection(2) },
+          { text: 'Cancel', style: 'cancel' },
+        ]);
+      }
+    },
+    [user?.id],
+  );
 
   async function fetchFeed(p = 1, refresh = false) {
     try {
@@ -131,15 +193,18 @@ export default function HomeScreen() {
             onResultPress={(urls, index) => {
               setFullScreenImages(urls);
               setFullScreenInitialIndex(index);
+              setFullScreenAiGenerated(true);
             }}
             onClothingPress={(url) => {
               setFullScreenImages([url]);
               setFullScreenInitialIndex(0);
+              setFullScreenAiGenerated(false);
             }}
             onUsernamePress={() =>
               navigation.navigate('PublicProfile', { username: item.user.username })
             }
             onLikePress={() => toggleLike(item.id)}
+            onMorePress={() => handleMoreActions(item)}
           />
         )}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -161,7 +226,14 @@ export default function HomeScreen() {
         visible={fullScreenImages.length > 0}
         imageUrls={fullScreenImages}
         initialIndex={fullScreenInitialIndex}
+        aiGenerated={fullScreenAiGenerated}
         onClose={() => setFullScreenImages([])}
+      />
+      <ReportSheet
+        visible={reportTarget !== null}
+        targetType={reportTarget?.type ?? 'TRYON_JOB'}
+        targetId={reportTarget?.id ?? ''}
+        onClose={() => setReportTarget(null)}
       />
     </View>
   );
@@ -173,12 +245,14 @@ function FeedCard({
   onClothingPress,
   onUsernamePress,
   onLikePress,
+  onMorePress,
 }: {
   job: FeedJob;
   onResultPress: (urls: string[], index: number) => void;
   onClothingPress: (url: string) => void;
   onUsernamePress: () => void;
   onLikePress: () => void;
+  onMorePress: () => void;
 }) {
   // Collect all available result images
   const resultImages: string[] = [];
@@ -217,18 +291,28 @@ function FeedCard({
           </View>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.likeButton}
-          onPress={onLikePress}
-          accessibilityLabel={job.liked ? 'Unlike' : 'Like'}
-          hitSlop={10}
-        >
-          <Ionicons
-            name={job.liked ? 'heart' : 'heart-outline'}
-            size={24}
-            color={job.liked ? Colors.danger : Colors.black}
-          />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.likeButton}
+            onPress={onLikePress}
+            accessibilityLabel={job.liked ? 'Unlike' : 'Like'}
+            hitSlop={10}
+          >
+            <Ionicons
+              name={job.liked ? 'heart' : 'heart-outline'}
+              size={24}
+              color={job.liked ? Colors.danger : Colors.black}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.likeButton}
+            onPress={onMorePress}
+            accessibilityLabel="More actions"
+            hitSlop={10}
+          >
+            <Ionicons name="ellipsis-horizontal" size={22} color={Colors.black} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.resultsRow}>
@@ -239,6 +323,7 @@ function FeedCard({
             activeOpacity={0.9}
           >
             <Image source={{ uri: displayUrl }} style={styles.resultImage} resizeMode="cover" />
+            <AiGeneratedBadge />
             {resultImages.length > 1 && (
               <View style={styles.multiImageBadge}>
                 <Text style={styles.multiImageText}>1/{resultImages.length}</Text>
@@ -320,6 +405,11 @@ const styles = StyleSheet.create({
   },
   displayName: { fontSize: Typography.fontSizeMD, fontWeight: Typography.fontWeightSemiBold, color: Colors.black },
   username: { fontSize: Typography.fontSizeSM, color: Colors.gray600 },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   likeButton: {
     width: 32,
     height: 32,

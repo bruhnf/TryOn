@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../lib/prisma';
 import { isAdminEmail } from '../utils/admin';
+import { getInvisibleUserIds } from '../utils/blocks';
 
 const updateSchema = z.object({
   firstName: z.string().max(50).optional(),
@@ -41,34 +42,56 @@ export async function getProfile(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  // Public, completed try-on sessions (private sessions are omitted)
-  const jobs = await prisma.tryOnJob.findMany({
-    where: { userId: user.id, status: 'COMPLETE', isPrivate: false },
-    orderBy: { createdAt: 'desc' },
-    take: 30,
-    select: {
-      id: true,
-      resultFullBodyUrl: true,
-      resultMediumUrl: true,
-      likesCount: true,
-      createdAt: true,
-    },
-  });
-
-  // If the request is authenticated, surface whether the viewer follows this user
-  let isFollowing = false;
+  // Block-aware visibility. If either party has blocked the other:
+  //   - If the viewer blocked the target, return the profile shell with a
+  //     `viewerHasBlocked: true` flag so the client can render an "Unblock to
+  //     see this profile" state.
+  //   - If the target blocked the viewer, return 404 to avoid revealing the
+  //     block to the blocked party.
+  let viewerHasBlocked = false;
   let isSelf = false;
+  let isFollowing = false;
   if (req.user) {
     isSelf = req.user.userId === user.id;
     if (!isSelf) {
-      const f = await prisma.follow.findUnique({
-        where: { followerId_followingId: { followerId: req.user.userId, followingId: user.id } },
-      });
-      isFollowing = !!f;
+      const [blockedByThem, weBlockedThem, follow] = await Promise.all([
+        prisma.userBlock.findUnique({
+          where: { blockerId_blockedId: { blockerId: user.id, blockedId: req.user.userId } },
+        }),
+        prisma.userBlock.findUnique({
+          where: { blockerId_blockedId: { blockerId: req.user.userId, blockedId: user.id } },
+        }),
+        prisma.follow.findUnique({
+          where: { followerId_followingId: { followerId: req.user.userId, followingId: user.id } },
+        }),
+      ]);
+      if (blockedByThem) {
+        res.status(404).json({ error: 'User not found' });
+        return;
+      }
+      viewerHasBlocked = !!weBlockedThem;
+      isFollowing = !!follow;
     }
   }
 
-  res.json({ ...user, jobs, isFollowing, isSelf });
+  // If the viewer has blocked this user, return the bare profile shell with
+  // no jobs so they can see who's blocked but not consume their content.
+  const jobs = viewerHasBlocked
+    ? []
+    : await prisma.tryOnJob.findMany({
+        where: { userId: user.id, status: 'COMPLETE', isPrivate: false },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+        select: {
+          id: true,
+          resultFullBodyUrl: true,
+          resultMediumUrl: true,
+          likesCount: true,
+          createdAt: true,
+        },
+      });
+
+  res.json({ ...user, jobs, isFollowing, isSelf, viewerHasBlocked });
 }
 
 export async function updateProfile(req: Request, res: Response): Promise<void> {

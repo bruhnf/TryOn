@@ -19,6 +19,7 @@ import creditsRoutes from './routes/credits';
 import notificationsRoutes from './routes/notifications';
 import likesRoutes from './routes/likes';
 import appleWebhookRoutes from './routes/appleWebhook';
+import moderationRoutes from './routes/moderation';
 
 import './queue/tryonWorker';
 import './queue/vulnerabilityWorker';
@@ -134,6 +135,7 @@ app.use('/api/credits', creditsRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/likes', likesRoutes);
 app.use('/api/webhooks', appleWebhookRoutes);
+app.use('/api', moderationRoutes);
 
 // Health check (no auth required)
 app.get('/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));

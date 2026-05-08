@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../middleware/auth';
 import prisma from '../lib/prisma';
+import { getInvisibleUserIds } from '../utils/blocks';
 
 const router = Router();
 
@@ -11,13 +12,20 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
   const limit = 20;
   const userId = req.user.userId;
 
-  // Show public completed try-on jobs from all users
-  const totalPublicJobs = await prisma.tryOnJob.count({
-    where: { status: 'COMPLETE', isPrivate: false },
-  });
+  // Exclude content from users involved in a block relationship in either
+  // direction. Apple Guideline 1.2 requires blocked users be hidden.
+  const invisibleUserIds = await getInvisibleUserIds(userId);
+
+  const baseWhere = {
+    status: 'COMPLETE' as const,
+    isPrivate: false,
+    userId: { notIn: invisibleUserIds },
+  };
+
+  const totalPublicJobs = await prisma.tryOnJob.count({ where: baseWhere });
 
   const jobs = await prisma.tryOnJob.findMany({
-    where: { status: 'COMPLETE', isPrivate: false },
+    where: baseWhere,
     orderBy: { createdAt: 'desc' },
     skip: (page - 1) * limit,
     take: limit,

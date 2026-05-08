@@ -33,6 +33,27 @@ enum NotificationType {
   TRYON_COMPLETE
 }
 
+enum ReportTargetType {
+  TRYON_JOB
+  USER
+}
+
+enum ReportReason {
+  INAPPROPRIATE
+  HARASSMENT
+  IMPERSONATION
+  SPAM
+  COPYRIGHT
+  OTHER
+}
+
+enum ReportStatus {
+  OPEN
+  REVIEWING
+  RESOLVED_REMOVED
+  RESOLVED_NO_ACTION
+}
+
 model User {
   id                String            @id @default(uuid())
   username          String            @unique
@@ -76,8 +97,51 @@ model User {
   notifications      Notification[]      @relation("NotificationRecipient")
   actorNotifications Notification[]      @relation("NotificationActor")
   applePurchases     ApplePurchase[]
+  reportsFiled       Report[]            @relation("ReportReporter")
+  blocking           UserBlock[]         @relation("BlockerUser")
+  blockedBy          UserBlock[]         @relation("BlockedUser")
 
   @@map("users")
+}
+
+// User-submitted report of objectionable content or behavior.
+// Required by App Store Review Guideline 1.2 for apps with UGC.
+model Report {
+  id           String           @id @default(uuid())
+  reporterId   String
+  targetType   ReportTargetType
+  // ID of the reported entity (TryOnJob.id when targetType=TRYON_JOB, User.id when targetType=USER).
+  targetId     String
+  reason       ReportReason
+  // Optional free-text from the reporter for additional context.
+  details      String?
+  status       ReportStatus     @default(OPEN)
+  // Admin's note when resolving the report.
+  resolverNote String?
+  resolvedAt   DateTime?
+  createdAt    DateTime         @default(now())
+
+  reporter User @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([targetType, targetId])
+  @@index([status, createdAt])
+  @@map("reports")
+}
+
+// One row per "user A has blocked user B". Used to filter feeds and profile
+// visibility in both directions: blocked users do not see the blocker's
+// content either, to prevent retaliation discovery.
+model UserBlock {
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+
+  blocker User @relation("BlockerUser", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("BlockedUser", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@id([blockerId, blockedId])
+  @@index([blockedId])
+  @@map("user_blocks")
 }
 
 // Records of Apple In-App Purchase / StoreKit subscription receipts.

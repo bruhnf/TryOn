@@ -171,6 +171,7 @@ export default function SettingsScreen() {
       ) : null}
 
       <SectionHeader label="Privacy & Data" />
+      <SettingButton label="Blocked Users" onPress={() => navigation.navigate('BlockedUsers')} />
       <SettingButton label="Delete All Body Photos" onPress={handleDeletePhotos} />
       <SettingButton
         label={exporting ? 'Exporting…' : 'Export My Data (GDPR/CCPA)'}

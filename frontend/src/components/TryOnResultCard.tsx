@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { TryOnJob } from '../types';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
+import AiGeneratedBadge from './AiGeneratedBadge';
 
 interface Props {
   job: TryOnJob;
@@ -33,7 +34,10 @@ export default function TryOnResultCard({ job, onPress }: Props) {
             <Text style={styles.failedText}>Failed</Text>
           </View>
         ) : displayUrl ? (
-          <Image source={{ uri: displayUrl }} style={styles.resultImage} resizeMode="cover" />
+          <>
+            <Image source={{ uri: displayUrl }} style={styles.resultImage} resizeMode="cover" />
+            <AiGeneratedBadge />
+          </>
         ) : null}
 
         {job.clothingPhoto1Url && (

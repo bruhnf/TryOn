@@ -22,6 +22,7 @@ import EditProfileScreen from '../screens/EditProfileScreen';
 import AdminConsoleScreen from '../screens/AdminConsoleScreen';
 import PurchaseScreen from '../screens/PurchaseScreen';
 import PublicProfileScreen from '../screens/PublicProfileScreen';
+import BlockedUsersScreen from '../screens/BlockedUsersScreen';
 
 export type AuthStackParams = {
   Login: undefined;
@@ -46,6 +47,7 @@ export type RootStackParams = {
   Purchase: undefined;
   Friends: { initialTab?: 'following' | 'followers'; openSearch?: boolean };
   PublicProfile: { username: string };
+  BlockedUsers: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParams>();
@@ -218,6 +220,11 @@ export default function AppNavigator() {
             <Stack.Screen
               name="PublicProfile"
               component={PublicProfileScreen}
+              options={{ presentation: 'card', headerShown: false }}
+            />
+            <Stack.Screen
+              name="BlockedUsers"
+              component={BlockedUsersScreen}
               options={{ presentation: 'card', headerShown: false }}
             />
           </>
