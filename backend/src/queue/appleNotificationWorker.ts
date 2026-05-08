@@ -108,6 +108,67 @@ async function upsertApplePurchase(
   });
 }
 
+// Idempotently grant credits for an Apple consumable purchase. If the
+// transactionId is already on file (e.g. /api/credits/verify-receipt got there
+// first from the client) this is a no-op. Otherwise we atomically create the
+// ApplePurchase row, increment the user's credits, and write a CreditTransaction.
+async function grantCreditsIfNew(
+  userId: string,
+  transaction: JWSTransactionDecodedPayload,
+  rawSignedPayload: string,
+  creditsToGrant: number,
+): Promise<void> {
+  if (!transaction.transactionId || !transaction.originalTransactionId || !transaction.productId) {
+    log.warn('Skipping credit grant — missing required transaction fields', {
+      transactionId: transaction.transactionId,
+      productId: transaction.productId,
+    });
+    return;
+  }
+  const existing = await prisma.applePurchase.findUnique({
+    where: { transactionId: transaction.transactionId },
+    select: { id: true },
+  });
+  if (existing) {
+    log.info('Credit pack already granted (transaction on file) — skipping', {
+      userId,
+      transactionId: transaction.transactionId,
+    });
+    return;
+  }
+  await prisma.$transaction([
+    prisma.applePurchase.create({
+      data: {
+        userId,
+        transactionId: transaction.transactionId,
+        originalTransactionId: transaction.originalTransactionId,
+        productId: transaction.productId,
+        tier: 'FREE',
+        expiresAt: null,
+        rawReceipt: rawSignedPayload,
+      },
+    }),
+    prisma.user.update({
+      where: { id: userId },
+      data: { credits: { increment: creditsToGrant } },
+    }),
+    prisma.creditTransaction.create({
+      data: {
+        userId,
+        type: 'PURCHASE',
+        amount: creditsToGrant,
+        description: `Apple IAP webhook: ${transaction.productId} (+${creditsToGrant} credits)`,
+      },
+    }),
+  ]);
+  log.info('Credits granted via webhook', {
+    userId,
+    transactionId: transaction.transactionId,
+    productId: transaction.productId,
+    creditsGranted: creditsToGrant,
+  });
+}
+
 // Idempotently claw back credits granted by a refunded consumable purchase.
 // Looks up the ApplePurchase row by transactionId; if it's already marked revoked
 // we assume the claw-back already ran and skip. Otherwise we deduct (clamped to 0)
@@ -326,9 +387,10 @@ async function handleCreditPackNotification(
       break;
 
     case NotificationTypeV2.ONE_TIME_CHARGE:
-      // Some consumables emit this on initial purchase. The actual credit grant
-      // happens at /api/credits/verify-receipt; this is informational.
-      await upsertApplePurchase(userId, transaction, signedPayload, tier);
+      // Initial purchase of a consumable. Grant credits idempotently — if the
+      // ApplePurchase row already exists we assume verify-receipt already
+      // granted them and no-op.
+      await grantCreditsIfNew(userId, transaction, signedPayload, product.credits);
       break;
 
     default:
