@@ -13,7 +13,7 @@ import {
   verifyAndDecodeRenewalInfo,
   verifyAndDecodeTransaction,
 } from '../services/appleNotificationService';
-import { tierForProductId } from '../config/appleIap';
+import { getProduct, AppleProduct } from '../config/appleIap';
 import prisma from '../lib/prisma';
 import { createChildLogger } from '../services/logger';
 
@@ -72,6 +72,8 @@ async function upsertApplePurchase(
   userId: string,
   transaction: JWSTransactionDecodedPayload,
   rawSignedPayload: string,
+  // Tier this purchase grants. Credit packs use FREE since they don't change tier;
+  // the row exists purely to record the transaction for refund handling and audit.
   tier: UserTier,
   revoked = false,
 ): Promise<void> {
@@ -104,6 +106,56 @@ async function upsertApplePurchase(
       revokedAt: revoked ? new Date() : null,
     },
   });
+}
+
+// Idempotently claw back credits granted by a refunded consumable purchase.
+// Looks up the ApplePurchase row by transactionId; if it's already marked revoked
+// we assume the claw-back already ran and skip. Otherwise we deduct (clamped to 0)
+// and write a REFUND CreditTransaction.
+async function clawBackCreditsForRefund(
+  userId: string,
+  transaction: JWSTransactionDecodedPayload,
+  creditsGranted: number,
+): Promise<void> {
+  if (!transaction.transactionId) return;
+  const existing = await prisma.applePurchase.findUnique({
+    where: { transactionId: transaction.transactionId },
+    select: { revokedAt: true },
+  });
+  if (existing?.revokedAt) {
+    log.info('Refund already processed — skipping claw-back', {
+      transactionId: transaction.transactionId,
+    });
+    return;
+  }
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { credits: true },
+  });
+  if (!user) return;
+  const deduct = Math.min(user.credits, creditsGranted);
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: userId },
+      data: { credits: { decrement: deduct } },
+    }),
+    prisma.creditTransaction.create({
+      data: {
+        userId,
+        type: 'REFUND',
+        amount: -deduct,
+        description: `Apple refund (${transaction.productId}) — clawed back ${deduct} of ${creditsGranted} granted credits`,
+      },
+    }),
+  ]);
+  if (deduct < creditsGranted) {
+    log.warn('Partial credit claw-back — user spent some refunded credits', {
+      userId,
+      transactionId: transaction.transactionId,
+      granted: creditsGranted,
+      reclaimed: deduct,
+    });
+  }
 }
 
 async function setUserTier(userId: string, tier: UserTier): Promise<void> {
@@ -148,15 +200,31 @@ async function handleNotification(
     return;
   }
 
-  const tier = tierForProductId(transaction.productId);
-  if (!tier) {
-    log.warn('Unknown productId — no tier mapping configured', {
+  const product = getProduct(transaction.productId);
+  if (!product) {
+    log.warn('Unknown productId — no mapping configured', {
       productId: transaction.productId,
       notificationType,
     });
     return;
   }
 
+  if (product.type === 'subscription') {
+    await handleSubscriptionNotification(notificationType, subtype, signedPayload, userId, transaction, product);
+  } else {
+    await handleCreditPackNotification(notificationType, subtype, signedPayload, userId, transaction, product);
+  }
+}
+
+async function handleSubscriptionNotification(
+  notificationType: NotificationTypeV2 | string,
+  subtype: Subtype | string | undefined,
+  signedPayload: string,
+  userId: string,
+  transaction: JWSTransactionDecodedPayload,
+  product: Extract<AppleProduct, { type: 'subscription' }>,
+): Promise<void> {
+  const tier = product.tier;
   switch (notificationType) {
     // New subscription, resub, or auto-renewal succeeded.
     case NotificationTypeV2.SUBSCRIBED:
@@ -166,7 +234,6 @@ async function handleNotification(
       await setUserTier(userId, tier);
       break;
 
-    // Billing recovery succeeded after a failed renewal — same as a renew.
     case NotificationTypeV2.DID_CHANGE_RENEWAL_STATUS:
       // User toggled auto-renew on/off. Informational; entitlement unchanged
       // until EXPIRED actually fires.
@@ -199,14 +266,12 @@ async function handleNotification(
 
     case NotificationTypeV2.REFUND_DECLINED:
     case NotificationTypeV2.REFUND_REVERSED:
-      // Refund did not actually go through, or was reversed. Restore the row.
       await upsertApplePurchase(userId, transaction, signedPayload, tier, /*revoked*/ false);
       await setUserTier(userId, tier);
       break;
 
     case NotificationTypeV2.RENEWAL_EXTENDED:
     case NotificationTypeV2.RENEWAL_EXTENSION:
-      // Apple extended the subscription expiry — persist the new expiresDate.
       await upsertApplePurchase(userId, transaction, signedPayload, tier);
       await setUserTier(userId, tier);
       break;
@@ -216,16 +281,58 @@ async function handleNotification(
       break;
 
     case NotificationTypeV2.CONSUMPTION_REQUEST:
-      // Apple requesting consumption data for a refund decision. Replying via
-      // App Store Server API SendConsumptionInformation is out of scope here.
-      log.info('Apple CONSUMPTION_REQUEST received — manual response required', {
+      log.info('Apple CONSUMPTION_REQUEST (subscription) — manual response required', {
         userId,
         originalTransactionId: transaction.originalTransactionId,
       });
       break;
 
     default:
-      log.info('Unhandled Apple notification type', { notificationType, subtype, userId });
+      log.info('Unhandled subscription notification type', { notificationType, subtype, userId });
+  }
+}
+
+async function handleCreditPackNotification(
+  notificationType: NotificationTypeV2 | string,
+  subtype: Subtype | string | undefined,
+  signedPayload: string,
+  userId: string,
+  transaction: JWSTransactionDecodedPayload,
+  product: Extract<AppleProduct, { type: 'credits' }>,
+): Promise<void> {
+  // Tier doesn't apply to consumables — the ApplePurchase row stores the user's
+  // current tier just for schema reasons; it isn't used for entitlement.
+  const tier = 'FREE' as UserTier;
+
+  switch (notificationType) {
+    case NotificationTypeV2.REFUND:
+    case NotificationTypeV2.REVOKE:
+      await upsertApplePurchase(userId, transaction, signedPayload, tier, /*revoked*/ true);
+      await clawBackCreditsForRefund(userId, transaction, product.credits);
+      break;
+
+    case NotificationTypeV2.REFUND_DECLINED:
+    case NotificationTypeV2.REFUND_REVERSED:
+      // No-op: credits were never deducted (we only deduct on REFUND).
+      await upsertApplePurchase(userId, transaction, signedPayload, tier, /*revoked*/ false);
+      break;
+
+    case NotificationTypeV2.CONSUMPTION_REQUEST:
+      log.info('Apple CONSUMPTION_REQUEST (credit pack) — manual response required', {
+        userId,
+        originalTransactionId: transaction.originalTransactionId,
+        creditsGranted: product.credits,
+      });
+      break;
+
+    case NotificationTypeV2.ONE_TIME_CHARGE:
+      // Some consumables emit this on initial purchase. The actual credit grant
+      // happens at /api/credits/verify-receipt; this is informational.
+      await upsertApplePurchase(userId, transaction, signedPayload, tier);
+      break;
+
+    default:
+      log.info('Unhandled credit-pack notification type', { notificationType, subtype, userId });
   }
 }
 

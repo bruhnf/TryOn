@@ -6,15 +6,16 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
-  Switch,
-  ActivityIndicator,
+  Linking,
+  Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import api from '../config/api';
 import { useUserStore } from '../store/useUserStore';
-import { Colors, Typography, Spacing, Radius } from '../constants/theme';
+import { Colors, Typography, Spacing } from '../constants/theme';
 import { RootStackParams } from '../navigation';
+import { MANAGE_SUBSCRIPTIONS_URL, restorePurchases } from '../services/iap';
 
 type SettingsNavProp = NativeStackNavigationProp<RootStackParams, 'Settings'>;
 
@@ -27,23 +28,25 @@ export default function SettingsScreen() {
   async function handleRestorePurchases() {
     setRestoring(true);
     try {
-      const { data } = await api.post<{ restored: boolean; tier?: string; expiresAt?: string | null; message?: string }>(
-        '/credits/restore-purchases',
-      );
+      const { restoredCount } = await restorePurchases();
       await refreshUser();
-      if (data.restored) {
-        Alert.alert(
-          'Purchases Restored',
-          `Your ${data.tier} subscription has been restored${data.expiresAt ? ` (renews ${new Date(data.expiresAt).toLocaleDateString()})` : ''}.`,
-        );
-      } else {
-        Alert.alert('No Purchases Found', data.message ?? 'We did not find any prior subscriptions for this account.');
-      }
-    } catch {
-      Alert.alert('Error', 'Could not restore purchases. Please try again.');
+      Alert.alert(
+        restoredCount > 0 ? 'Purchases Restored' : 'No Purchases Found',
+        restoredCount > 0
+          ? `Restored ${restoredCount} purchase${restoredCount === 1 ? '' : 's'}.`
+          : 'We did not find any prior purchases for this Apple ID.',
+      );
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Could not restore purchases.');
     } finally {
       setRestoring(false);
     }
+  }
+
+  function handleManageSubscription() {
+    Linking.openURL(MANAGE_SUBSCRIPTIONS_URL).catch(() =>
+      Alert.alert('Could not open', 'Open the App Store app and go to your account settings.'),
+    );
   }
 
   function handleLogout() {
@@ -133,6 +136,9 @@ export default function SettingsScreen() {
         onPress={handleRestorePurchases}
         disabled={restoring}
       />
+      {Platform.OS === 'ios' ? (
+        <SettingButton label="Manage Subscription" onPress={handleManageSubscription} />
+      ) : null}
 
       <SectionHeader label="Privacy & Data" />
       <SettingButton label="Delete All Body Photos" onPress={handleDeletePhotos} />

@@ -41,6 +41,8 @@
     "scheme": "tryon",
     "plugins": [
       "expo-secure-store",
+      "expo-iap",
+      "expo-web-browser",
       [
         "expo-camera",
         {
@@ -66,11 +68,26 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "209e84f3-f3fa-458f-a26a-8b76023b2197",
-        "credits10Id": "621215711f318a4fc1813a7dff937ef2",
-        "credits25Id": "4964e60bf506b1d82efe966ec71d1421",
-        "credits50Id": "333424bfef0ca60466e258ffbe20ea90",
-        "credits100Id": "47501df29b5777086fb59b628932368f",
+        "projectId": "209e84f3-f3fa-458f-a26a-8b76023b2197"
+      },
+      "appleProducts": {
+        "subscriptions": {
+          "basicMonthly": "com.evofaceflow.tryon.app.basic.monthly",
+          "premiumMonthly": "com.evofaceflow.tryon.app.premium.monthly"
+        },
+        "credits": {
+          "10": "com.evofaceflow.tryon.app.credits.10",
+          "25": "com.evofaceflow.tryon.app.credits.25",
+          "50": "com.evofaceflow.tryon.app.credits.50",
+          "100": "com.evofaceflow.tryon.app.credits.100"
+        }
+      },
+      "appleProductReferenceIds": {
+        "_comment": "App Store Connect internal UUIDs (NOT product IDs). Useful only for App Store Server API endpoints that target a specific product. Do not pass these to StoreKit.",
+        "credits10": "621215711f318a4fc1813a7dff937ef2",
+        "credits25": "4964e60bf506b1d82efe966ec71d1421",
+        "credits50": "333424bfef0ca60466e258ffbe20ea90",
+        "credits100": "47501df29b5777086fb59b628932368f",
         "basicTier": "9d99727cc5d1b37563ff2175d63880e9",
         "premiumTier": "ed387b679d97548b2ff33b5f20aee52a"
       }

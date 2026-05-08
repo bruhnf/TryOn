@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -7,155 +7,200 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Linking,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import * as IAP from 'expo-iap';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
 import { useUserStore } from '../store/useUserStore';
 import { UserTier } from '../types';
-import api from '../config/api';
+import {
+  CREDITS_FOR_SKU,
+  CREDIT_PACK_SKUS,
+  DisplayProduct,
+  MANAGE_SUBSCRIPTIONS_URL,
+  endIap,
+  fetchProducts,
+  initIap,
+  purchaseCreditPack,
+  purchaseSubscription,
+  restorePurchases,
+  verifyAndFinish,
+} from '../services/iap';
+import Constants from 'expo-constants';
 
-interface TierInfo {
-  id: UserTier;
-  name: string;
-  tagline: string;
-  features: string[];
-  creditPrice: number;
-  monthlyPrice?: number;
-  badge?: string;
-}
+type AppleProductsConfig = {
+  subscriptions: { basicMonthly: string; premiumMonthly: string };
+  credits: { '10': string; '25': string; '50': string; '100': string };
+};
 
-const TIERS: TierInfo[] = [
-  {
-    id: 'FREE',
+const APPLE_PRODUCTS: AppleProductsConfig =
+  (Constants.expoConfig?.extra as { appleProducts?: AppleProductsConfig })?.appleProducts ??
+  ({} as AppleProductsConfig);
+
+const TIER_FEATURES: Record<UserTier, { name: string; tagline: string; features: string[]; sku?: string; tier: UserTier; badge?: string }> = {
+  FREE: {
+    tier: 'FREE',
     name: 'Free',
     tagline: 'Get started with monthly free credits',
-    features: [
-      '5 free credits when you sign up',
-      'Buy more credits at $0.60 each',
-      'Full access to community feed',
-    ],
-    creditPrice: 0.6,
+    features: ['10 free credits granted monthly', 'Buy credits anytime', 'Full access to community feed'],
   },
-  {
-    id: 'BASIC',
+  BASIC: {
+    tier: 'BASIC',
     name: 'Basic',
     tagline: '2 try-ons every day',
-    features: [
-      '2 daily try-on sessions included',
-      'Buy more credits at $0.50 each',
-      'Priority queue',
-    ],
-    creditPrice: 0.5,
-    monthlyPrice: 9.99,
+    features: ['2 daily try-on sessions included', 'Cheaper credit pricing', 'Priority queue'],
+    sku: APPLE_PRODUCTS.subscriptions?.basicMonthly,
   },
-  {
-    id: 'PREMIUM',
+  PREMIUM: {
+    tier: 'PREMIUM',
     name: 'Premium',
-    tagline: '4 try-ons every day, best per-credit pricing',
-    features: [
-      '4 daily try-on sessions included',
-      'Buy more credits at $0.25 each',
-      'Top-priority queue',
-    ],
-    creditPrice: 0.25,
-    monthlyPrice: 19.99,
+    tagline: '4 try-ons every day',
+    features: ['4 daily try-on sessions included', 'Best credit pricing', 'Top-priority queue'],
+    sku: APPLE_PRODUCTS.subscriptions?.premiumMonthly,
     badge: 'BEST VALUE',
   },
-];
+};
 
-const CREDIT_AMOUNTS = [10, 25, 50, 100];
+const CREDIT_TIERS: UserTier[] = ['FREE', 'BASIC', 'PREMIUM'];
 
 export default function PurchaseScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { user, refreshUser } = useUserStore();
   const [selectedTab, setSelectedTab] = useState<'tiers' | 'credits'>('tiers');
-  const [loading, setLoading] = useState(false);
-  const [busyAmount, setBusyAmount] = useState<number | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [restoring, setRestoring] = useState(false);
+  const [productsLoading, setProductsLoading] = useState(true);
+  const [productsError, setProductsError] = useState<string | null>(null);
+  const [subscriptions, setSubscriptions] = useState<DisplayProduct[]>([]);
+  const [creditPacks, setCreditPacks] = useState<DisplayProduct[]>([]);
 
   const currentTier: UserTier = user?.tier ?? 'FREE';
-  const currentTierConfig = TIERS.find((t) => t.id === currentTier) ?? TIERS[0];
 
-  async function handleSelectTier(tier: TierInfo) {
-    if (tier.id === currentTier) return;
+  useEffect(() => {
+    let cancelled = false;
+    async function run() {
+      try {
+        await initIap();
+        const products = await fetchProducts();
+        if (cancelled) return;
+        setSubscriptions(products.subscriptions);
+        setCreditPacks(products.credits);
+        setProductsError(null);
+      } catch (err) {
+        if (!cancelled) {
+          setProductsError(err instanceof Error ? err.message : 'Could not load products');
+        }
+      } finally {
+        if (!cancelled) setProductsLoading(false);
+      }
+    }
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-    const isUpgrade = tierRank(tier.id) > tierRank(currentTier);
-    const message = tier.id === 'FREE'
-      ? 'Cancel your subscription and switch to the Free tier?'
-      : `Switch to the ${tier.name} tier?`;
+  // Listen for purchase results from StoreKit. When a purchase completes we
+  // verify the JWS with the backend, which is the actual entitlement grant.
+  useEffect(() => {
+    const updateSub = IAP.purchaseUpdatedListener(async (purchase: unknown) => {
+      try {
+        const result = await verifyAndFinish(purchase as never);
+        await refreshUser();
+        if (result.alreadyProcessed) {
+          Alert.alert('Already on file', 'This purchase was already applied to your account.');
+        } else {
+          Alert.alert('Purchase complete', 'Your account has been updated.');
+        }
+      } catch (err) {
+        Alert.alert(
+          'Purchase verification failed',
+          err instanceof Error ? err.message : 'Please try Restore Purchases.',
+        );
+      } finally {
+        setBusy(null);
+      }
+    });
+    const errSub = IAP.purchaseErrorListener((err: { code?: string; message?: string }) => {
+      setBusy(null);
+      // User-cancelled is not an error worth surfacing.
+      if (err && err.code !== 'E_USER_CANCELLED') {
+        Alert.alert('Purchase failed', err.message ?? 'Unknown error.');
+      }
+    });
+    return () => {
+      updateSub.remove();
+      errSub.remove();
+    };
+  }, [refreshUser]);
 
-    Alert.alert(isUpgrade ? `Upgrade to ${tier.name}` : `Switch to ${tier.name}`, message, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Confirm',
-        onPress: async () => {
-          setLoading(true);
-          try {
-            if (tier.id === 'FREE') {
-              await api.post('/credits/unsubscribe');
-            } else {
-              await api.post('/credits/subscribe', { tier: tier.id });
-            }
-            await refreshUser();
-            Alert.alert('Success', `You are now on the ${tier.name} tier.`);
-          } catch {
-            Alert.alert('Error', 'Could not update your tier. Please try again.');
-          } finally {
-            setLoading(false);
-          }
-        },
-      },
-    ]);
+  // Tear down the IAP connection when leaving the screen.
+  useEffect(() => () => { void endIap(); }, []);
+
+  function priceForSku(sku?: string): string {
+    if (!sku) return '';
+    const sub = subscriptions.find((p) => p.sku === sku);
+    if (sub) return sub.displayPrice;
+    const pack = creditPacks.find((p) => p.sku === sku);
+    if (pack) return pack.displayPrice;
+    return '';
   }
 
-  const [restoring, setRestoring] = useState(false);
+  async function handleSubscribe(tier: UserTier) {
+    if (!user) return;
+    const config = TIER_FEATURES[tier];
+    if (!config.sku) {
+      Alert.alert('Unavailable', 'This tier is not available for purchase.');
+      return;
+    }
+    if (tier === currentTier) return;
+    setBusy(config.sku);
+    try {
+      await purchaseSubscription(config.sku, user.id);
+      // Result lands in the purchaseUpdatedListener.
+    } catch (err) {
+      setBusy(null);
+      Alert.alert('Purchase failed', err instanceof Error ? err.message : 'Unknown error.');
+    }
+  }
 
-  async function handleRestorePurchases() {
+  async function handleBuyCredits(sku: string) {
+    if (!user) return;
+    setBusy(sku);
+    try {
+      await purchaseCreditPack(sku, user.id);
+    } catch (err) {
+      setBusy(null);
+      Alert.alert('Purchase failed', err instanceof Error ? err.message : 'Unknown error.');
+    }
+  }
+
+  async function handleRestore() {
     setRestoring(true);
     try {
-      const { data } = await api.post<{ restored: boolean; tier: UserTier; expiresAt?: string | null; message?: string }>(
-        '/credits/restore-purchases',
-      );
+      const { restoredCount } = await restorePurchases();
       await refreshUser();
-      if (data.restored) {
-        Alert.alert(
-          'Purchases Restored',
-          `Your ${data.tier} subscription has been restored${data.expiresAt ? ` (renews ${new Date(data.expiresAt).toLocaleDateString()})` : ''}.`,
-        );
-      } else {
-        Alert.alert('No Purchases Found', data.message ?? 'We did not find any prior subscriptions for this account.');
-      }
-    } catch {
-      Alert.alert('Error', 'Could not restore purchases. Please try again.');
+      Alert.alert(
+        restoredCount > 0 ? 'Purchases Restored' : 'No Purchases Found',
+        restoredCount > 0
+          ? `Restored ${restoredCount} purchase${restoredCount === 1 ? '' : 's'}.`
+          : 'We did not find any prior purchases for this Apple ID.',
+      );
+    } catch (err) {
+      Alert.alert('Restore failed', err instanceof Error ? err.message : 'Unknown error.');
     } finally {
       setRestoring(false);
     }
   }
 
-  async function handlePurchaseCredits(amount: number) {
-    Alert.alert(
-      'Purchase Credits',
-      `Buy ${amount} credits for $${(amount * currentTierConfig.creditPrice).toFixed(2)}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Purchase',
-          onPress: async () => {
-            setBusyAmount(amount);
-            try {
-              await api.post('/credits/purchase', { credits: amount });
-              await refreshUser();
-              Alert.alert('Success', `${amount} credits added to your account!`);
-            } catch {
-              Alert.alert('Error', 'Could not complete purchase. Please try again.');
-            } finally {
-              setBusyAmount(null);
-            }
-          },
-        },
-      ],
+  function handleManageSubscription() {
+    Linking.openURL(MANAGE_SUBSCRIPTIONS_URL).catch(() =>
+      Alert.alert('Could not open', 'Open the App Store app and go to your account settings.'),
     );
   }
 
@@ -174,7 +219,9 @@ export default function PurchaseScreen() {
           <Ionicons name="wallet-outline" size={24} color={Colors.gray600} />
           <View style={styles.statusInfo}>
             <Text style={styles.statusLabel}>Current Tier</Text>
-            <Text style={styles.statusValue}>{currentTierConfig.name} · {user?.credits ?? 0} credits</Text>
+            <Text style={styles.statusValue}>
+              {TIER_FEATURES[currentTier].name} · {user?.credits ?? 0} credits
+            </Text>
           </View>
         </View>
 
@@ -193,15 +240,24 @@ export default function PurchaseScreen() {
           </TouchableOpacity>
         </View>
 
-        {selectedTab === 'tiers' ? (
+        {productsLoading ? (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator color={Colors.black} />
+            <Text style={styles.loadingText}>Loading prices from the App Store…</Text>
+          </View>
+        ) : productsError ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>{productsError}</Text>
+          </View>
+        ) : selectedTab === 'tiers' ? (
           <View>
-            {TIERS.map((tier) => {
-              const isCurrent = tier.id === currentTier;
+            {CREDIT_TIERS.map((tierKey) => {
+              const tier = TIER_FEATURES[tierKey];
+              const isCurrent = tier.tier === currentTier;
+              const localizedPrice = priceForSku(tier.sku);
+              const isBusy = busy === tier.sku;
               return (
-                <View
-                  key={tier.id}
-                  style={[styles.tierCard, isCurrent && styles.tierCardCurrent]}
-                >
+                <View key={tier.tier} style={[styles.tierCard, isCurrent && styles.tierCardCurrent]}>
                   {tier.badge ? (
                     <View style={styles.tierBadge}>
                       <Ionicons name="star" size={11} color={Colors.white} />
@@ -211,12 +267,8 @@ export default function PurchaseScreen() {
 
                   <Text style={styles.tierName}>{tier.name}</Text>
                   <View style={styles.tierPriceRow}>
-                    <Text style={styles.tierPriceAmount}>
-                      ${tier.monthlyPrice != null ? tier.monthlyPrice.toFixed(2) : '0'}
-                    </Text>
-                    {tier.monthlyPrice != null ? (
-                      <Text style={styles.tierPricePer}>/month</Text>
-                    ) : null}
+                    <Text style={styles.tierPriceAmount}>{localizedPrice || (tier.sku ? '—' : 'Free')}</Text>
+                    {tier.sku ? <Text style={styles.tierPricePer}>/month</Text> : null}
                   </View>
                   <Text style={styles.tierTagline}>{tier.tagline}</Text>
 
@@ -229,26 +281,45 @@ export default function PurchaseScreen() {
                     ))}
                   </View>
 
-                  <TouchableOpacity
-                    style={[styles.tierButton, isCurrent && styles.tierButtonCurrent]}
-                    onPress={() => handleSelectTier(tier)}
-                    disabled={loading || isCurrent}
-                  >
-                    {loading && !isCurrent ? (
-                      <ActivityIndicator color={Colors.white} />
-                    ) : (
-                      <Text style={[styles.tierButtonText, isCurrent && styles.tierButtonTextCurrent]}>
-                        {isCurrent ? 'Current Tier' : tier.id === 'FREE' ? 'Switch to Free' : `Choose ${tier.name}`}
+                  {tier.sku ? (
+                    <>
+                      <TouchableOpacity
+                        style={[styles.tierButton, isCurrent && styles.tierButtonCurrent]}
+                        onPress={() => handleSubscribe(tier.tier)}
+                        disabled={isBusy || isCurrent || !localizedPrice}
+                      >
+                        {isBusy ? (
+                          <ActivityIndicator color={Colors.white} />
+                        ) : (
+                          <Text style={[styles.tierButtonText, isCurrent && styles.tierButtonTextCurrent]}>
+                            {isCurrent ? 'Current Tier' : `Subscribe for ${localizedPrice}/month`}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+
+                      {/* App Store Review Guideline 3.1.2(a): auto-renew disclosure
+                          must appear adjacent to the subscribe action. */}
+                      <Text style={styles.subscribeDisclosure}>
+                        Auto-renews monthly at {localizedPrice || tier.name + ' price'}. Cancel anytime in
+                        Settings &gt; Apple ID &gt; Subscriptions; cancellation takes effect at the end
+                        of the current period. By subscribing you agree to our Terms of Service and
+                        Privacy Policy.
                       </Text>
-                    )}
-                  </TouchableOpacity>
+                    </>
+                  ) : (
+                    <View style={[styles.tierButton, styles.tierButtonCurrent]}>
+                      <Text style={[styles.tierButtonText, styles.tierButtonTextCurrent]}>
+                        {isCurrent ? 'Current Tier' : 'Free'}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               );
             })}
 
             <TouchableOpacity
               style={styles.restoreButton}
-              onPress={handleRestorePurchases}
+              onPress={handleRestore}
               disabled={restoring}
             >
               {restoring ? (
@@ -258,95 +329,51 @@ export default function PurchaseScreen() {
               )}
             </TouchableOpacity>
 
-            <View style={styles.disclosureBlock}>
-              <Text style={styles.disclosureHeader}>Subscription Terms</Text>
-              <Text style={styles.disclosureText}>
-                <Text style={styles.disclosureBold}>Basic:</Text> $9.99 per month, billed monthly.
-              </Text>
-              <Text style={styles.disclosureText}>
-                <Text style={styles.disclosureBold}>Premium:</Text> $19.99 per month, billed monthly.
-              </Text>
-              <Text style={styles.disclosureText}>
-                Payment will be charged to your Apple ID account at confirmation of purchase.
-                Subscription automatically renews unless it is canceled at least 24 hours
-                before the end of the current period. Your account will be charged for
-                renewal within 24 hours prior to the end of the current period.
-              </Text>
-              <Text style={styles.disclosureText}>
-                You can manage and cancel your subscription at any time by going to your
-                Apple ID account settings on the App Store after purchase. No cancellation
-                of the current subscription is allowed during the active period.
-              </Text>
-              <Text style={styles.disclosureText}>
-                Free trials (if offered) automatically convert to a paid subscription unless
-                canceled at least 24 hours before the trial ends. Any unused portion of a
-                free trial period is forfeited when you purchase a subscription.
-              </Text>
-              <View style={styles.disclosureLinks}>
-                <TouchableOpacity
-                  onPress={() => Alert.alert('Terms of Service', 'Open ToS URL: https://evofaceflow.com/terms')}
-                >
-                  <Text style={styles.disclosureLink}>Terms of Service</Text>
-                </TouchableOpacity>
-                <Text style={styles.disclosureLinkSep}>·</Text>
-                <TouchableOpacity
-                  onPress={() => Alert.alert('Privacy Policy', 'Open Privacy URL: https://evofaceflow.com/privacy')}
-                >
-                  <Text style={styles.disclosureLink}>Privacy Policy</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+            {Platform.OS === 'ios' ? (
+              <TouchableOpacity style={styles.manageButton} onPress={handleManageSubscription}>
+                <Text style={styles.manageButtonText}>Manage Subscription</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         ) : (
           <View>
             <Text style={styles.sectionTitle}>Buy Credits</Text>
             <Text style={styles.sectionSubtitle}>
-              Your tier ({currentTierConfig.name}) gets credits at ${currentTierConfig.creditPrice.toFixed(2)} each.
-              Credits never expire.
+              Credits never expire. Daily try-on allowance is used first; credits are spent only
+              after the daily allowance runs out.
             </Text>
 
-            {CREDIT_AMOUNTS.map((amount) => {
-              const total = (amount * currentTierConfig.creditPrice).toFixed(2);
+            {CREDIT_PACK_SKUS.map((sku) => {
+              const pack = creditPacks.find((p) => p.sku === sku);
+              const credits = CREDITS_FOR_SKU[sku] ?? 0;
+              const isBusy = busy === sku;
+              if (!pack) return null;
               return (
                 <TouchableOpacity
-                  key={amount}
+                  key={sku}
                   style={styles.creditCard}
-                  onPress={() => handlePurchaseCredits(amount)}
-                  disabled={busyAmount !== null}
+                  onPress={() => handleBuyCredits(sku)}
+                  disabled={isBusy}
                 >
                   <View style={styles.creditInfo}>
                     <View style={styles.creditAmountRow}>
                       <Ionicons name="flash" size={20} color={Colors.warning} />
-                      <Text style={styles.creditCount}>{amount}</Text>
+                      <Text style={styles.creditCount}>{credits}</Text>
                       <Text style={styles.creditLabel}>credits</Text>
                     </View>
-                    <Text style={styles.creditPrice}>${total}</Text>
+                    <Text style={styles.creditPrice}>{pack.displayPrice}</Text>
                   </View>
-                  <Text style={styles.perUnitText}>
-                    ${currentTierConfig.creditPrice.toFixed(2)} per credit
-                  </Text>
-                  {busyAmount === amount && (
+                  {isBusy ? (
                     <ActivityIndicator style={styles.creditLoader} color={Colors.black} />
-                  )}
+                  ) : null}
                 </TouchableOpacity>
               );
             })}
-
-            <View style={styles.creditNote}>
-              <Ionicons name="information-circle-outline" size={18} color={Colors.gray600} />
-              <Text style={styles.creditNoteText}>
-                Daily try-on allowance is used first; credits are spent only after the daily allowance runs out.
-              </Text>
-            </View>
           </View>
         )}
       </ScrollView>
     </View>
   );
-}
-
-function tierRank(t: UserTier): number {
-  return t === 'PREMIUM' ? 2 : t === 'BASIC' ? 1 : 0;
 }
 
 const styles = StyleSheet.create({
@@ -399,6 +426,16 @@ const styles = StyleSheet.create({
     color: Colors.gray600,
   },
   tabTextActive: { color: Colors.white },
+  loadingBox: { alignItems: 'center', padding: Spacing.xl, gap: Spacing.sm },
+  loadingText: { color: Colors.gray600, fontSize: Typography.fontSizeSM },
+  errorBox: {
+    backgroundColor: Colors.white,
+    padding: Spacing.md,
+    borderRadius: Radius.md,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.danger,
+  },
+  errorText: { color: Colors.danger, fontSize: Typography.fontSizeSM },
   sectionTitle: {
     fontSize: Typography.fontSizeLG,
     fontWeight: Typography.fontWeightBold,
@@ -484,6 +521,12 @@ const styles = StyleSheet.create({
     color: Colors.white,
   },
   tierButtonTextCurrent: { color: Colors.gray600 },
+  subscribeDisclosure: {
+    fontSize: Typography.fontSizeXS,
+    color: Colors.gray600,
+    lineHeight: 16,
+    marginTop: Spacing.sm,
+  },
   creditCard: {
     backgroundColor: Colors.white,
     borderRadius: Radius.md,
@@ -506,29 +549,13 @@ const styles = StyleSheet.create({
     fontWeight: Typography.fontWeightBold,
     color: Colors.black,
   },
-  perUnitText: { fontSize: Typography.fontSizeSM, color: Colors.gray600, marginTop: Spacing.xs },
   creditLoader: { position: 'absolute', right: Spacing.md, top: '50%', marginTop: -10 },
-  creditNote: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: Colors.white,
-    padding: Spacing.md,
-    borderRadius: Radius.md,
-    marginTop: Spacing.sm,
-  },
-  creditNoteText: {
-    flex: 1,
-    fontSize: Typography.fontSizeSM,
-    color: Colors.gray600,
-    marginLeft: Spacing.sm,
-    lineHeight: 20,
-  },
   restoreButton: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: Spacing.md,
     marginTop: Spacing.sm,
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
     borderRadius: Radius.full,
     borderWidth: 1.5,
     borderColor: Colors.black,
@@ -539,41 +566,16 @@ const styles = StyleSheet.create({
     fontWeight: Typography.fontWeightSemiBold,
     color: Colors.black,
   },
-  disclosureBlock: {
-    backgroundColor: Colors.white,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    marginTop: Spacing.sm,
+  manageButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.md,
+    marginBottom: Spacing.md,
   },
-  disclosureHeader: {
+  manageButtonText: {
     fontSize: Typography.fontSizeMD,
-    fontWeight: Typography.fontWeightBold,
-    color: Colors.black,
-    marginBottom: Spacing.sm,
-  },
-  disclosureText: {
-    fontSize: Typography.fontSizeXS,
-    color: Colors.gray600,
-    lineHeight: 18,
-    marginBottom: Spacing.sm,
-  },
-  disclosureBold: {
     fontWeight: Typography.fontWeightSemiBold,
     color: Colors.black,
-  },
-  disclosureLinks: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: Spacing.xs,
-  },
-  disclosureLink: {
-    fontSize: Typography.fontSizeXS,
-    color: Colors.black,
     textDecorationLine: 'underline',
-  },
-  disclosureLinkSep: {
-    fontSize: Typography.fontSizeXS,
-    color: Colors.gray400,
-    marginHorizontal: Spacing.xs,
   },
 });
