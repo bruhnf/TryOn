@@ -5,7 +5,7 @@ import { TIER_CONFIG } from '../services/tierService';
 export const MAX_CLOTHING_ITEMS = 1;
 
 /**
- * Middleware to require an active tier with a daily allowance OR available credits.
+ * Middleware to require an active tier with a weekly allowance OR available credits.
  */
 export function requireSubscription() {
   return (req: Request, res: Response, next: NextFunction): void => {
@@ -13,8 +13,8 @@ export function requireSubscription() {
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
-    const dailyLimit = TIER_CONFIG[req.user.tier].dailyLimit;
-    if (dailyLimit <= 0 && req.user.credits <= 0) {
+    const weeklyLimit = TIER_CONFIG[req.user.tier].weeklyLimit;
+    if (weeklyLimit <= 0 && req.user.credits <= 0) {
       res.status(403).json({
         error: 'SUBSCRIPTION_REQUIRED',
         message: 'Please subscribe or purchase credits to use try-on.',

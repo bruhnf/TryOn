@@ -62,6 +62,10 @@ export const CREDITS_FOR_SKU: Record<string, number> = (() => {
 export interface DisplayProduct {
   sku: string;
   displayPrice: string; // localized, e.g. "$9.99" or "€9,99"
+  // Numeric price in major currency units (e.g. 9.99). Used to compute
+  // derived figures like price-per-credit. Localized formatting should
+  // still come from `displayPrice` whenever possible.
+  priceAmount?: number;
   currency?: string;
   title?: string;
   description?: string;
@@ -84,10 +88,30 @@ export async function endIap(): Promise<void> {
   }
 }
 
-function toDisplay(p: { id?: string; productId?: string; displayPrice?: string; price?: string; currency?: string; title?: string; description?: string }): DisplayProduct {
+function toDisplay(p: {
+  id?: string;
+  productId?: string;
+  displayPrice?: string;
+  price?: string | number;
+  currency?: string;
+  title?: string;
+  description?: string;
+}): DisplayProduct {
+  // `price` from expo-iap is a numeric string (e.g. "5.99") on iOS. Parse it
+  // so we can compute per-credit pricing without re-parsing the localized
+  // displayPrice (which would break in non-USD locales).
+  const rawPrice = p.price;
+  let priceAmount: number | undefined;
+  if (typeof rawPrice === 'number' && Number.isFinite(rawPrice)) {
+    priceAmount = rawPrice;
+  } else if (typeof rawPrice === 'string') {
+    const parsed = parseFloat(rawPrice);
+    if (Number.isFinite(parsed)) priceAmount = parsed;
+  }
   return {
     sku: p.id ?? p.productId ?? '',
-    displayPrice: p.displayPrice ?? p.price ?? '',
+    displayPrice: p.displayPrice ?? (typeof rawPrice === 'string' ? rawPrice : '') ?? '',
+    priceAmount,
     currency: p.currency,
     title: p.title,
     description: p.description,

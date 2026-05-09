@@ -1,16 +1,16 @@
 import { UserTier } from '@prisma/client';
 
 export interface TierConfig {
-  // Daily included try-on sessions; FREE has 0 (credits-only)
-  dailyLimit: number;
+  // Included try-on sessions per rolling 7-day window; FREE has 0 (credits-only)
+  weeklyLimit: number;
   // Per-credit price in dollars for buying additional credits
   creditPrice: number;
 }
 
 export const TIER_CONFIG: Record<UserTier, TierConfig> = {
-  FREE: { dailyLimit: 0, creditPrice: 0.6 },
-  BASIC: { dailyLimit: 2, creditPrice: 0.5 },
-  PREMIUM: { dailyLimit: 4, creditPrice: 0.25 },
+  FREE: { weeklyLimit: 0, creditPrice: 0.6 },
+  BASIC: { weeklyLimit: 12, creditPrice: 0.5 },
+  PREMIUM: { weeklyLimit: 24, creditPrice: 0.25 },
 };
 
 // Free-credit policy: 10 credits granted ONCE at email verification

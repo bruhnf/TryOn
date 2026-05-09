@@ -481,10 +481,11 @@ createdAt DateTime @default(now())
 ### Subscription & Credits
 - **Tiered subscription model**: Each user has a `tier` of `FREE`, `BASIC`, or `PREMIUM` (see `UserTier` enum). There is **no** `isSubscribed` flag — check `tier !== 'FREE'` to gate subscriber-only features.
 - **Tier configuration** lives in `backend/src/services/tierService.ts` (`TIER_CONFIG`). Current values:
-  - `FREE`: 0 daily try-ons, $0.60/credit
-  - `BASIC`: 2 daily try-ons, $0.50/credit
-  - `PREMIUM`: 4 daily try-ons, $0.25/credit
-- When a tiered user exhausts their daily included try-ons, additional try-ons spend credits.
+  - `FREE`: 0 included try-ons, $0.60/credit
+  - `BASIC`: 12 try-ons per rolling 7-day window, $0.50/credit
+  - `PREMIUM`: 24 try-ons per rolling 7-day window, $0.25/credit
+- The weekly window is **rolling**, not a calendar week — `tryonController` and the `/balance` endpoint count non-failed jobs whose `createdAt` is within the last 7 days. This avoids midnight-Sunday reset exploits.
+- When a tiered user exhausts their weekly included try-ons, additional try-ons spend credits.
 - Credit balance is displayed in the top-left corner of the app and tapping it opens `PurchaseScreen`.
 - Credit transactions are tracked in the `CreditTransaction` model (`PURCHASE`, `GRANT`, `USAGE`, `REFUND`).
 - Lifetime try-on count per user is tracked in `User.tryOnCount` (incremented on successful job completion).
@@ -513,7 +514,7 @@ Production uses **only** the `/api/credits/verify-receipt` path plus App Store S
 - Product IDs (must match App Store Connect):
   - `com.evofaceflow.tryon.app.basic.monthly` → BASIC tier subscription
   - `com.evofaceflow.tryon.app.premium.monthly` → PREMIUM tier subscription
-  - `com.evofaceflow.tryon.app.credits.{10,25,50,100}.{free,basic,premium}` → 12 consumable credit packs (4 sizes × 3 tier variants)
+  - `com.evofaceflow.tryon.app.credits.{10,25,50,100}.{free,basic,premium}` → 12 consumable credit packs (4 sizes × 3 tier variants). Exception: the 25 / Basic SKU is `com.evofaceflow.tryon.app.credits.25.basic.v2` because the original ID could not be reused after deletion in App Store Connect. See [backend/src/config/appleIap.ts](backend/src/config/appleIap.ts) and [frontend/app.json](frontend/app.json) for the authoritative mapping.
 - The mobile app sets `appAccountToken` (= our `User.id` as UUID) on every StoreKit purchase so notifications can be mapped back to a user. The verify-receipt endpoint requires this match. Fallback identification (webhook only) is by `originalTransactionId` against existing `ApplePurchase` rows.
 - Frontend uses `expo-iap` via `frontend/src/services/iap.ts`. The service handles connection lifecycle, fetches localized prices (`displayPrice`) from the App Store at runtime — **never hardcode prices** (Guideline 3.1.1(a)).
 - `POST /api/credits/restore-purchases` is now a fallback that re-applies the most recent unexpired, non-revoked `ApplePurchase` from our DB. The primary Restore Purchases flow on the client uses `expo-iap`'s `getAvailablePurchases()` and re-posts each receipt to `/verify-receipt`. Both surfaces (PurchaseScreen and Settings) call the StoreKit version.

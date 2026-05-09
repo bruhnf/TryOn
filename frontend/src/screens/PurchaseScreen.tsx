@@ -52,21 +52,44 @@ const TIER_FEATURES: Record<UserTier, { name: string; tagline: string; features:
   BASIC: {
     tier: 'BASIC',
     name: 'Basic',
-    tagline: '2 try-ons every day',
-    features: ['2 daily try-on sessions included', 'Cheaper credit pricing', 'Priority queue'],
+    tagline: '12 try-ons every week',
+    features: ['12 try-on sessions per week included', 'Cheaper credit pricing', 'Priority queue'],
     sku: APPLE_PRODUCTS.subscriptions?.basicMonthly,
   },
   PREMIUM: {
     tier: 'PREMIUM',
     name: 'Premium',
-    tagline: '4 try-ons every day',
-    features: ['4 daily try-on sessions included', 'Best credit pricing', 'Top-priority queue'],
+    tagline: '24 try-ons every week',
+    features: ['24 try-on sessions per week included', 'Best credit pricing', 'Top-priority queue'],
     sku: APPLE_PRODUCTS.subscriptions?.premiumMonthly,
     badge: 'BEST VALUE',
   },
 };
 
 const CREDIT_TIERS: UserTier[] = ['FREE', 'BASIC', 'PREMIUM'];
+
+// Per-credit price for a pack. Uses the numeric `priceAmount` so we don't
+// have to parse the localized displayPrice (which would break in non-USD
+// locales). Returns null when we can't compute it (e.g. priceAmount missing
+// from the StoreKit response).
+function formatPricePerCredit(
+  priceAmount: number | undefined,
+  currency: string | undefined,
+  credits: number,
+): string | null {
+  if (priceAmount == null || !Number.isFinite(priceAmount) || credits <= 0) return null;
+  const perCredit = priceAmount / credits;
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: currency || 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(perCredit);
+  } catch {
+    return `${perCredit.toFixed(2)}`;
+  }
+}
 
 export default function PurchaseScreen() {
   const insets = useSafeAreaInsets();
@@ -366,8 +389,8 @@ export default function PurchaseScreen() {
           <View>
             <Text style={styles.sectionTitle}>Buy Credits</Text>
             <Text style={styles.sectionSubtitle}>
-              Credits never expire. Daily try-on allowance is used first; credits are spent only
-              after the daily allowance runs out.
+              Credits never expire. Your weekly try-on allowance is used first; credits are spent
+              only after the weekly allowance runs out.
             </Text>
 
             {creditPackSkusForTier(currentTier).map((sku) => {
@@ -375,6 +398,7 @@ export default function PurchaseScreen() {
               const credits = CREDITS_FOR_SKU[sku] ?? 0;
               const isBusy = busy === sku;
               if (!pack) return null;
+              const perCredit = formatPricePerCredit(pack.priceAmount, pack.currency, credits);
               return (
                 <TouchableOpacity
                   key={sku}
@@ -388,7 +412,12 @@ export default function PurchaseScreen() {
                       <Text style={styles.creditCount}>{credits}</Text>
                       <Text style={styles.creditLabel}>credits</Text>
                     </View>
-                    <Text style={styles.creditPrice}>{pack.displayPrice}</Text>
+                    <View style={styles.creditPriceColumn}>
+                      <Text style={styles.creditPrice}>{pack.displayPrice}</Text>
+                      {perCredit ? (
+                        <Text style={styles.creditPerUnit}>{perCredit}/credit</Text>
+                      ) : null}
+                    </View>
                   </View>
                   {isBusy ? (
                     <ActivityIndicator style={styles.creditLoader} color={Colors.black} />
@@ -575,10 +604,18 @@ const styles = StyleSheet.create({
     marginLeft: Spacing.xs,
   },
   creditLabel: { fontSize: Typography.fontSizeMD, color: Colors.gray600, marginLeft: Spacing.xs },
+  creditPriceColumn: {
+    alignItems: 'flex-end',
+  },
   creditPrice: {
     fontSize: Typography.fontSizeXXL,
     fontWeight: Typography.fontWeightBold,
     color: Colors.black,
+  },
+  creditPerUnit: {
+    fontSize: Typography.fontSizeXS,
+    color: Colors.gray600,
+    marginTop: 2,
   },
   creditLoader: { position: 'absolute', right: Spacing.md, top: '50%', marginTop: -10 },
   restoreButton: {

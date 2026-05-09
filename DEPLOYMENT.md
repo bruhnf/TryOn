@@ -295,7 +295,7 @@ Products must be configured in App Store Connect → **In-App Purchases & Subscr
 | `com.evofaceflow.tryon.app.credits.50.free` | Consumable | 50 credits (Free-tier price) |
 | `com.evofaceflow.tryon.app.credits.100.free` | Consumable | 100 credits (Free-tier price) |
 | `com.evofaceflow.tryon.app.credits.10.basic` | Consumable | 10 credits (Basic-tier price) |
-| `com.evofaceflow.tryon.app.credits.25.basic` | Consumable | 25 credits (Basic-tier price) |
+| `com.evofaceflow.tryon.app.credits.25.basic.v2` | Consumable | 25 credits (Basic-tier price) — `.v2` because the original ID couldn't be reused after deletion in App Store Connect |
 | `com.evofaceflow.tryon.app.credits.50.basic` | Consumable | 50 credits (Basic-tier price) |
 | `com.evofaceflow.tryon.app.credits.100.basic` | Consumable | 100 credits (Basic-tier price) |
 | `com.evofaceflow.tryon.app.credits.10.premium` | Consumable | 10 credits (Premium-tier price) |

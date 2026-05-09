@@ -41,13 +41,13 @@ export async function submitTryOn(req: Request, res: Response): Promise<void> {
   if (!user) { res.status(404).json({ error: 'User not found' }); return; }
 
   const { tier, credits } = user;
-  const dailyLimit = TIER_CONFIG[tier].dailyLimit;
+  const weeklyLimit = TIER_CONFIG[tier].weeklyLimit;
 
-  log.debug('User tier status (live)', { userId, tier, credits, dailyLimit });
+  log.debug('User tier status (live)', { userId, tier, credits, weeklyLimit });
 
-  // FREE tier (no daily allowance) needs credits
-  if (dailyLimit <= 0 && credits <= 0) {
-    log.info('Try-on blocked: no daily allowance or credits', { userId, tier, credits });
+  // FREE tier (no weekly allowance) needs credits
+  if (weeklyLimit <= 0 && credits <= 0) {
+    log.info('Try-on blocked: no weekly allowance or credits', { userId, tier, credits });
     res.status(403).json({
       error: 'SUBSCRIPTION_REQUIRED',
       message: 'Please upgrade or purchase credits to use try-on.',
@@ -55,26 +55,28 @@ export async function submitTryOn(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  // Count today's non-failed jobs to enforce daily limit
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const todayCount = await prisma.tryOnJob.count({
-    where: { userId, createdAt: { gte: todayStart }, status: { not: 'FAILED' } },
+  // Count non-failed jobs in the rolling 7-day window to enforce the weekly limit.
+  // Rolling window (rather than calendar week) keeps the reset gradual: usage
+  // ages out continuously, so a user can't burn the full quota at the end of
+  // one week and the start of the next.
+  const weekStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const weekCount = await prisma.tryOnJob.count({
+    where: { userId, createdAt: { gte: weekStart }, status: { not: 'FAILED' } },
   });
 
-  // If user has any daily allowance left, use it (free); otherwise fall back to credits
+  // If user has any weekly allowance left, use it (free); otherwise fall back to credits
   let useCredit = false;
-  if (dailyLimit > 0 && todayCount < dailyLimit) {
+  if (weeklyLimit > 0 && weekCount < weeklyLimit) {
     useCredit = false;
   } else {
     if (credits <= 0) {
       res.status(429).json({
-        error: 'DAILY_LIMIT_REACHED',
-        message: dailyLimit > 0
-          ? `Daily limit of ${dailyLimit} reached. Purchase credits for more try-ons.`
+        error: 'WEEKLY_LIMIT_REACHED',
+        message: weeklyLimit > 0
+          ? `Weekly limit of ${weeklyLimit} reached. Purchase credits for more try-ons.`
           : 'No credits remaining. Purchase credits to use try-on.',
-        dailyUsed: todayCount,
-        dailyLimit,
+        weeklyUsed: weekCount,
+        weeklyLimit,
       });
       return;
     }

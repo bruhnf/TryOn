@@ -26,10 +26,12 @@ export const PRODUCTS: Record<string, AppleProduct> = {
   'com.evofaceflow.tryon.app.credits.100.free': { type: 'credits', credits: 100, tierVariant: 'FREE' },
 
   // Consumable credit packs — Basic-tier prices
-  'com.evofaceflow.tryon.app.credits.10.basic':  { type: 'credits', credits: 10,  tierVariant: 'BASIC' },
-  'com.evofaceflow.tryon.app.credits.25.basic':  { type: 'credits', credits: 25,  tierVariant: 'BASIC' },
-  'com.evofaceflow.tryon.app.credits.50.basic':  { type: 'credits', credits: 50,  tierVariant: 'BASIC' },
-  'com.evofaceflow.tryon.app.credits.100.basic': { type: 'credits', credits: 100, tierVariant: 'BASIC' },
+  'com.evofaceflow.tryon.app.credits.10.basic':     { type: 'credits', credits: 10,  tierVariant: 'BASIC' },
+  // The 25-credit Basic SKU was reissued in App Store Connect (the original ID
+  // could not be reused after deletion), hence the `.v2` suffix on this one.
+  'com.evofaceflow.tryon.app.credits.25.basic.v2':  { type: 'credits', credits: 25,  tierVariant: 'BASIC' },
+  'com.evofaceflow.tryon.app.credits.50.basic':     { type: 'credits', credits: 50,  tierVariant: 'BASIC' },
+  'com.evofaceflow.tryon.app.credits.100.basic':    { type: 'credits', credits: 100, tierVariant: 'BASIC' },
 
   // Consumable credit packs — Premium-tier prices (cheapest)
   'com.evofaceflow.tryon.app.credits.10.premium':  { type: 'credits', credits: 10,  tierVariant: 'PREMIUM' },

@@ -115,8 +115,8 @@ export default function TryOnScreen() {
       Alert.alert('No Clothing Photo', 'Please add at least one clothing photo.');
       return;
     }
-    const hasDailyAllowance = user?.tier === 'BASIC' || user?.tier === 'PREMIUM';
-    if (!hasDailyAllowance && (user?.credits ?? 0) <= 0) {
+    const hasWeeklyAllowance = user?.tier === 'BASIC' || user?.tier === 'PREMIUM';
+    if (!hasWeeklyAllowance && (user?.credits ?? 0) <= 0) {
       Alert.alert(
         'Credits Required',
         'You need credits or a Basic/Premium subscription to use try-on.',
@@ -164,10 +164,10 @@ export default function TryOnScreen() {
             { text: 'Get Credits', onPress: () => navigation.navigate('Purchase') },
           ],
         );
-      } else if (error?.error === 'DAILY_LIMIT_REACHED') {
+      } else if (error?.error === 'WEEKLY_LIMIT_REACHED') {
         Alert.alert(
-          'Daily Limit Reached',
-          error.message ?? 'You\'ve used all your daily try-ons. Get more credits to continue.',
+          'Weekly Limit Reached',
+          error.message ?? "You've used all your weekly try-ons. Get more credits to continue.",
           [
             { text: 'OK', style: 'cancel' },
             { text: 'Get Credits', onPress: () => navigation.navigate('Purchase') },

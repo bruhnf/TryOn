@@ -83,7 +83,7 @@
           },
           "BASIC": {
             "10": "com.evofaceflow.tryon.app.credits.10.basic",
-            "25": "com.evofaceflow.tryon.app.credits.25.basic",
+            "25": "com.evofaceflow.tryon.app.credits.25.basic.v2",
             "50": "com.evofaceflow.tryon.app.credits.50.basic",
             "100": "com.evofaceflow.tryon.app.credits.100.basic"
           },

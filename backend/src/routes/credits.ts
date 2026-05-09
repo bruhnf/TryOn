@@ -13,7 +13,7 @@ const log = createChildLogger('CreditsRoute');
 
 router.use(requireAuth);
 
-// Get current user's credit balance, tier, and daily usage
+// Get current user's credit balance, tier, and weekly usage (rolling 7-day window)
 router.get('/balance', async (req: Request, res: Response) => {
   if (!req.user) {
     res.status(401).json({ error: 'Unauthorized' });
@@ -30,14 +30,13 @@ router.get('/balance', async (req: Request, res: Response) => {
     return;
   }
 
-  // Count today's try-on jobs
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
+  // Count non-failed try-on jobs in the rolling 7-day window
+  const weekStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-  const todayJobCount = await prisma.tryOnJob.count({
+  const weekJobCount = await prisma.tryOnJob.count({
     where: {
       userId: req.user.userId,
-      createdAt: { gte: startOfDay },
+      createdAt: { gte: weekStart },
       status: { not: 'FAILED' },
     },
   });
@@ -48,9 +47,9 @@ router.get('/balance', async (req: Request, res: Response) => {
     credits: user.credits,
     tier: user.tier,
     tryOnCount: user.tryOnCount,
-    dailyUsed: todayJobCount,
-    dailyLimit: config.dailyLimit,
-    dailyRemaining: Math.max(0, config.dailyLimit - todayJobCount),
+    weeklyUsed: weekJobCount,
+    weeklyLimit: config.weeklyLimit,
+    weeklyRemaining: Math.max(0, config.weeklyLimit - weekJobCount),
     creditPrice: config.creditPrice,
   });
 });
