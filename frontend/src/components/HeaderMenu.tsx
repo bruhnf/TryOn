@@ -52,15 +52,15 @@ export default function HeaderMenu({
   return (
     <>
       <View style={styles.header}>
-        <View style={styles.left}>
+        <View style={styles.left} pointerEvents="box-none">
           {leftComponent}
         </View>
         {title ? (
-          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.title} pointerEvents="none">{title}</Text>
         ) : (
-          <View style={styles.center} />
+          <View style={styles.center} pointerEvents="none" />
         )}
-        <View style={styles.right}>
+        <View style={styles.right} pointerEvents="box-none">
           {rightComponent}
           {showMenu && (
             <TouchableOpacity onPress={() => setMenuVisible(true)} style={styles.menuButton}>
