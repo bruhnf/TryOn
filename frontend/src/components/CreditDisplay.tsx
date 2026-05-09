@@ -22,7 +22,13 @@ export default function CreditDisplay({ onPress }: CreditDisplayProps) {
 
   if (onPress) {
     return (
-      <TouchableOpacity onPress={onPress}>
+      <TouchableOpacity
+        onPress={onPress}
+        activeOpacity={0.7}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        accessibilityRole="button"
+        accessibilityLabel="Credits"
+      >
         {content}
       </TouchableOpacity>
     );

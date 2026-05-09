@@ -68,21 +68,40 @@ const LOCAL_URL = 'http://localhost:3000/api';
 const LIVE_URL = 'https://api.evofaceflow.com/api';
 ```
 
-**Local Development Setup (Emulator/Simulator):**
+> **🚨 Expo Go does NOT work for this app.** The app depends on native modules that ship outside Expo Go's fixed module set (`expo-iap`, `expo-secure-store`, etc.). Launching in Expo Go fails at startup with `Cannot find native module 'ExpoIap'` and "App entry not found" on the device. Every device-testing flow below assumes a **dev client build** — either a simulator/emulator build via `expo run:*`, or an installed dev-client app via EAS Build. Once the dev client is installed, JS still hot-reloads from `npx expo start` like normal.
+
+**One-time: build a dev client**
+
+Pick the path that matches your machine and target device:
+
+- **iOS Simulator (Mac only):** `cd frontend && npx expo run:ios` — builds and installs the dev client into the simulator. Requires Xcode.
+- **Android Emulator (Mac/Windows/Linux):** `cd frontend && npx expo run:android` — builds and installs into the running emulator. Requires Android Studio.
+- **Physical iPhone from Windows or without a Mac:** use **EAS Build** with the development profile:
+  ```bash
+  cd frontend
+  npm install -g eas-cli           # one-time
+  eas login                        # one-time
+  eas build:configure              # one-time, creates eas.json if missing
+  eas build --profile development --platform ios
+  ```
+  When the build finishes, EAS gives you a QR/install link. Install the resulting dev-client app on your iPhone (TestFlight or internal distribution). Rebuild only when you add or upgrade a native module — JS changes do not require a rebuild.
+- **Physical Android device:** same flow with `--platform android`, or run `npx expo run:android` against the device with USB debugging enabled.
+
+**Local Development Setup (Simulator/Emulator):**
 1. Set `USE_LOCAL = true` in `frontend/src/config/api.ts`
 2. Start backend: `cd backend && npm run dev`
 3. Start frontend: `cd frontend && npx expo start`
-4. Press `a` for Android emulator or `i` for iOS simulator
+4. Press `a` for Android emulator or `i` for iOS simulator (the dev client launches automatically once it's been built once via `expo run:*`)
 
-**Local Development Setup (Physical Device - iPhone/Android):**
+**Local Development Setup (Physical Device — iPhone/Android):**
 
-Testing on a physical device with local backend requires exposing your local backend to the internet. There are two approaches:
+Requires the dev client to already be installed on the device (see one-time setup above). Then pick one approach for the backend:
 
 **Option A: Use Live Backend (Recommended for quick testing)**
 1. Set `USE_LOCAL = false` in `frontend/src/config/api.ts`
-2. Start frontend: `cd frontend && npx expo start --tunnel`
-3. Scan QR code with Expo Go app on your phone
-4. Backend is already running on Lightsail
+2. Start the metro bundler: `cd frontend && npx expo start --tunnel`
+3. **Open the dev client app on your phone** (NOT Expo Go) and scan the QR code, or tap the project under "Recently opened" inside the dev client
+4. Backend is already running on Lightsail — no local backend needed
 
 **Option B: Use Local Backend with ngrok (Full local stack)**
 1. Install ngrok: https://ngrok.com/download
@@ -94,9 +113,9 @@ Testing on a physical device with local backend requires exposing your local bac
    const LOCAL_URL = 'https://abc123.ngrok-free.app/api';  // Your ngrok URL
    const USE_LOCAL = true;
    ```
-6. Start frontend with tunnel: `cd frontend && npx expo start --tunnel`
-7. Scan QR code with Expo Go app on your phone
-8. Connect to the Admin Dashboard using http://localhost:3000/admin 
+6. Start the metro bundler: `cd frontend && npx expo start --tunnel`
+7. **Open the dev client app on your phone** (NOT Expo Go) and scan the QR code
+8. Admin Dashboard remains reachable at http://localhost:3000/admin from your dev machine
 
 > **Note:** The frontend already includes the `ngrok-skip-browser-warning` header to bypass ngrok's browser warning page.
 
@@ -294,9 +313,9 @@ lastFreeCreditGrantAt    DateTime?                  // set once at email verific
 firstName                String?
 lastName                 String?
 bio                      String?
-avatarUrl                String?   // close-up — profile display only, never sent to Grok
-fullBodyUrl              String?   // full-body front — primary Grok input
-mediumBodyUrl            String?   // waist-up — fallback Grok input
+avatarUrl                String?   // S3 key — close-up; profile display only, never sent to Grok
+fullBodyUrl              String?   // S3 key — full-body front; primary Grok input
+mediumBodyUrl            String?   // S3 key — waist-up; fallback Grok input
 followingCount           Int       @default(0)
 followersCount           Int       @default(0)
 likesCount               Int       @default(0)
@@ -359,11 +378,11 @@ id                String    @id @default(uuid())
 userId            String
 status            JobStatus  // PENDING | PROCESSING | COMPLETE | FAILED
 isPrivate         Boolean   @default(false)
-clothingPhoto1Url String
-clothingPhoto2Url String?
-resultFullBodyUrl String?    // result image for full body perspective
-resultMediumUrl   String?    // result image for medium perspective
-bodyPhotoUrl      String?    // primary body photo used as input (full body preferred, medium fallback)
+clothingPhoto1Url String     // S3 key
+clothingPhoto2Url String?    // S3 key
+resultFullBodyUrl String?    // S3 key — result image for full body perspective
+resultMediumUrl   String?    // S3 key — result image for medium perspective
+bodyPhotoUrl      String?    // S3 key — primary body photo used as input (full body preferred, medium fallback)
 perspectivesUsed  String[]   // ["full_body", "medium"] — records which inputs were used
 likesCount        Int        @default(0)  // denormalized for feed performance
 errorMessage      String?
@@ -570,7 +589,7 @@ All uploaded images (body photos, clothing photos) undergo a two-stage resizing 
 
 - **Database**: PostgreSQL 15 (Prisma ORM)
 - **Queue**: Redis 7 + BullMQ
-- **Storage**: AWS S3 — separate prefixes: `body-photos/`, `clothing-photos/`, `tryon-results/`
+- **Storage**: AWS S3 (`evofaceflow-uploads`) — separate prefixes: `body-photos/`, `clothing-photos/`, `tryon-results/`. Bucket has Block Public Access enabled and **no** bucket policy granting `s3:GetObject` to `Principal: "*"`. All reads go through the backend.
 - **Reverse proxy**: Nginx (production) with SSL via Let's Encrypt
 - **Hosting**: AWS Lightsail Ubuntu 22.04
 - **Email**: AWS SES (transactional) — verification emails, suspicious login alerts
@@ -709,7 +728,9 @@ APPLE_ROOT_CERTS_DIR  # path to dir holding Apple root CA .cer files inside the 
 
 - Passwords hashed with bcrypt (cost factor ≥ 12).
 - JWTs: short-lived access tokens (15 min) + long-lived refresh tokens (30 days) stored in HttpOnly cookies (web) or secure device storage (mobile).
-- All S3 object URLs are pre-signed with short TTLs; no public bucket ACLs.
+- The S3 bucket is **private** (Block Public Access enabled, no public bucket policy). The DB stores bare S3 keys (e.g. `body-photos/<userId>/<file>.jpg`) in `User.avatarUrl`, `User.fullBodyUrl`, `User.mediumBodyUrl`, `TryOnJob.clothingPhoto1Url`, `TryOnJob.clothingPhoto2Url`, `TryOnJob.bodyPhotoUrl`, `TryOnJob.resultFullBodyUrl`, and `TryOnJob.resultMediumUrl`. Controllers mint presigned GET URLs at response time via `presignUserPhotos`, `presignTryOnJob`, `presignTryOnJobs`, and `presignAvatarOnly` in [backend/src/services/imageUrlService.ts](backend/src/services/imageUrlService.ts) (1-hour TTL). The helpers tolerate legacy rows that still hold full `https://...amazonaws.com/...` URLs by extracting the key.
+- The Grok worker reads body and clothing inputs by S3 key via the AWS SDK — never via public URL — see `resolveS3Key()` in [backend/src/services/grokService.ts](backend/src/services/grokService.ts).
+- When adding a new endpoint that returns image fields, route the response through the appropriate `presign*` helper before sending. Forgetting this on a new endpoint will produce 403s on the client once Block Public Access is on.
 - Body photo S3 keys are prefixed with the userId and are not guessable.
 - Rate limiting applied to `/api/auth` and `/api/tryon` endpoints.
 - GDPR/CCPA: users can export and delete all personal data including body photos and AI results.
