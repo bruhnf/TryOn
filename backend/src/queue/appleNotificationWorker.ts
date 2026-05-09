@@ -15,7 +15,7 @@ import {
 } from '../services/appleNotificationService';
 import { getProduct, AppleProduct } from '../config/appleIap';
 import prisma from '../lib/prisma';
-import { createChildLogger } from '../services/logger';
+import { createChildLogger, hashForLog } from '../services/logger';
 
 const log = createChildLogger('AppleNotificationWorker');
 
@@ -35,8 +35,10 @@ async function resolveUserId(transaction: JWSTransactionDecodedPayload): Promise
       select: { id: true },
     });
     if (user) return user.id;
+    // Hash the token for log correlation without leaking the raw User.id
+    // (which is what the appAccountToken is on our side).
     log.warn('appAccountToken did not match any user', {
-      appAccountToken: transaction.appAccountToken,
+      appAccountTokenHash: hashForLog(transaction.appAccountToken),
       originalTransactionId: transaction.originalTransactionId,
     });
   }
@@ -349,7 +351,10 @@ async function handleSubscriptionNotification(
       break;
 
     default:
-      log.info('Unhandled subscription notification type', { notificationType, subtype, userId });
+      // Surface unknown types loudly: Apple may add new notification types
+      // (e.g. new refund variants) and silently swallowing them at info level
+      // would let entitlement bugs slip through.
+      log.warn('Unhandled subscription notification type', { notificationType, subtype, userId });
   }
 }
 
@@ -394,7 +399,7 @@ async function handleCreditPackNotification(
       break;
 
     default:
-      log.info('Unhandled credit-pack notification type', { notificationType, subtype, userId });
+      log.warn('Unhandled credit-pack notification type', { notificationType, subtype, userId });
   }
 }
 

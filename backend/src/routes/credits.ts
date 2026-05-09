@@ -6,7 +6,7 @@ import { TIER_CONFIG } from '../services/tierService';
 import { verifyAndDecodeTransaction } from '../services/appleNotificationService';
 import { getProduct } from '../config/appleIap';
 import { env } from '../config/env';
-import { createChildLogger } from '../services/logger';
+import { createChildLogger, hashForLog } from '../services/logger';
 
 const router = Router();
 const log = createChildLogger('CreditsRoute');
@@ -118,9 +118,12 @@ router.post('/verify-receipt', async (req: Request, res: Response) => {
   // If that's missing or doesn't match the authenticated user, refuse: prevents
   // a malicious user from posting someone else's receipt to claim entitlement.
   if (!transaction.appAccountToken || transaction.appAccountToken !== req.user.userId) {
+    // Hash the appAccountToken for log correlation without leaking valid User
+    // IDs to anyone with read access to logs.
     log.warn('Receipt appAccountToken does not match authenticated user', {
-      userId: req.user.userId,
-      appAccountToken: transaction.appAccountToken,
+      userIdHash: hashForLog(req.user.userId),
+      appAccountTokenHash: hashForLog(transaction.appAccountToken),
+      appAccountTokenPresent: !!transaction.appAccountToken,
       transactionId: transaction.transactionId,
     });
     res.status(403).json({ error: 'Receipt does not belong to this account' });

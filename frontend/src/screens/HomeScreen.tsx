@@ -46,6 +46,7 @@ export default function HomeScreen() {
   const [fullScreenInitialIndex, setFullScreenInitialIndex] = useState(0);
   const [fullScreenAiGenerated, setFullScreenAiGenerated] = useState(false);
   const [reportTarget, setReportTarget] = useState<{ type: ReportTargetType; id: string } | null>(null);
+  const [feedError, setFeedError] = useState(false);
 
   // Show platform-native action sheet on iOS, basic Alert on Android, with
   // Report and Block options. Required by App Store Review Guideline 1.2.
@@ -110,8 +111,11 @@ export default function HomeScreen() {
       setJobs((prev) => (refresh ? data.jobs : [...prev, ...data.jobs]));
       setHasMore(data.jobs.length === 20);
       setPage(p);
+      setFeedError(false);
     } catch {
-      // silently fail; user sees empty state
+      // Surface a retry banner instead of just an empty state — empty + no
+      // feedback makes a transient backend hiccup look like an empty feed.
+      setFeedError(true);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -184,6 +188,15 @@ export default function HomeScreen() {
           </TouchableOpacity>
         }
       />
+      {feedError ? (
+        <View style={styles.errorBanner}>
+          <Ionicons name="cloud-offline-outline" size={18} color={Colors.danger} />
+          <Text style={styles.errorBannerText}>Couldn't load the feed.</Text>
+          <TouchableOpacity onPress={() => fetchFeed(1, true)} hitSlop={10}>
+            <Text style={styles.errorBannerAction}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
       <FlatList
         data={jobs}
         keyExtractor={(item) => item.id}
@@ -365,6 +378,26 @@ const styles = StyleSheet.create({
   searchIconButton: {
     padding: Spacing.sm,
     marginRight: Spacing.xs,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    backgroundColor: Colors.gray100,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.gray200,
+  },
+  errorBannerText: {
+    flex: 1,
+    fontSize: Typography.fontSizeSM,
+    color: Colors.gray800,
+  },
+  errorBannerAction: {
+    fontSize: Typography.fontSizeSM,
+    fontWeight: Typography.fontWeightSemiBold,
+    color: Colors.black,
   },
   card: {
     marginHorizontal: Spacing.md,

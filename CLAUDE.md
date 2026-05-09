@@ -47,12 +47,14 @@ npm run seed     # Seed development data
 ### Frontend (local Expo dev only — not for distribution)
 ```bash
 cd frontend
-npx expo start -c          # Dev server with cache clear (Expo Go / Dev Client)
-npx expo start --tunnel    # Dev server with ngrok (for Expo Go on physical device)
+npx expo start -c          # Dev server with cache clear — open the dev client app to load
+npx expo start --tunnel    # Dev server through ngrok tunnel — open the dev client app to load
 npm run android            # Local native build via Xcode/Android Studio (expo run:android)
 npm run ios                # Local native build via Xcode (expo run:ios)
 npm run web                # Web preview (limited — most native modules don't work on web)
 ```
+
+> **Expo Go does NOT work for this app.** See the "Local Development Setup" section below — the app depends on native modules outside Expo Go's fixed module set, so every device test requires a dev client built via `expo run:*` or EAS Build.
 
 For TestFlight or App Store distribution, use **EAS Build** instead — see DEPLOYMENT.md §11. EAS is required for any build that includes native code that the user will install (the app uses `expo-iap`, `expo-secure-store`, etc. which all require a native build).
 
@@ -273,7 +275,7 @@ React Native app using Expo with React Navigation and Zustand for state.
   - `AdminConsoleScreen` — admin-only screen, route only registered when `__DEV__ || user.isAdmin`
   - `PurchaseScreen` — StoreKit-driven purchase flow. Fetches localized prices from Apple, presents tiers + credit packs, real Restore Purchases. Auto-renew disclosure rendered adjacent to each subscribe button (App Store Guideline 3.1.2(a)).
 - **Components**: `components/` — shared UI:
-  - `BodyPhotoCard`, `CreditDisplay`, `HeaderMenu`
+  - `CreditDisplay`, `HeaderMenu`
   - `TryOnResultCard`, `TryOnDetailModal`, `FullScreenImageModal` — each renders `AiGeneratedBadge` over result images
   - `AiGeneratedBadge` — visible "✨ AI-generated" pill required by Guideline 4.0
   - `ReportSheet` — bottom-sheet modal with 6 reason options (INAPPROPRIATE, HARASSMENT, IMPERSONATION, SPAM, COPYRIGHT, OTHER) + free-text details. Used by HomeScreen and PublicProfileScreen.
@@ -285,9 +287,9 @@ React Native app using Expo with React Navigation and Zustand for state.
 
 **Navigation structure:**
 - Unauthenticated stack: Login → Signup → Onboarding (skippable)
-- Authenticated tabs: Home | [Camera FAB — TryOn] | Inbox | Profile (4 tabs total — no Shop tab)
+- Authenticated tabs: Home | Friends | [Camera FAB — TryOn] | Inbox | Profile (5 tabs total — no Shop tab)
 - Modal screens: Settings, EditProfile, AdminConsole (dev/admin-only), Purchase, BlockedUsers
-- Card screens: Friends, PublicProfile
+- Card screens: PublicProfile
 
 **UI style:** Clean white/minimal design (see design screenshots). Black-and-white accent palette. Bottom tab bar with prominent centered camera FAB for quick try-on access. Typography: bold headers, light body text. Rounded pill-shaped toggle buttons for option selection.
 

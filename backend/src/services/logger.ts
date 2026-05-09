@@ -27,6 +27,7 @@
 import winston from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
 import path from 'path';
+import crypto from 'crypto';
 import { env } from '../config/env';
 
 // Log directory - in production this should be a mounted volume
@@ -159,6 +160,19 @@ logger.rejections.handle(
  */
 export function createChildLogger(serviceName: string): winston.Logger {
   return logger.child({ service: serviceName });
+}
+
+/**
+ * One-way hash a sensitive identifier for safe logging. Use this when you
+ * want to correlate log lines that involve the same value (e.g. a User.id
+ * surfaced via a StoreKit appAccountToken) without writing the raw value
+ * to disk where it could be enumerated by a log reader. Returns a short
+ * 12-char hex prefix of SHA-256, which is enough to correlate but not
+ * enough to reverse to the original.
+ */
+export function hashForLog(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return crypto.createHash('sha256').update(value).digest('hex').slice(0, 12);
 }
 
 /**

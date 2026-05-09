@@ -11,6 +11,30 @@ function optional(key: string, fallback = ''): string {
   return process.env[key] ?? fallback;
 }
 
+// Lightweight email shape check — RFC 5322 has plenty of edge cases, but for an
+// admin allowlist sanity check this catches the common typos (missing @, stray
+// spaces, trailing commas). Anything that doesn't pass is dropped from the list
+// AND announced via console.warn so an operator can see they had a typo.
+function parseAdminEmails(raw: string): string[] {
+  const entries = raw.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+  const valid: string[] = [];
+  const dropped: string[] = [];
+  const looksLikeEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  for (const e of entries) {
+    if (looksLikeEmail.test(e)) valid.push(e);
+    else dropped.push(e);
+  }
+  if (dropped.length > 0) {
+    // env.ts loads before the Winston logger is constructed, so use console
+    // directly. The message will appear in container logs at startup.
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[env] ADMIN_EMAILS: dropped ${dropped.length} malformed entr${dropped.length === 1 ? 'y' : 'ies'}: ${dropped.join(', ')}`,
+    );
+  }
+  return valid;
+}
+
 export const env = {
   port: parseInt(optional('PORT', '3000'), 10),
   nodeEnv: optional('NODE_ENV', 'development'),
@@ -25,10 +49,7 @@ export const env = {
   // Comma-separated list of email addresses with admin UI access in the app.
   // Backend admin routes also require ADMIN_API_KEY; this list controls
   // whether the Admin Console button is even shown in Settings.
-  adminEmails: optional('ADMIN_EMAILS', '')
-    .split(',')
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean),
+  adminEmails: parseAdminEmails(optional('ADMIN_EMAILS', '')),
   allowedOrigins: optional('ALLOWED_ORIGINS', 'http://localhost:8081').split(','),
 
   aws: {

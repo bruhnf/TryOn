@@ -43,14 +43,18 @@ export default function InboxScreen() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const clearUnreadCount = useNotificationStore((s) => s.clearUnreadCount);
 
   async function load() {
     try {
       const { data } = await api.get<{ notifications: Notification[] }>('/notifications');
       setNotifications(data.notifications);
+      setLoadError(false);
     } catch {
-      // Silent fail
+      // Surface a retry banner so a transient backend hiccup doesn't look
+      // like an empty inbox.
+      setLoadError(true);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -102,6 +106,15 @@ export default function InboxScreen() {
           ) : undefined
         }
       />
+      {loadError ? (
+        <View style={styles.errorBanner}>
+          <Ionicons name="cloud-offline-outline" size={18} color={Colors.danger} />
+          <Text style={styles.errorBannerText}>Couldn't load messages.</Text>
+          <TouchableOpacity onPress={load} hitSlop={10}>
+            <Text style={styles.errorBannerAction}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
       {loading ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={Colors.black} />
@@ -183,6 +196,26 @@ const styles = StyleSheet.create({
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   markAllButton: { padding: Spacing.sm },
   markAllText: { fontSize: Typography.fontSizeSM, color: Colors.gray600 },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    backgroundColor: Colors.gray100,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.gray200,
+  },
+  errorBannerText: {
+    flex: 1,
+    fontSize: Typography.fontSizeSM,
+    color: Colors.gray800,
+  },
+  errorBannerAction: {
+    fontSize: Typography.fontSizeSM,
+    fontWeight: Typography.fontWeightSemiBold,
+    color: Colors.black,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

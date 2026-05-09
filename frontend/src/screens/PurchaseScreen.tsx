@@ -52,14 +52,14 @@ const TIER_FEATURES: Record<UserTier, { name: string; tagline: string; features:
   BASIC: {
     tier: 'BASIC',
     name: 'Basic',
-    tagline: '12 try-ons every week',
+    tagline: '12 try-on sessions per week',
     features: ['12 try-on sessions per week included', 'Basic members get lower credit pricing, from $0.40–$0.50 per credit depending on package size.', 'Priority queue'],
     sku: APPLE_PRODUCTS.subscriptions?.basicMonthly,
   },
   PREMIUM: {
     tier: 'PREMIUM',
     name: 'Premium',
-    tagline: '24 try-ons every week',
+    tagline: '24 try-on sessions per week',
     features: ['24 try-on sessions per week included', 'Premium members get the lowest credit pricing, from $0.30–$0.32 per credit depending on package size.', 'Top-priority queue'],
     sku: APPLE_PRODUCTS.subscriptions?.premiumMonthly,
     badge: 'BEST VALUE',

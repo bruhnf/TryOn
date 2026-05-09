@@ -5,12 +5,15 @@ import { storage } from '../utils/storage';
 // API ENVIRONMENT CONFIGURATION
 // ============================================
 // To switch environments, change USE_LOCAL below:
-//   - true  = Local development (ngrok tunnel to localhost:3000)
-//   - false = Live server (api.evofaceflow.com)
+//   - true  = Local development. Replace LOCAL_URL with whatever the device
+//             can actually reach: a LAN IP for an emulator on the same Wi-Fi,
+//             or your personal ngrok hostname for a physical device. Do NOT
+//             commit your ngrok URL — it's tied to your free-tier session.
+//   - false = Live server (api.evofaceflow.com).
 // ============================================
 const USE_LOCAL = false;
 
-const LOCAL_URL = 'https://alden-unconcludable-camilo.ngrok-free.dev/api';
+const LOCAL_URL = 'http://localhost:3000/api';
 const LIVE_URL = 'https://api.evofaceflow.com/api';
 
 export const BASE_URL = USE_LOCAL ? LOCAL_URL : LIVE_URL;
