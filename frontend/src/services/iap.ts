@@ -16,36 +16,48 @@
 import * as IAP from 'expo-iap';
 import Constants from 'expo-constants';
 import api from '../config/api';
+import { UserTier } from '../types';
 
+type CreditSizeMap = { '10': string; '25': string; '50': string; '100': string };
 type AppleProductsConfig = {
   subscriptions: { basicMonthly: string; premiumMonthly: string };
-  credits: { '10': string; '25': string; '50': string; '100': string };
+  credits: { FREE: CreditSizeMap; BASIC: CreditSizeMap; PREMIUM: CreditSizeMap };
 };
 
 const APPLE_PRODUCTS: AppleProductsConfig =
   (Constants.expoConfig?.extra as { appleProducts?: AppleProductsConfig })?.appleProducts ??
   ({} as AppleProductsConfig);
 
+const CREDIT_SIZES = ['10', '25', '50', '100'] as const;
+
 export const SUBSCRIPTION_SKUS = [
   APPLE_PRODUCTS.subscriptions?.basicMonthly,
   APPLE_PRODUCTS.subscriptions?.premiumMonthly,
 ].filter(Boolean) as string[];
 
-export const CREDIT_PACK_SKUS = [
-  APPLE_PRODUCTS.credits?.['10'],
-  APPLE_PRODUCTS.credits?.['25'],
-  APPLE_PRODUCTS.credits?.['50'],
-  APPLE_PRODUCTS.credits?.['100'],
-].filter(Boolean) as string[];
+// Returns the 4 credit-pack SKUs priced for the given tier. Each tier sees
+// different prices in App Store Connect, but the credits granted per pack
+// size are identical. The client must offer ONLY the matching tier's SKUs;
+// the backend logs a warning if a purchased SKU's tier variant doesn't
+// match the user's current tier (see routes/credits.ts verify-receipt).
+export function creditPackSkusForTier(tier: UserTier): string[] {
+  const map = APPLE_PRODUCTS.credits?.[tier];
+  if (!map) return [];
+  return CREDIT_SIZES.map((size) => map[size]).filter(Boolean) as string[];
+}
 
-// Maps a credit-pack SKU to the number of credits it grants. Used only for
-// display; the backend is the source of truth for credit grants.
-export const CREDITS_FOR_SKU: Record<string, number> = {
-  [APPLE_PRODUCTS.credits?.['10'] ?? '']: 10,
-  [APPLE_PRODUCTS.credits?.['25'] ?? '']: 25,
-  [APPLE_PRODUCTS.credits?.['50'] ?? '']: 50,
-  [APPLE_PRODUCTS.credits?.['100'] ?? '']: 100,
-};
+// Maps any credit-pack SKU (across all 12 variants) to the number of credits
+// it grants. Used only for display; the backend is the source of truth.
+export const CREDITS_FOR_SKU: Record<string, number> = (() => {
+  const map: Record<string, number> = {};
+  for (const tier of ['FREE', 'BASIC', 'PREMIUM'] as UserTier[]) {
+    for (const size of CREDIT_SIZES) {
+      const sku = APPLE_PRODUCTS.credits?.[tier]?.[size];
+      if (sku) map[sku] = parseInt(size, 10);
+    }
+  }
+  return map;
+})();
 
 export interface DisplayProduct {
   sku: string;
@@ -82,14 +94,17 @@ function toDisplay(p: { id?: string; productId?: string; displayPrice?: string; 
   };
 }
 
-export async function fetchProducts(): Promise<{
+export async function fetchProducts(tier: UserTier): Promise<{
   subscriptions: DisplayProduct[];
   credits: DisplayProduct[];
 }> {
   await initIap();
+  const creditSkus = creditPackSkusForTier(tier);
   const [subs, credits] = await Promise.all([
     IAP.requestProducts({ skus: SUBSCRIPTION_SKUS, type: 'subs' as const }),
-    IAP.requestProducts({ skus: CREDIT_PACK_SKUS, type: 'inapp' as const }),
+    creditSkus.length > 0
+      ? IAP.requestProducts({ skus: creditSkus, type: 'inapp' as const })
+      : Promise.resolve([] as unknown[]),
   ]);
   return {
     subscriptions: (subs as unknown as Array<Record<string, unknown>>).map((p) => toDisplay(p as never)),

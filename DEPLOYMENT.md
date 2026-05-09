@@ -290,10 +290,20 @@ Products must be configured in App Store Connect → **In-App Purchases & Subscr
 |---|---|---|
 | `com.evofaceflow.tryon.app.basic.monthly` | Auto-renewing subscription | BASIC |
 | `com.evofaceflow.tryon.app.premium.monthly` | Auto-renewing subscription | PREMIUM |
-| `com.evofaceflow.tryon.app.credits.10` | Consumable | 10 credits |
-| `com.evofaceflow.tryon.app.credits.25` | Consumable | 25 credits |
-| `com.evofaceflow.tryon.app.credits.50` | Consumable | 50 credits |
-| `com.evofaceflow.tryon.app.credits.100` | Consumable | 100 credits |
+| `com.evofaceflow.tryon.app.credits.10.free` | Consumable | 10 credits (Free-tier price) |
+| `com.evofaceflow.tryon.app.credits.25.free` | Consumable | 25 credits (Free-tier price) |
+| `com.evofaceflow.tryon.app.credits.50.free` | Consumable | 50 credits (Free-tier price) |
+| `com.evofaceflow.tryon.app.credits.100.free` | Consumable | 100 credits (Free-tier price) |
+| `com.evofaceflow.tryon.app.credits.10.basic` | Consumable | 10 credits (Basic-tier price) |
+| `com.evofaceflow.tryon.app.credits.25.basic` | Consumable | 25 credits (Basic-tier price) |
+| `com.evofaceflow.tryon.app.credits.50.basic` | Consumable | 50 credits (Basic-tier price) |
+| `com.evofaceflow.tryon.app.credits.100.basic` | Consumable | 100 credits (Basic-tier price) |
+| `com.evofaceflow.tryon.app.credits.10.premium` | Consumable | 10 credits (Premium-tier price) |
+| `com.evofaceflow.tryon.app.credits.25.premium` | Consumable | 25 credits (Premium-tier price) |
+| `com.evofaceflow.tryon.app.credits.50.premium` | Consumable | 50 credits (Premium-tier price) |
+| `com.evofaceflow.tryon.app.credits.100.premium` | Consumable | 100 credits (Premium-tier price) |
+
+The 12 credit-pack SKUs come in 4 sizes × 3 tier variants. **All variants of the same size grant the same number of credits** — only the price differs (Free = highest, Premium = lowest). The mobile client offers the user only the variant priced for their current tier.
 
 Each product needs a price tier and at least one localization (display name + description). Sandbox testing requires "Ready to Submit" status minimum.
 

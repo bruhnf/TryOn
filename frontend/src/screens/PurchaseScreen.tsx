@@ -21,9 +21,9 @@ import { useUserStore } from '../store/useUserStore';
 import { UserTier } from '../types';
 import {
   CREDITS_FOR_SKU,
-  CREDIT_PACK_SKUS,
   DisplayProduct,
   MANAGE_SUBSCRIPTIONS_URL,
+  creditPackSkusForTier,
   endIap,
   fetchProducts,
   initIap,
@@ -36,7 +36,6 @@ import Constants from 'expo-constants';
 
 type AppleProductsConfig = {
   subscriptions: { basicMonthly: string; premiumMonthly: string };
-  credits: { '10': string; '25': string; '50': string; '100': string };
 };
 
 const APPLE_PRODUCTS: AppleProductsConfig =
@@ -83,12 +82,16 @@ export default function PurchaseScreen() {
 
   const currentTier: UserTier = user?.tier ?? 'FREE';
 
+  // Re-fetch when the user's tier changes — credit-pack SKUs (and prices)
+  // are tier-specific, so a user upgrading from FREE to BASIC mid-session
+  // should immediately see Basic prices.
   useEffect(() => {
     let cancelled = false;
     async function run() {
+      setProductsLoading(true);
       try {
         await initIap();
-        const products = await fetchProducts();
+        const products = await fetchProducts(currentTier);
         if (cancelled) return;
         setSubscriptions(products.subscriptions);
         setCreditPacks(products.credits);
@@ -105,7 +108,7 @@ export default function PurchaseScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [currentTier]);
 
   // Listen for purchase results from StoreKit. When a purchase completes we
   // verify the JWS with the backend, which is the actual entitlement grant.
@@ -367,7 +370,7 @@ export default function PurchaseScreen() {
               after the daily allowance runs out.
             </Text>
 
-            {CREDIT_PACK_SKUS.map((sku) => {
+            {creditPackSkusForTier(currentTier).map((sku) => {
               const pack = creditPacks.find((p) => p.sku === sku);
               const credits = CREDITS_FOR_SKU[sku] ?? 0;
               const isBusy = busy === sku;

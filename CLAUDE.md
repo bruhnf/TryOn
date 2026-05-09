@@ -508,11 +508,12 @@ Production uses **only** the `/api/credits/verify-receipt` path plus App Store S
   1. **Fast path (client → backend):** `POST /api/credits/verify-receipt` — the mobile app posts the StoreKit JWS immediately after a purchase succeeds. Backend verifies the JWS via Apple's CA chain, checks `appAccountToken === userId`, and applies the entitlement. Used so credits / tier appear instantly in the UI.
   2. **Authoritative path (Apple → backend):** **App Store Server Notifications V2** webhook at `POST /api/webhooks/apple`. Used for renewals, cancellations, refunds, and as a safety net if verify-receipt fails. See `backend/src/routes/appleWebhook.ts` and `backend/src/queue/appleNotificationWorker.ts`.
 - StoreKit transactions are persisted in the `ApplePurchase` model (`transactionId` unique per renewal, `originalTransactionId` stable across the subscription lifetime, `productId`, `tier`, `expiresAt`, `revokedAt`).
-- The product catalog (`backend/src/config/appleIap.ts`) is a discriminated union: products are either `{ type: 'subscription', tier }` or `{ type: 'credits', credits: N }`. Subscription notifications update `User.tier`; consumable notifications grant credits via a `CreditTransaction`.
+- The product catalog (`backend/src/config/appleIap.ts`) is a discriminated union: products are either `{ type: 'subscription', tier }` or `{ type: 'credits', credits: N, tierVariant }`. Subscription notifications update `User.tier`; consumable notifications grant credits via a `CreditTransaction`.
+- **Tier-priced credit packs.** Each credit-pack size has 3 SKU variants (`.free`, `.basic`, `.premium`) with different App Store Connect prices but identical credit grants. The client offers only the variant matching `user.tier`. If verify-receipt sees a tier-variant mismatch (race during a tier change, or a tampered client), it logs a warning and **still grants credits** — Apple already charged the user, so honest users aren't penalized.
 - Product IDs (must match App Store Connect):
-  - `com.evofaceflow.tryon.app.basic.monthly` → BASIC tier
-  - `com.evofaceflow.tryon.app.premium.monthly` → PREMIUM tier
-  - `com.evofaceflow.tryon.app.credits.10/25/50/100` → consumable credit packs
+  - `com.evofaceflow.tryon.app.basic.monthly` → BASIC tier subscription
+  - `com.evofaceflow.tryon.app.premium.monthly` → PREMIUM tier subscription
+  - `com.evofaceflow.tryon.app.credits.{10,25,50,100}.{free,basic,premium}` → 12 consumable credit packs (4 sizes × 3 tier variants)
 - The mobile app sets `appAccountToken` (= our `User.id` as UUID) on every StoreKit purchase so notifications can be mapped back to a user. The verify-receipt endpoint requires this match. Fallback identification (webhook only) is by `originalTransactionId` against existing `ApplePurchase` rows.
 - Frontend uses `expo-iap` via `frontend/src/services/iap.ts`. The service handles connection lifecycle, fetches localized prices (`displayPrice`) from the App Store at runtime — **never hardcode prices** (Guideline 3.1.1(a)).
 - `POST /api/credits/restore-purchases` is now a fallback that re-applies the most recent unexpired, non-revoked `ApplePurchase` from our DB. The primary Restore Purchases flow on the client uses `expo-iap`'s `getAvailablePurchases()` and re-posts each receipt to `/verify-receipt`. Both surfaces (PurchaseScreen and Settings) call the StoreKit version.

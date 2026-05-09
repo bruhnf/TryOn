@@ -138,6 +138,27 @@ router.post('/verify-receipt', async (req: Request, res: Response) => {
     return;
   }
 
+  // Defensive audit: a credit pack's tier variant should match the user's
+  // current tier (the client offers only the matching variant). A mismatch
+  // can happen on a tier-change race (user upgraded mid-purchase) or a
+  // tampered client buying a cheaper variant. Log it but still grant credits
+  // — Apple already charged the user — so honest users aren't penalized.
+  if (product.type === 'credits') {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.userId },
+      select: { tier: true },
+    });
+    if (user && user.tier !== product.tierVariant) {
+      log.warn('Credit pack tier variant does not match user tier', {
+        userId: req.user.userId,
+        userTier: user.tier,
+        productTierVariant: product.tierVariant,
+        productId: transaction.productId,
+        transactionId: transaction.transactionId,
+      });
+    }
+  }
+
   // Idempotency: if we've already processed this transactionId, return current state.
   const existing = await prisma.applePurchase.findUnique({
     where: { transactionId: transaction.transactionId },

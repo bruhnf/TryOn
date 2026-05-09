@@ -75,20 +75,25 @@
           "premiumMonthly": "com.evofaceflow.tryon.app.premium.monthly"
         },
         "credits": {
-          "10": "com.evofaceflow.tryon.app.credits.10",
-          "25": "com.evofaceflow.tryon.app.credits.25",
-          "50": "com.evofaceflow.tryon.app.credits.50",
-          "100": "com.evofaceflow.tryon.app.credits.100"
+          "FREE": {
+            "10": "com.evofaceflow.tryon.app.credits.10.free",
+            "25": "com.evofaceflow.tryon.app.credits.25.free",
+            "50": "com.evofaceflow.tryon.app.credits.50.free",
+            "100": "com.evofaceflow.tryon.app.credits.100.free"
+          },
+          "BASIC": {
+            "10": "com.evofaceflow.tryon.app.credits.10.basic",
+            "25": "com.evofaceflow.tryon.app.credits.25.basic",
+            "50": "com.evofaceflow.tryon.app.credits.50.basic",
+            "100": "com.evofaceflow.tryon.app.credits.100.basic"
+          },
+          "PREMIUM": {
+            "10": "com.evofaceflow.tryon.app.credits.10.premium",
+            "25": "com.evofaceflow.tryon.app.credits.25.premium",
+            "50": "com.evofaceflow.tryon.app.credits.50.premium",
+            "100": "com.evofaceflow.tryon.app.credits.100.premium"
+          }
         }
-      },
-      "appleProductReferenceIds": {
-        "_comment": "App Store Connect internal UUIDs (NOT product IDs). Useful only for App Store Server API endpoints that target a specific product. Do not pass these to StoreKit.",
-        "credits10": "621215711f318a4fc1813a7dff937ef2",
-        "credits25": "4964e60bf506b1d82efe966ec71d1421",
-        "credits50": "333424bfef0ca60466e258ffbe20ea90",
-        "credits100": "47501df29b5777086fb59b628932368f",
-        "basicTier": "9d99727cc5d1b37563ff2175d63880e9",
-        "premiumTier": "ed387b679d97548b2ff33b5f20aee52a"
       }
     },
     "owner": "bruhnf"
