@@ -31,6 +31,7 @@ export type AuthStackParams = {
 
 export type MainTabParams = {
   Home: undefined;
+  Friends: { initialTab?: 'following' | 'followers'; openSearch?: boolean } | undefined;
   TryOn: undefined;
   Inbox: undefined;
   Profile: undefined;
@@ -129,6 +130,15 @@ function MainTabs() {
         }}
       />
       <Tab.Screen
+        name="Friends"
+        component={FriendsScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="people-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
         name="TryOn"
         component={TryOnScreen}
         options={{
@@ -205,11 +215,6 @@ export default function AppNavigator() {
               name="Purchase"
               component={PurchaseScreen}
               options={{ presentation: 'modal', headerShown: false }}
-            />
-            <Stack.Screen
-              name="Friends"
-              component={FriendsScreen}
-              options={{ headerShown: true, title: 'Friends' }}
             />
             <Stack.Screen
               name="PublicProfile"

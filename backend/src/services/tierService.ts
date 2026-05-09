@@ -13,10 +13,6 @@ export const TIER_CONFIG: Record<UserTier, TierConfig> = {
   PREMIUM: { dailyLimit: 4, creditPrice: 0.25 },
 };
 
-export function getTierConfig(tier: UserTier): TierConfig {
-  return TIER_CONFIG[tier];
-}
-
 // Free-credit policy: 10 credits granted ONCE at email verification
 // (see authController.verifyEmail). There is no recurring grant — users
 // who exhaust their initial credits must purchase more or subscribe.

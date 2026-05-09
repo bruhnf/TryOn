@@ -55,37 +55,42 @@ enum ReportStatus {
 }
 
 model User {
-  id                String            @id @default(uuid())
-  username          String            @unique
-  email             String            @unique
-  passwordHash      String
-  verified          Boolean           @default(false)
-  verifyToken       String?
-  verifyTokenExpiry DateTime?
+  id                       String    @id @default(uuid())
+  username                 String    @unique
+  email                    String    @unique
+  passwordHash             String
+  verified                 Boolean   @default(false)
+  verifyToken              String?
+  verifyTokenExpiry        DateTime?
   passwordResetToken       String?
   passwordResetTokenExpiry DateTime?
-  tier              UserTier          @default(FREE)
-  credits           Int               @default(0)
+  tier                     UserTier  @default(FREE)
+  credits                  Int       @default(0)
   // Lifetime count of try-on sessions generated
-  tryOnCount        Int               @default(0)
-  // Tracks when this FREE-tier user last received the monthly free-credit grant
-  lastFreeCreditGrantAt DateTime?
-  firstName         String?
-  lastName          String?
-  bio               String?
+  tryOnCount               Int       @default(0)
+  // Set once at email verification when the one-time signup credit grant is
+  // applied. Retained for audit; no longer drives any logic.
+  lastFreeCreditGrantAt    DateTime?
+  firstName                String?
+  lastName                 String?
+  bio                      String?
+  // The *Url columns below store an S3 key (e.g. "body-photos/<userId>/<file>.jpg"),
+  // not a public URL. The bucket is private; presigned GET URLs are minted at
+  // response time by services/imageUrlService.ts. Legacy rows may still hold
+  // full https://...amazonaws.com/... URLs — the presign helpers tolerate both.
   // avatarUrl = close-up photo — used for profile display ONLY, never sent to Grok
-  avatarUrl         String?
+  avatarUrl                String?
   // fullBodyUrl and mediumBodyUrl are the inputs for the Grok try-on API
-  fullBodyUrl       String?
-  mediumBodyUrl     String?
-  followingCount    Int               @default(0)
-  followersCount    Int               @default(0)
-  likesCount        Int               @default(0)
-  address           String?
-  city              String?
-  state             String?
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  fullBodyUrl              String?
+  mediumBodyUrl            String?
+  followingCount           Int       @default(0)
+  followersCount           Int       @default(0)
+  likesCount               Int       @default(0)
+  address                  String?
+  city                     String?
+  state                    String?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
   tryOnJobs          TryOnJob[]
   locations          UserLocation[]
@@ -148,10 +153,10 @@ model UserBlock {
 // One row per StoreKit transaction; the `originalTransactionId` ties together
 // renewals of the same subscription so we can resolve the active entitlement.
 model ApplePurchase {
-  id                    String   @id @default(uuid())
+  id                    String    @id @default(uuid())
   userId                String
   // Apple StoreKit transaction identifier (unique per renewal/purchase).
-  transactionId         String   @unique
+  transactionId         String    @unique
   // Original transaction id — stable across renewals of the same subscription.
   originalTransactionId String
   // App Store product identifier (e.g. com.evofaceflow.tryon.basic.monthly).
@@ -164,8 +169,8 @@ model ApplePurchase {
   rawReceipt            String?
   // Set when StoreKit reports the user revoked/refunded the purchase.
   revokedAt             DateTime?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -191,6 +196,10 @@ model TryOnJob {
   userId            String
   status            JobStatus @default(PENDING)
   isPrivate         Boolean   @default(false)
+  // The *Url columns below store an S3 key, not a public URL — the bucket is
+  // private and presigned GET URLs are minted at response time by
+  // services/imageUrlService.ts. Legacy rows may still hold full
+  // https://...amazonaws.com/... URLs; the presign helpers tolerate both.
   clothingPhoto1Url String
   clothingPhoto2Url String?
   resultFullBodyUrl String?
@@ -205,9 +214,9 @@ model TryOnJob {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  likes          Like[]
-  notifications  Notification[]
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  likes         Like[]
+  notifications Notification[]
 
   @@map("tryon_jobs")
 }
@@ -256,7 +265,7 @@ model CreditTransaction {
   id          String                @id @default(uuid())
   userId      String
   type        CreditTransactionType
-  amount      Int                   // positive for grants/purchases, negative for usage
+  amount      Int // positive for grants/purchases, negative for usage
   description String?
   createdAt   DateTime              @default(now())
 
@@ -281,16 +290,16 @@ model Like {
 }
 
 model Notification {
-  id          String           @id @default(uuid())
+  id        String           @id @default(uuid())
   // recipient of the notification
-  userId      String
-  type        NotificationType
+  userId    String
+  type      NotificationType
   // user who triggered the notification (e.g., the follower or liker)
-  actorId     String?
+  actorId   String?
   // optional related try-on job (e.g., for LIKE or TRYON_COMPLETE)
-  jobId       String?
-  read        Boolean          @default(false)
-  createdAt   DateTime         @default(now())
+  jobId     String?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
 
   user  User      @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
   actor User?     @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
@@ -317,21 +326,21 @@ enum VulnerabilitySeverity {
 }
 
 model VulnerabilityReport {
-  id                 String                 @id @default(uuid())
-  scanType           ScanType
-  totalVulnerabilities Int                  @default(0)
-  criticalCount      Int                    @default(0)
-  highCount          Int                    @default(0)
-  moderateCount      Int                    @default(0)
-  lowCount           Int                    @default(0)
-  infoCount          Int                    @default(0)
-  details            String?                // JSON string with full audit report
-  systemInfo         String?                // OS version, Docker version, etc.
-  packagesChecked    Int?                   // Number of packages scanned
-  fixAvailable       Boolean                @default(false)
-  scanDurationMs     Int?                   // How long the scan took
-  errorMessage       String?                // If scan failed
-  createdAt          DateTime               @default(now())
+  id                   String   @id @default(uuid())
+  scanType             ScanType
+  totalVulnerabilities Int      @default(0)
+  criticalCount        Int      @default(0)
+  highCount            Int      @default(0)
+  moderateCount        Int      @default(0)
+  lowCount             Int      @default(0)
+  infoCount            Int      @default(0)
+  details              String? // JSON string with full audit report
+  systemInfo           String? // OS version, Docker version, etc.
+  packagesChecked      Int? // Number of packages scanned
+  fixAvailable         Boolean  @default(false)
+  scanDurationMs       Int? // How long the scan took
+  errorMessage         String? // If scan failed
+  createdAt            DateTime @default(now())
 
   @@index([scanType, createdAt])
   @@map("vulnerability_reports")
