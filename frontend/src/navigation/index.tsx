@@ -225,7 +225,10 @@ export default function AppNavigator() {
             <Stack.Screen
               name="BlockedUsers"
               component={BlockedUsersScreen}
-              options={{ presentation: 'card', headerShown: false }}
+              // Modal presentation so this screen stacks ABOVE the Settings modal
+              // when launched from there. A 'card' presentation would push to the
+              // parent stack and render underneath.
+              options={{ presentation: 'modal', headerShown: false }}
             />
           </>
         ) : (

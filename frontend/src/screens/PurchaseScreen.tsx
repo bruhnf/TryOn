@@ -47,8 +47,8 @@ const TIER_FEATURES: Record<UserTier, { name: string; tagline: string; features:
   FREE: {
     tier: 'FREE',
     name: 'Free',
-    tagline: 'Get started with monthly free credits',
-    features: ['10 free credits granted monthly', 'Buy credits anytime', 'Full access to community feed'],
+    tagline: 'Get started with free credits',
+    features: ['10 free credits when you join', 'Buy credits anytime', 'Full access to community feed'],
   },
   BASIC: {
     tier: 'BASIC',
