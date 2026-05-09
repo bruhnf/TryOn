@@ -204,9 +204,8 @@ export default function TryOnScreen() {
         pollErrorsRef.current += 1;
         
         if (status === 429) {
-          // Rate limited - wait longer before retrying
-          console.log('Rate limited, waiting before retry...');
-          pollTimerRef.current = setTimeout(() => pollJobStatus(jobId), 10000); // Wait 10 seconds
+          // Rate limited — back off and retry after 10s.
+          pollTimerRef.current = setTimeout(() => pollJobStatus(jobId), 10000);
         } else if (pollErrorsRef.current < MAX_POLL_ERRORS) {
           // Retry on other errors
           pollJobStatus(jobId);

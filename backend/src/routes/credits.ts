@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { UserTier } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import prisma from '../lib/prisma';
-import { TIER_CONFIG, grantMonthlyFreeCreditsIfDue } from '../services/tierService';
+import { TIER_CONFIG } from '../services/tierService';
 import { verifyAndDecodeTransaction } from '../services/appleNotificationService';
 import { getProduct } from '../config/appleIap';
 import { env } from '../config/env';
@@ -19,9 +19,6 @@ router.get('/balance', async (req: Request, res: Response) => {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
-
-  // Lazy monthly grant for FREE-tier users
-  await grantMonthlyFreeCreditsIfDue(req.user.userId);
 
   const user = await prisma.user.findUnique({
     where: { id: req.user.userId },
@@ -367,14 +364,23 @@ router.post('/restore-purchases', async (req: Request, res: Response) => {
   });
 });
 
-// Cancel subscription — drops user back to FREE
+// Legacy: dev-only manual tier downgrade. App Store Review Guideline 3.1.1
+// requires that subscription cancellation flow through Apple, not our server.
+// Production users cancel via iOS Settings > Apple ID > Subscriptions, and the
+// resulting EXPIRED notification fires our webhook to drop them back to FREE.
 router.post('/unsubscribe', async (req: Request, res: Response) => {
+  if (!env.isDev) {
+    res.status(410).json({
+      error:
+        'This endpoint is disabled. Cancel your subscription in iOS Settings > Apple ID > Subscriptions.',
+    });
+    return;
+  }
+
   if (!req.user) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
-
-  // TODO: cancel Stripe subscription at period end.
 
   const user = await prisma.user.update({
     where: { id: req.user.userId },
@@ -386,7 +392,7 @@ router.post('/unsubscribe', async (req: Request, res: Response) => {
     success: true,
     tier: user.tier,
     credits: user.credits,
-    message: 'Subscription cancelled',
+    message: '[DEV] Tier set to FREE',
   });
 });
 

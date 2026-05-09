@@ -15,7 +15,6 @@ import HomeScreen from '../screens/HomeScreen';
 import TryOnScreen from '../screens/TryOnScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import FriendsScreen from '../screens/FriendsScreen';
-import ShopScreen from '../screens/ShopScreen';
 import InboxScreen from '../screens/InboxScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
@@ -32,7 +31,6 @@ export type AuthStackParams = {
 
 export type MainTabParams = {
   Home: undefined;
-  Shop: undefined;
   TryOn: undefined;
   Inbox: undefined;
   Profile: undefined;
@@ -131,15 +129,6 @@ function MainTabs() {
         }}
       />
       <Tab.Screen
-        name="Shop"
-        component={ShopScreen}
-        options={{
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="bag-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
         name="TryOn"
         component={TryOnScreen}
         options={{
@@ -202,11 +191,16 @@ export default function AppNavigator() {
               component={EditProfileScreen}
               options={{ presentation: 'modal', headerShown: true, title: 'Edit Profile' }}
             />
-            <Stack.Screen
-              name="AdminConsole"
-              component={AdminConsoleScreen}
-              options={{ presentation: 'modal', headerShown: false }}
-            />
+            {/* AdminConsole is only registered for users in the ADMIN_EMAILS allowlist
+                or in dev builds. Defense in depth on top of the Settings UI gate, so
+                a malicious deep-link cannot reach the screen on a normal user's device. */}
+            {(__DEV__ || user.isAdmin) ? (
+              <Stack.Screen
+                name="AdminConsole"
+                component={AdminConsoleScreen}
+                options={{ presentation: 'modal', headerShown: false }}
+              />
+            ) : null}
             <Stack.Screen
               name="Purchase"
               component={PurchaseScreen}

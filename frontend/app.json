@@ -2,7 +2,7 @@
   "expo": {
     "name": "TryOn",
     "slug": "tryon",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -15,9 +15,9 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.evofaceflow.tryon.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "TryOn uses your camera to photograph clothing items for virtual try-on.",
-        "NSPhotoLibraryUsageDescription": "TryOn uses your photo library to upload your body photos and clothing images.",
-        "NSPhotoLibraryAddUsageDescription": "TryOn saves your try-on results to your photo library.",
+        "NSCameraUsageDescription": "TryOn uses your camera to photograph clothing items for virtual try-on. Clothing photos are processed by AI to generate images of you wearing them.",
+        "NSPhotoLibraryUsageDescription": "TryOn uses your photo library to upload body and clothing photos. Body photos are processed by AI (xAI Grok) to generate try-on images. You can delete them at any time from Settings.",
+        "NSPhotoLibraryAddUsageDescription": "TryOn saves your AI-generated try-on results to your photo library when you choose to.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -31,8 +31,7 @@
         "android.permission.CAMERA",
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ]
     },
     "web": {
@@ -46,13 +45,13 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "TryOn uses your camera to photograph clothing items."
+          "cameraPermission": "TryOn uses your camera to photograph clothing items. Photos are processed by AI to generate try-on images."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "TryOn accesses your photos to let you upload body and clothing images."
+          "photosPermission": "TryOn uses your photo library to upload body and clothing photos. Body photos are processed by AI (xAI Grok) to generate try-on images."
         }
       ],
       [
