@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import prisma from '../lib/prisma';
 import { uploadToS3, deleteFromS3, keyFromUrl } from '../services/s3Service';
+import { presignUserPhotos } from '../services/imageUrlService';
+import { getPresignedUrl } from '../services/s3Service';
 import { safeFilename } from '../middleware/uploadMiddleware';
 import { resizeImageForTryOn, resizeImageForAvatar } from '../utils/imageProcessor';
 import { createChildLogger, logUpload } from '../services/logger';
@@ -67,15 +69,15 @@ async function handleBodyPhotoUpload(
   const baseFilename = safeFilename(req.file.originalname).replace(/\.[^/.]+$/, '');
   const filename = `${uuidv4()}-${baseFilename}.jpg`;
   const key = await uploadToS3('body-photos', userId, filename, processedBuffer, mimeType);
-  const url = `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
 
   const updated = await prisma.user.update({
     where: { id: userId },
-    data: { [field]: url },
+    data: { [field]: key },
     select: { avatarUrl: true, fullBodyUrl: true, mediumBodyUrl: true },
   });
 
-  res.json({ url, photos: updated });
+  const presigned = await presignUserPhotos(updated);
+  res.json({ url: await getPresignedUrl(key), photos: presigned });
 }
 
 async function handleBodyPhotoDelete(
@@ -100,7 +102,7 @@ async function handleBodyPhotoDelete(
     select: { avatarUrl: true, fullBodyUrl: true, mediumBodyUrl: true },
   });
 
-  res.json({ photos: updated });
+  res.json({ photos: await presignUserPhotos(updated) });
 }
 
 export const uploadAvatar = (req: Request, res: Response) =>

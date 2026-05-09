@@ -44,15 +44,17 @@ npm run migrate  # Run Prisma migrations
 npm run seed     # Seed development data
 ```
 
-### Frontend
+### Frontend (local Expo dev only — not for distribution)
 ```bash
 cd frontend
-npx expo start -c          # Dev server with cache clear
+npx expo start -c          # Dev server with cache clear (Expo Go / Dev Client)
 npx expo start --tunnel    # Dev server with ngrok (for Expo Go on physical device)
-npm run android            # Android preview build
-npm run ios                # iOS preview build
-npm run web                # Web preview
+npm run android            # Local native build via Xcode/Android Studio (expo run:android)
+npm run ios                # Local native build via Xcode (expo run:ios)
+npm run web                # Web preview (limited — most native modules don't work on web)
 ```
+
+For TestFlight or App Store distribution, use **EAS Build** instead — see DEPLOYMENT.md §11. EAS is required for any build that includes native code that the user will install (the app uses `expo-iap`, `expo-secure-store`, etc. which all require a native build).
 
 ### Switching Between Local and Live Backend
 
@@ -186,26 +188,31 @@ tail -f /var/lib/docker/volumes/www_backend_logs/_data/combined-*.log
 ## Architecture
 
 ### Website (`website/`)
-Static landing page for evoFaceFlow with web authentication.
+Static landing page for evoFaceFlow with web authentication. Hosted via the nginx container (mounted as `/var/www/website` per `docker-compose.prod.yml`).
 
 - **index.html** — Main landing page promoting TryOn app
 - **login.html** — Web login page
 - **signup.html** — Web signup page
+- **privacy.html** — **Privacy Policy** (linked from Settings, Signup consent, and PurchaseScreen disclosures). Required by App Store Review.
+- **terms.html** — **Terms of Service** (same link surfaces). Required by App Store Review.
 - **css/style.css** — Black/white minimal design
 - **js/auth.js** — Client-side authentication (calls backend API)
 
 **URLs:**
 - `https://evofaceflow.com` — Landing page
+- `https://evofaceflow.com/privacy.html` — Privacy Policy (referenced from `frontend/src/constants/legal.ts`)
+- `https://evofaceflow.com/terms.html` — Terms of Service (same)
 - `https://www.evofaceflow.com` — Redirects to non-www
 - `https://api.evofaceflow.com` — Backend API
+- `https://api.evofaceflow.com/admin` — Admin web dashboard (requires `ADMIN_API_KEY`)
 
-**Note:** The website makes API calls to `api.evofaceflow.com`. Ensure `ALLOWED_ORIGINS` in backend `.env` includes `https://evofaceflow.com`.
+**Note:** The website makes API calls to `api.evofaceflow.com`. Ensure `ALLOWED_ORIGINS` in backend `.env` includes `https://evofaceflow.com`. Any update to `privacy.html` / `terms.html` requires the nginx container to be redeployed (or restarted) on Lightsail to pick up the new files.
 
 ### Backend (`backend/src/`)
 Express app with JWT authentication and BullMQ job queue for async AI image generation.
 
 - **Entry point**: `index.ts` — mounts all middleware (Helmet, CORS, rate limiting) and routes
-- **Routes**: `routes/` — `auth`, `upload`, `tryon`, `admin`, `friends`, `feed`, `profile`, `credits`, `notifications`, `likes`, `appleWebhook`
+- **Routes**: `routes/` — `auth`, `upload`, `tryon`, `admin`, `friends`, `feed`, `profile`, `credits`, `notifications`, `likes`, `appleWebhook` (mounted at `/api/webhooks/apple`), `moderation` (mounted under `/api`, exposes `/reports`, `/users/:id/block`, `/users/me/blocks`)
 - **Controllers**: `controllers/` — one per route group
 - **Services**: `services/grokService.ts` — calls xAI Grok Imagine API for AI image generation
 - **Services**: `services/locationService.ts` — geo-IP lookup and suspicious-location detection
@@ -233,27 +240,35 @@ React Native app using Expo with React Navigation and Zustand for state.
 
 - **Screens**: `screens/`
   - `LoginScreen` — email + password
-  - `SignupScreen` — username, email, password (minimal, no photo required to proceed)
+  - `SignupScreen` — username, email, password (minimal, no photo required to proceed). Consent checkbox links to Privacy Policy and Terms of Service.
   - `OnboardingPhotoScreen` — soft prompt to upload body photos after signup; can skip
-  - `HomeScreen` — scrollable feed of community or personal try-on results
-  - `TryOnScreen` — main feature; upload 1–2 clothing/outfit photos, view AI results
-  - `ProfileScreen` — avatar, full body photo, medium photo, stats, videos/results grid
+  - `HomeScreen` — scrollable feed of community try-on results. Three-dot menu on each card for Report/Block.
+  - `TryOnScreen` — main feature; upload 1 clothing/outfit photo, view AI results
+  - `ProfileScreen` — avatar, full body photo, medium photo, stats, results grid
+  - `PublicProfileScreen` — view another user's public profile and try-on history. Header three-dot menu for Report/Block. Shows "you've blocked this user" empty state when applicable.
   - `EditProfileScreen` — edit bio, username, body photos
   - `FriendsScreen` — Following / Followers tabs + search
-  - `ShopScreen` — browse clothing items (tab in bottom navigation)
-  - `InboxScreen` — notifications and messages
-  - `SettingsScreen` — account, notifications, privacy, subscription
-  - `AdminConsoleScreen` — admin dashboard for managing users and jobs
-  - `PurchaseScreen` — credit purchase flow
-- **Components**: `components/` — shared UI (BodyPhotoCard, CreditDisplay, TryOnResultCard, TryOnDetailModal, FullScreenImageModal, HeaderMenu)
-- **State**: `store/useUserStore.ts` — Zustand store holding authenticated user and body photo status
+  - `InboxScreen` — in-app notifications (FOLLOW / LIKE / TRYON_COMPLETE)
+  - `SettingsScreen` — account, subscription (Restore Purchases, Manage Subscription deep link), Privacy & Data (Blocked Users, Delete Body Photos, Export My Data, Delete Account), Legal (Privacy/Terms in WebBrowser), Admin (only visible to admin allowlist)
+  - `BlockedUsersScreen` — list and unblock previously-blocked users (modal presentation so it stacks above Settings)
+  - `AdminConsoleScreen` — admin-only screen, route only registered when `__DEV__ || user.isAdmin`
+  - `PurchaseScreen` — StoreKit-driven purchase flow. Fetches localized prices from Apple, presents tiers + credit packs, real Restore Purchases. Auto-renew disclosure rendered adjacent to each subscribe button (App Store Guideline 3.1.2(a)).
+- **Components**: `components/` — shared UI:
+  - `BodyPhotoCard`, `CreditDisplay`, `HeaderMenu`
+  - `TryOnResultCard`, `TryOnDetailModal`, `FullScreenImageModal` — each renders `AiGeneratedBadge` over result images
+  - `AiGeneratedBadge` — visible "✨ AI-generated" pill required by Guideline 4.0
+  - `ReportSheet` — bottom-sheet modal with 6 reason options (INAPPROPRIATE, HARASSMENT, IMPERSONATION, SPAM, COPYRIGHT, OTHER) + free-text details. Used by HomeScreen and PublicProfileScreen.
+- **Services**: `services/iap.ts` — wraps `expo-iap`. Manages connection lifecycle, fetches localized products, initiates StoreKit purchases with `appAccountToken: user.id`, posts signed JWS to backend `/api/credits/verify-receipt`, finishes transactions only after backend confirms.
+- **State**: `store/useUserStore.ts` — Zustand store holding authenticated user (including `isAdmin` flag from server). `store/useNotificationStore.ts` — unread count for inbox tab badge.
 - **API config**: `config/api.ts` — base URL switching between dev and production
+- **Constants**: `constants/legal.ts` — Privacy Policy URL, Terms of Service URL, support / privacy email addresses
 - **Hooks**: `hooks/useTryOn.ts`, `hooks/useBodyPhotos.ts`
 
 **Navigation structure:**
 - Unauthenticated stack: Login → Signup → Onboarding (skippable)
-- Authenticated tabs: Home | Shop | [Camera FAB — TryOn] | Inbox | Profile
-- Modal screens: Settings, EditProfile, AdminConsole, Purchase, Friends
+- Authenticated tabs: Home | [Camera FAB — TryOn] | Inbox | Profile (4 tabs total — no Shop tab)
+- Modal screens: Settings, EditProfile, AdminConsole (dev/admin-only), Purchase, BlockedUsers
+- Card screens: Friends, PublicProfile
 
 **UI style:** Clean white/minimal design (see design screenshots). Black-and-white accent palette. Bottom tab bar with prominent centered camera FAB for quick try-on access. Typography: bold headers, light body text. Rounded pill-shaped toggle buttons for option selection.
 
@@ -275,7 +290,7 @@ passwordResetTokenExpiry DateTime?
 tier                     UserTier  @default(FREE)   // FREE | BASIC | PREMIUM
 credits                  Int       @default(0)
 tryOnCount               Int       @default(0)      // lifetime successful try-ons
-lastFreeCreditGrantAt    DateTime?                  // last monthly grant (FREE tier only)
+lastFreeCreditGrantAt    DateTime?                  // set once at email verification; retained for audit only
 firstName                String?
 lastName                 String?
 bio                      String?
@@ -340,18 +355,20 @@ createdAt DateTime @default(now())
 
 ### TryOnJobs
 ```
-id               String   @id @default(uuid())
-userId           String
-status           JobStatus  // PENDING | PROCESSING | COMPLETE | FAILED
-isPrivate        Boolean  @default(false)
+id                String    @id @default(uuid())
+userId            String
+status            JobStatus  // PENDING | PROCESSING | COMPLETE | FAILED
+isPrivate         Boolean   @default(false)
 clothingPhoto1Url String
 clothingPhoto2Url String?
-resultFullBodyUrl  String?   // result image for full body perspective
-resultMediumUrl    String?   // result image for medium perspective
-perspectivesUsed   String[]  // ["full_body", "medium"] — records which inputs were used
-errorMessage       String?
-createdAt          DateTime @default(now())
-updatedAt          DateTime @updatedAt
+resultFullBodyUrl String?    // result image for full body perspective
+resultMediumUrl   String?    // result image for medium perspective
+bodyPhotoUrl      String?    // primary body photo used as input (full body preferred, medium fallback)
+perspectivesUsed  String[]   // ["full_body", "medium"] — records which inputs were used
+likesCount        Int        @default(0)  // denormalized for feed performance
+errorMessage      String?
+createdAt         DateTime  @default(now())
+updatedAt         DateTime  @updatedAt
 ```
 
 ### UserLocations
@@ -397,6 +414,30 @@ description String?
 createdAt   DateTime @default(now())
 ```
 
+### Report
+User-submitted content/user reports. Required by App Store Review Guideline 1.2.
+```
+id           String           @id @default(uuid())
+reporterId   String
+targetType   ReportTargetType // TRYON_JOB | USER
+targetId     String           // TryOnJob.id or User.id depending on targetType
+reason       ReportReason     // INAPPROPRIATE | HARASSMENT | IMPERSONATION | SPAM | COPYRIGHT | OTHER
+details      String?          // optional free-text from reporter
+status       ReportStatus     // OPEN | REVIEWING | RESOLVED_REMOVED | RESOLVED_NO_ACTION
+resolverNote String?          // admin note when resolving
+resolvedAt   DateTime?
+createdAt    DateTime         @default(now())
+```
+
+### UserBlock
+Mutual-invisibility between two users. The blocked party also cannot see the blocker's content (prevents retaliation discovery).
+```
+blockerId String
+blockedId String
+createdAt DateTime @default(now())
+@@id([blockerId, blockedId])
+```
+
 ---
 
 ## Key Business Rules
@@ -421,22 +462,66 @@ createdAt   DateTime @default(now())
 ### Subscription & Credits
 - **Tiered subscription model**: Each user has a `tier` of `FREE`, `BASIC`, or `PREMIUM` (see `UserTier` enum). There is **no** `isSubscribed` flag — check `tier !== 'FREE'` to gate subscriber-only features.
 - **Tier configuration** lives in `backend/src/services/tierService.ts` (`TIER_CONFIG`). Current values:
-  - `FREE`: 0 daily try-ons, $0.60/credit, 10 free credits granted monthly (lazy, on `/api/credits/balance` hit).
-  - `BASIC`: 2 daily try-ons, $0.50/credit, no free monthly credits.
-  - `PREMIUM`: 4 daily try-ons, $0.25/credit, no free monthly credits.
+  - `FREE`: 0 daily try-ons, $0.60/credit
+  - `BASIC`: 2 daily try-ons, $0.50/credit
+  - `PREMIUM`: 4 daily try-ons, $0.25/credit
 - When a tiered user exhausts their daily included try-ons, additional try-ons spend credits.
 - Credit balance is displayed in the top-left corner of the app and tapping it opens `PurchaseScreen`.
 - Credit transactions are tracked in the `CreditTransaction` model (`PURCHASE`, `GRANT`, `USAGE`, `REFUND`).
 - Lifetime try-on count per user is tracked in `User.tryOnCount` (incremented on successful job completion).
-- Monthly free-credit grants for FREE-tier users are recorded via `User.lastFreeCreditGrantAt` and granted by `grantMonthlyFreeCreditsIfDue()` in `tierService.ts`.
+
+#### Free credit policy
+- Each user receives **10 free credits ONCE** at email verification. There is no recurring grant.
+- Implemented in `authController.verifyEmail` — atomically increments `User.credits` and writes a `CreditTransaction` of type `GRANT` with description "Welcome bonus — email verified".
+- `User.lastFreeCreditGrantAt` is set at verification time. The field is retained for audit but no longer drives any logic.
+- Once a user exhausts their 10 credits, they must purchase more or subscribe.
+
+#### Legacy (dev-only) endpoints
+The following endpoints exist but are gated to **dev only** and return **HTTP 410 Gone** in production with a message pointing users to the StoreKit flow:
+- `POST /api/credits/subscribe` — direct tier mutation (use `/verify-receipt` instead)
+- `POST /api/credits/purchase` — direct credit grant (use `/verify-receipt` instead)
+- `POST /api/credits/unsubscribe` — direct downgrade to FREE (users cancel via iOS Settings; webhook fires EXPIRED)
+
+Production uses **only** the `/api/credits/verify-receipt` path plus App Store Server Notifications. Granting entitlement via these legacy endpoints in production violates App Store Review Guideline 3.1.1.
 
 ### Apple In-App Purchases
-- Subscription state is sourced from Apple via **App Store Server Notifications V2**. See `backend/src/routes/appleWebhook.ts` and `backend/src/queue/appleNotificationWorker.ts`.
+- Two ingestion paths run in parallel for redundancy. **Both are idempotent on `transactionId`**:
+  1. **Fast path (client → backend):** `POST /api/credits/verify-receipt` — the mobile app posts the StoreKit JWS immediately after a purchase succeeds. Backend verifies the JWS via Apple's CA chain, checks `appAccountToken === userId`, and applies the entitlement. Used so credits / tier appear instantly in the UI.
+  2. **Authoritative path (Apple → backend):** **App Store Server Notifications V2** webhook at `POST /api/webhooks/apple`. Used for renewals, cancellations, refunds, and as a safety net if verify-receipt fails. See `backend/src/routes/appleWebhook.ts` and `backend/src/queue/appleNotificationWorker.ts`.
 - StoreKit transactions are persisted in the `ApplePurchase` model (`transactionId` unique per renewal, `originalTransactionId` stable across the subscription lifetime, `productId`, `tier`, `expiresAt`, `revokedAt`).
-- Product IDs follow the pattern `com.evofaceflow.tryon.<tier>.<period>` (e.g. `com.evofaceflow.tryon.basic.monthly`). The product → tier mapping lives in `backend/src/config/appleIap.ts`.
-- The mobile app sets `appAccountToken` (= our `User.id` as UUID) on every StoreKit purchase so notifications can be mapped back to a user. Fallback identification is by `originalTransactionId` against existing `ApplePurchase` rows.
-- `POST /api/credits/restore-purchases` re-applies the most recent unexpired, non-revoked `ApplePurchase` to `User.tier`. App Store Review Guideline 3.1.1 requires this affordance in the UI.
-- iOS bundle identifier is `com.evofaceflow.tryon.app` (see `frontend/app.json`).
+- The product catalog (`backend/src/config/appleIap.ts`) is a discriminated union: products are either `{ type: 'subscription', tier }` or `{ type: 'credits', credits: N }`. Subscription notifications update `User.tier`; consumable notifications grant credits via a `CreditTransaction`.
+- Product IDs (must match App Store Connect):
+  - `com.evofaceflow.tryon.app.basic.monthly` → BASIC tier
+  - `com.evofaceflow.tryon.app.premium.monthly` → PREMIUM tier
+  - `com.evofaceflow.tryon.app.credits.10/25/50/100` → consumable credit packs
+- The mobile app sets `appAccountToken` (= our `User.id` as UUID) on every StoreKit purchase so notifications can be mapped back to a user. The verify-receipt endpoint requires this match. Fallback identification (webhook only) is by `originalTransactionId` against existing `ApplePurchase` rows.
+- Frontend uses `expo-iap` via `frontend/src/services/iap.ts`. The service handles connection lifecycle, fetches localized prices (`displayPrice`) from the App Store at runtime — **never hardcode prices** (Guideline 3.1.1(a)).
+- `POST /api/credits/restore-purchases` is now a fallback that re-applies the most recent unexpired, non-revoked `ApplePurchase` from our DB. The primary Restore Purchases flow on the client uses `expo-iap`'s `getAvailablePurchases()` and re-posts each receipt to `/verify-receipt`. Both surfaces (PurchaseScreen and Settings) call the StoreKit version.
+- iOS bundle identifier: `com.evofaceflow.tryon.app` (see `frontend/app.json`).
+- **Apple root CA certificates** must be present in the backend at `backend/certs/apple/*.cer` (or wherever `APPLE_ROOT_CERTS_DIR` points). Download from https://www.apple.com/certificateauthority/ — at minimum `AppleRootCA-G3.cer`. Without these the JWS verifier cannot validate notifications. The Dockerfile `COPY certs ./certs` step bakes them into the production image.
+
+### Content Moderation (App Store Guideline 1.2)
+The app supports user-generated content (public try-on feed) and so must provide reporting, blocking, and content filtering.
+- **Report:** Three-dot menu on every feed card (HomeScreen) and on PublicProfileScreen. Opens `ReportSheet` with 6 reason options. Submits to `POST /api/reports`. Reports are listed in admin moderation endpoints (`GET /api/admin/moderation/reports`) and resolved with `PATCH /api/admin/moderation/reports/:id` (optional `removeContent: true` flips `TryOnJob.isPrivate = true`).
+- **Block:** Same three-dot menus expose Block. `POST /api/users/:userId/block` creates a `UserBlock` row; mutual filtering is applied to feed, public-profile, and search queries via `getInvisibleUserIds()` in `backend/src/utils/blocks.ts`. Blocking also deletes any existing follow links between the two users.
+- **Unblock:** Settings → Privacy & Data → Blocked Users (`BlockedUsersScreen`) lists current blocks and allows unblocking via `DELETE /api/users/:userId/block`.
+- **Filtering objectionable material from posting:** combination of (a) ToS prohibition, (b) xAI Grok's built-in content filters on AI-generated images, (c) user reports, (d) admin removal. There is no automated image moderation — adding AWS Rekognition or similar would harden this further.
+
+### AI-Generated Content Disclosure (Guideline 4.0)
+Every visible try-on result image carries an `AiGeneratedBadge` overlay ("✨ AI-generated"). Surfaces:
+- `TryOnResultCard` (used in profile history)
+- `HomeScreen` feed card result image
+- `TryOnDetailModal` carousel
+- `FullScreenImageModal` when caller passes `aiGenerated={true}` (HomeScreen passes false for clothing/body photo previews)
+
+Profile-screen 3-column thumbnails are intentionally not badged — they're micro-previews that immediately open the detail modal where the badge is shown.
+
+### Admin Access (UI gating)
+- Backend admin endpoints require the `X-Admin-Key` header matching `ADMIN_API_KEY`.
+- The mobile app's `AdminConsoleScreen` is gated by **two** independent layers:
+  1. The Stack.Screen route is only registered when `__DEV__ || user.isAdmin`. Non-admin production users have no entry point at all.
+  2. The Settings screen's "Admin Console" button is only shown when `user.isAdmin === true`.
+- `user.isAdmin` is server-derived: `authController` and `profileController.getMyProfile` compute it via `isAdminEmail(email)` against the `ADMIN_EMAILS` env var (comma-separated allowlist).
 
 ### Geo / Location Tracking
 - Location is recorded on every login and token refresh.
@@ -518,6 +603,8 @@ Admin API endpoints (all require `X-Admin-Key` header):
 - `POST /api/admin/jobs/delete` — bulk delete jobs
 - `GET /api/admin/security/stats` — suspicious login statistics
 - `GET /api/admin/security/suspicious` — list suspicious logins
+- `GET /api/admin/moderation/reports` — list user-submitted reports (filter by `?status=OPEN|REVIEWING|RESOLVED_REMOVED|RESOLVED_NO_ACTION`)
+- `PATCH /api/admin/moderation/reports/:id` — resolve a report (body: `{ status, resolverNote, removeContent }`. `removeContent: true` flips `TryOnJob.isPrivate = true`.)
 
 ---
 
@@ -599,7 +686,8 @@ Backend requires a `.env` file. Key variables:
 DATABASE_URL          # PostgreSQL connection string (Prisma)
 JWT_SECRET            # generate: openssl rand -hex 32
 JWT_REFRESH_SECRET    # separate secret for refresh tokens
-ADMIN_API_KEY         # protects /api/admin routes
+ADMIN_API_KEY         # protects /api/admin routes (X-Admin-Key header)
+ADMIN_EMAILS          # comma-separated allowlist for in-app Admin Console UI visibility
 AWS_ACCESS_KEY_ID
 AWS_SECRET_ACCESS_KEY
 AWS_REGION
@@ -612,7 +700,7 @@ GEOIP_API_KEY         # if using a paid geo-IP provider
 APPLE_BUNDLE_ID       # iOS bundle identifier (com.evofaceflow.tryon.app)
 APPLE_APP_APPLE_ID    # numeric App Store ID from App Store Connect
 APPLE_ENVIRONMENT     # "Production" or "Sandbox" — environment Apple sends from
-APPLE_ROOT_CERTS_DIR  # path to dir holding Apple root CA .cer files (defaults to ./certs/apple)
+APPLE_ROOT_CERTS_DIR  # path to dir holding Apple root CA .cer files inside the container (defaults to ./certs/apple)
 ```
 
 ---

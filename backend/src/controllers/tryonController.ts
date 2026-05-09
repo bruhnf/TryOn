@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import prisma from '../lib/prisma';
 import { uploadToS3, keyFromUrl } from '../services/s3Service';
+import { presignTryOnJob, presignTryOnJobs } from '../services/imageUrlService';
 import { safeFilename } from '../middleware/uploadMiddleware';
 import { enqueueTryOn } from '../queue/tryonQueue';
 import { MAX_CLOTHING_ITEMS } from '../middleware/subscription';
@@ -114,17 +115,16 @@ export async function submitTryOn(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  // Upload clothing photos to S3 (resize to 576x1024 first)
-  const clothingUrls: string[] = [];
+  // Upload clothing photos to S3 (resize to 576x1024 first).
+  // Stores S3 keys, not public URLs — bucket is private; presigned URLs are
+  // minted at read time by imageUrlService.
+  const clothingKeys: string[] = [];
   for (const file of files) {
-    // Resize image to 576x1024 portrait
     const processed = await resizeImageForTryOn(file.buffer);
     const baseFilename = safeFilename(file.originalname).replace(/\.[^/.]+$/, '');
     const filename = `${uuidv4()}-${baseFilename}.jpg`;
     const key = await uploadToS3('clothing-photos', userId, filename, processed.buffer, processed.mimeType);
-    clothingUrls.push(
-      `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`,
-    );
+    clothingKeys.push(key);
   }
 
   const jobId = uuidv4();
@@ -134,14 +134,15 @@ export async function submitTryOn(req: Request, res: Response): Promise<void> {
       id: jobId,
       userId,
       isPrivate,
-      clothingPhoto1Url: clothingUrls[0],
-      clothingPhoto2Url: clothingUrls[1] ?? null,
+      clothingPhoto1Url: clothingKeys[0],
+      clothingPhoto2Url: clothingKeys[1] ?? null,
       bodyPhotoUrl,
       perspectivesUsed: [],
     },
   });
 
-  await enqueueTryOn({ jobId, userId, clothingUrls, bodyPhotos });
+  // Worker reads from S3 via SDK using these keys — no public URL needed.
+  await enqueueTryOn({ jobId, userId, clothingUrls: clothingKeys, bodyPhotos });
 
   res.status(202).json({ jobId, status: 'PENDING' });
 }
@@ -156,7 +157,7 @@ export async function getJobStatus(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  res.json(job);
+  res.json(await presignTryOnJob(job));
 }
 
 export async function getTryOnHistory(req: Request, res: Response): Promise<void> {
@@ -172,7 +173,7 @@ export async function getTryOnHistory(req: Request, res: Response): Promise<void
     take: limit,
   });
 
-  res.json({ jobs, page });
+  res.json({ jobs: await presignTryOnJobs(jobs), page });
 }
 
 export async function updateJobPrivacy(req: Request, res: Response): Promise<void> {
@@ -197,5 +198,5 @@ export async function updateJobPrivacy(req: Request, res: Response): Promise<voi
     data: { isPrivate },
   });
 
-  res.json(updated);
+  res.json(await presignTryOnJob(updated));
 }

@@ -3,6 +3,12 @@ import { z } from 'zod';
 import prisma from '../lib/prisma';
 import { isAdminEmail } from '../utils/admin';
 import { getInvisibleUserIds } from '../utils/blocks';
+import {
+  presignUserPhotos,
+  presignTryOnJob,
+  presignTryOnJobs,
+  presignAvatarOnly,
+} from '../services/imageUrlService';
 
 const updateSchema = z.object({
   firstName: z.string().max(50).optional(),
@@ -91,7 +97,9 @@ export async function getProfile(req: Request, res: Response): Promise<void> {
         },
       });
 
-  res.json({ ...user, jobs, isFollowing, isSelf, viewerHasBlocked });
+  const presignedUser = await presignAvatarOnly(user);
+  const presignedJobs = await presignTryOnJobs(jobs);
+  res.json({ ...presignedUser, jobs: presignedJobs, isFollowing, isSelf, viewerHasBlocked });
 }
 
 export async function updateProfile(req: Request, res: Response): Promise<void> {
@@ -138,7 +146,7 @@ export async function updateProfile(req: Request, res: Response): Promise<void> 
     },
   });
 
-  res.json(updated);
+  res.json(await presignUserPhotos(updated));
 }
 
 export async function getMyProfile(req: Request, res: Response): Promise<void> {
@@ -169,7 +177,8 @@ export async function getMyProfile(req: Request, res: Response): Promise<void> {
   });
 
   if (!user) { res.status(404).json({ error: 'User not found' }); return; }
-  res.json({ ...user, isAdmin: isAdminEmail(user.email) });
+  const presigned = await presignUserPhotos(user);
+  res.json({ ...presigned, isAdmin: isAdminEmail(user.email) });
 }
 
 export async function deleteAccount(req: Request, res: Response): Promise<void> {
@@ -229,11 +238,14 @@ export async function exportData(req: Request, res: Response): Promise<void> {
 
   if (!user) { res.status(404).json({ error: 'User not found' }); return; }
 
+  const presignedUser = await presignUserPhotos(user);
+  const presignedJobs = await presignTryOnJobs(tryOnJobs);
+
   const exportPayload = {
     exportedAt: new Date().toISOString(),
     schemaVersion: 1,
-    user,
-    tryOnJobs,
+    user: presignedUser,
+    tryOnJobs: presignedJobs,
     locations,
     follows: { following: follows, followers },
     creditTransactions,

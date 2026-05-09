@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import prisma from '../lib/prisma';
 import { getInvisibleUserIds } from '../utils/blocks';
+import { presignAvatarOnly } from '../services/imageUrlService';
 
 export async function follow(req: Request, res: Response): Promise<void> {
   if (!req.user) { res.status(401).json({ error: 'Unauthorized' }); return; }
@@ -66,7 +67,7 @@ export async function getFollowing(req: Request, res: Response): Promise<void> {
     },
     orderBy: { createdAt: 'desc' },
   });
-  res.json(rows.map((r) => r.following));
+  res.json(await Promise.all(rows.map((r) => presignAvatarOnly(r.following))));
 }
 
 export async function getFollowers(req: Request, res: Response): Promise<void> {
@@ -80,7 +81,7 @@ export async function getFollowers(req: Request, res: Response): Promise<void> {
     },
     orderBy: { createdAt: 'desc' },
   });
-  res.json(rows.map((r) => r.follower));
+  res.json(await Promise.all(rows.map((r) => presignAvatarOnly(r.follower))));
 }
 
 export async function getFollowStatus(req: Request, res: Response): Promise<void> {
@@ -121,5 +122,5 @@ export async function searchUsers(req: Request, res: Response): Promise<void> {
     select: { id: true, username: true, firstName: true, lastName: true, avatarUrl: true, bio: true },
     take: 20,
   });
-  res.json(users);
+  res.json(await Promise.all(users.map((u) => presignAvatarOnly(u))));
 }

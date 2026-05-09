@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { requireAuth } from '../middleware/auth';
 import prisma from '../lib/prisma';
 import { getInvisibleUserIds } from '../utils/blocks';
+import { presignTryOnJob, presignAvatarOnly } from '../services/imageUrlService';
 
 const router = Router();
 
@@ -38,11 +39,18 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
     },
   });
 
-  // Map likes[] to a simple `liked` boolean per job for the current user
-  const decorated = jobs.map((j) => {
-    const { likes, ...rest } = j;
-    return { ...rest, liked: likes.length > 0 };
-  });
+  // Map likes[] to a simple `liked` boolean per job for the current user, and
+  // mint presigned URLs for both the result images and the embedded avatar.
+  const decorated = await Promise.all(
+    jobs.map(async (j) => {
+      const { likes, user, ...rest } = j;
+      const [presignedJob, presignedUser] = await Promise.all([
+        presignTryOnJob(rest),
+        presignAvatarOnly(user),
+      ]);
+      return { ...presignedJob, user: presignedUser, liked: likes.length > 0 };
+    }),
+  );
 
   const shuffled = decorated.sort(() => Math.random() - 0.5);
 

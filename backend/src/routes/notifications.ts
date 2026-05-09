@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../middleware/auth';
 import prisma from '../lib/prisma';
+import { presignAvatarOnly, presignTryOnJob } from '../services/imageUrlService';
 
 const router = Router();
 
@@ -33,7 +34,15 @@ router.get('/', async (req: Request, res: Response) => {
     }),
   ]);
 
-  res.json({ notifications, unreadCount, page });
+  const presigned = await Promise.all(
+    notifications.map(async (n) => ({
+      ...n,
+      actor: n.actor ? await presignAvatarOnly(n.actor) : n.actor,
+      job: n.job ? await presignTryOnJob(n.job) : n.job,
+    })),
+  );
+
+  res.json({ notifications: presigned, unreadCount, page });
 });
 
 // Unread count only (lightweight badge poll)

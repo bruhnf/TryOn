@@ -4,6 +4,7 @@ import { ReportTargetType, ReportReason } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import prisma from '../lib/prisma';
 import { createChildLogger } from '../services/logger';
+import { presignAvatarOnly } from '../services/imageUrlService';
 
 const router = Router();
 const log = createChildLogger('Moderation');
@@ -124,12 +125,14 @@ router.get('/users/me/blocks', async (req: Request, res: Response) => {
     },
   });
 
-  res.json({
-    blocks: blocks.map((b) => ({
+  const presigned = await Promise.all(
+    blocks.map(async (b) => ({
       blockedAt: b.createdAt,
-      user: b.blocked,
+      user: await presignAvatarOnly(b.blocked),
     })),
-  });
+  );
+
+  res.json({ blocks: presigned });
 });
 
 export default router;

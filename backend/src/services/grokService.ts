@@ -49,35 +49,48 @@ function detectImageFormat(buffer: Buffer): string | null {
   return null;
 }
 
-async function fetchImageAsBase64(url: string, label: string): Promise<{ base64: string; mimeType: string }> {
-  log.debug('Fetching image', { label, url: url.substring(0, 100) });
-  
+/**
+ * Resolves the input — which may be an S3 key (e.g. "body-photos/<uid>/<file>.jpg"),
+ * a legacy public URL, or a fully-qualified non-S3 URL — into an S3 key, or null
+ * if it's a non-S3 HTTP URL that should be fetched via plain HTTP.
+ */
+function resolveS3Key(ref: string, bucket: string): string | null {
+  if (!ref.startsWith('http://') && !ref.startsWith('https://')) {
+    // Bare key — what new rows store after the lockdown.
+    return ref.replace(/^\//, '');
+  }
+  // Legacy URL — extract key if it points at our bucket.
+  if (ref.includes(bucket) || ref.includes('.s3.') || ref.includes('s3.amazonaws.com')) {
+    try {
+      const urlObj = new URL(ref.split('?')[0]);
+      return urlObj.pathname.replace(/^\//, '');
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+async function fetchImageAsBase64(ref: string, label: string): Promise<{ base64: string; mimeType: string }> {
+  log.debug('Fetching image', { label, ref: ref.substring(0, 100) });
+
   const bucket = env.aws.s3Bucket;
   let buffer: Buffer;
   let contentType = '';
-  
-  // Check if this is an S3 URL - fetch directly via SDK for reliability
-  if (url.includes(bucket) || url.includes('.s3.') || url.includes('s3.amazonaws.com')) {
-    log.debug('Detected S3 URL, using SDK direct fetch', { label });
+
+  const s3Key = resolveS3Key(ref, bucket);
+
+  if (s3Key) {
+    log.debug('Resolved as S3 key, using SDK direct fetch', { label, key: s3Key });
     try {
-      // Extract key from URL
-      const urlObj = new URL(url.split('?')[0]); // Remove query params (presigned)
-      const key = urlObj.pathname.substring(1); // Remove leading /
-      
-      log.debug('S3 fetch params', { label, bucket, key });
-      
-      const command = new GetObjectCommand({
-        Bucket: bucket,
-        Key: key,
-      });
-      
+      const command = new GetObjectCommand({ Bucket: bucket, Key: s3Key });
       const response = await s3.send(command);
       const bodyContents = await response.Body?.transformToByteArray();
-      
+
       if (!bodyContents) {
         throw new Error('S3 returned empty body');
       }
-      
+
       buffer = Buffer.from(bodyContents);
       contentType = response.ContentType || '';
       log.debug('S3 fetch success', { label, bytes: buffer.length, contentType });
@@ -88,7 +101,7 @@ async function fetchImageAsBase64(url: string, label: string): Promise<{ base64:
   } else {
     // Fallback to HTTP fetch for non-S3 URLs
     log.debug('Using HTTP fetch', { label });
-    const res = await fetch(url);
+    const res = await fetch(ref);
     
     log.debug('HTTP response received', { 
       label, 

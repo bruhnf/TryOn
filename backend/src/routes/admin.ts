@@ -8,6 +8,12 @@ import {
   runAllScans,
 } from '../services/vulnerabilityService';
 import { triggerImmediateScan } from '../queue/vulnerabilityWorker';
+import {
+  presignUserPhotos,
+  presignTryOnJob,
+  presignTryOnJobs,
+  presignAvatarOnly,
+} from '../services/imageUrlService';
 
 const router = Router();
 
@@ -100,8 +106,8 @@ router.get('/user/:userId', async (req: Request, res: Response) => {
     res.status(404).json({ error: 'User not found' });
     return;
   }
-  
-  res.json(user);
+
+  res.json(await presignUserPhotos(user));
 });
 
 router.get('/jobs', async (_req: Request, res: Response) => {
@@ -110,7 +116,7 @@ router.get('/jobs', async (_req: Request, res: Response) => {
     take: 100,
     include: { user: { select: { username: true } } },
   });
-  res.json(jobs);
+  res.json(await presignTryOnJobs(jobs));
 });
 
 router.delete('/user/:userId', async (req: Request, res: Response) => {
@@ -397,13 +403,13 @@ router.get('/moderation/reports', async (req: Request, res: Response) => {
             user: { select: { id: true, username: true } },
           },
         });
-        return { ...r, target: job };
+        return { ...r, target: job ? await presignTryOnJob(job) : job };
       }
       const user = await prisma.user.findUnique({
         where: { id: r.targetId },
         select: { id: true, username: true, email: true, bio: true, avatarUrl: true },
       });
-      return { ...r, target: user };
+      return { ...r, target: user ? await presignAvatarOnly(user) : user };
     }),
   );
 

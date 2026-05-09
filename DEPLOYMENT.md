@@ -64,12 +64,17 @@ cd backend && npx prisma migrate dev
 
 ### Current Migrations
 
-| Migration | Purpose |
-|-----------|---------|
-| `20260427213923_init` | Initial schema (Users, TryOnJobs, Follows, etc.) |
-| `20260428193554_subscription_to_credits` | Add credits system, CreditTransaction model |
-| `20260428210000_add_user_names` | Add firstName, lastName to Users |
-| `20260429220000_add_tryon_privacy` | Add isPrivate field to TryOnJobs |
+The authoritative list is the contents of `backend/prisma/migrations/`. List them with:
+
+```bash
+ls backend/prisma/migrations/
+```
+
+`prisma migrate deploy` applies all unapplied migrations in chronological order — you don't need to track them by hand. If you need to know what's currently applied vs pending on the server:
+
+```bash
+docker compose -f docker-compose.prod.yml exec backend npx prisma migrate status
+```
 
 ---
 
@@ -155,9 +160,44 @@ Fill in all required values. Generate secrets with:
 openssl rand -hex 32  # For JWT_SECRET, JWT_REFRESH_SECRET, ADMIN_API_KEY
 ```
 
-**Important:** Set `ALLOWED_ORIGINS` to include the website domain:
+**Important values:**
 ```
+# CORS — must include the marketing site so the web auth flow works
 ALLOWED_ORIGINS=https://evofaceflow.com
+
+# Admin Console UI gate (comma-separated lowercase emails). Distinct from
+# ADMIN_API_KEY which protects the actual /api/admin/* endpoints.
+ADMIN_EMAILS=you@example.com
+
+# Apple In-App Purchases — App Store Server Notifications V2 verifier
+APPLE_BUNDLE_ID=com.evofaceflow.tryon.app
+APPLE_APP_APPLE_ID=<numeric ID from App Store Connect URL>
+APPLE_ENVIRONMENT=Production         # or "Sandbox" for the sandbox webhook
+# Leave APPLE_ROOT_CERTS_DIR unset to use the default ./certs/apple inside
+# the container (the path is relative to /app, the container WORKDIR).
+```
+
+> **🚨 Path gotcha:** `APPLE_ROOT_CERTS_DIR` must point to a path inside the container (e.g. `/app/certs/apple`), not the host. The default `./certs/apple` resolves correctly inside the container; setting it to a host path like `/opt/evofaceflow/TryOn/backend/certs/apple` will fail because the container has no view of the host filesystem.
+
+### Apple Root CA Certificates
+
+The backend's JWS verifier needs Apple's root CAs to validate App Store Server Notifications and StoreKit receipts. They are public certificates and are baked into the Docker image at build time.
+
+```bash
+# On your dev machine (one-time)
+mkdir -p backend/certs/apple
+# Download AppleRootCA-G3.cer (and optionally G2 + AppleIncRoot) from:
+# https://www.apple.com/certificateauthority/
+# Place the .cer files inside backend/certs/apple/
+git add backend/certs/apple/*.cer
+git commit -m "Add Apple root CAs for App Store Server Notifications V2"
+```
+
+The Dockerfile contains `COPY certs ./certs` which embeds these into the production image. Verify after deploy:
+
+```bash
+docker compose -f docker-compose.prod.yml exec backend ls certs/apple
+# Should list the .cer files
 ```
 
 ## 4. SSL Certificate Setup
@@ -219,6 +259,64 @@ docker compose -f docker-compose.prod.yml logs backend
 ```bash
 curl https://api.evofaceflow.com/health
 ```
+
+## 5b. Apple In-App Purchase Configuration
+
+In addition to env vars and the root CAs above, the App Store Connect side must be configured.
+
+### App Store Server Notifications V2
+
+In App Store Connect: **My Apps → [your app] → App Information → App Store Server Notifications**
+
+| Field | Value |
+|---|---|
+| Production Server URL | `https://api.evofaceflow.com/api/webhooks/apple` |
+| Sandbox Server URL | Same URL (or a separate one — see below) |
+| Version | **Version 2** (V1 is deprecated) |
+
+The endpoint must respond with HTTP 200 within a few seconds. Apple retries on non-2xx with exponential backoff. The webhook is exempt from the global rate limiter (see `index.ts`).
+
+**Notification environments:** A single `APPLE_ENVIRONMENT` env var controls which environment the verifier accepts. To handle both Sandbox (TestFlight) and Production from the same backend you need either:
+- Two backends with different `APPLE_ENVIRONMENT` values, OR
+- Separate URLs in App Store Connect for Sandbox vs Production, with one of them rejecting the other's notifications.
+
+For initial setup, point both URLs at the same backend with `APPLE_ENVIRONMENT=Sandbox`. Flip to `Production` and restart the stack just before public launch.
+
+### IAP Products
+
+Products must be configured in App Store Connect → **In-App Purchases & Subscriptions**. Product IDs must match `frontend/app.json` (`extra.appleProducts`) and `backend/src/config/appleIap.ts`:
+
+| Product ID | Type | Tier / Credits |
+|---|---|---|
+| `com.evofaceflow.tryon.app.basic.monthly` | Auto-renewing subscription | BASIC |
+| `com.evofaceflow.tryon.app.premium.monthly` | Auto-renewing subscription | PREMIUM |
+| `com.evofaceflow.tryon.app.credits.10` | Consumable | 10 credits |
+| `com.evofaceflow.tryon.app.credits.25` | Consumable | 25 credits |
+| `com.evofaceflow.tryon.app.credits.50` | Consumable | 50 credits |
+| `com.evofaceflow.tryon.app.credits.100` | Consumable | 100 credits |
+
+Each product needs a price tier and at least one localization (display name + description). Sandbox testing requires "Ready to Submit" status minimum.
+
+### Verifying the webhook end-to-end
+
+Once env vars are set and the stack is up, you can fire a TEST notification from your dev machine using the helper script:
+
+```powershell
+cd frontend
+$env:APPLE_ISSUER_ID="..."         # from App Store Connect → Users and Access → Integrations
+$env:APPLE_KEY_ID="..."
+$env:APPLE_PRIVATE_KEY_PATH=".\secrets\AuthKey_<KEYID>.p8"
+$env:APPLE_BUNDLE_ID="com.evofaceflow.tryon.app"
+npx ts-node ../backend/scripts/sendAppleTestNotification.ts sandbox
+```
+
+Watch the backend logs on Lightsail:
+
+```bash
+docker compose -f docker-compose.prod.yml logs --tail 200 backend | grep -iE "apple|webhook"
+```
+
+You should see four log lines: verifier initialized, notification enqueued, processing, TEST received.
 
 ## 6. Lightsail Firewall Configuration
 
@@ -383,12 +481,46 @@ mkdir -p /opt/evofaceflow/backups
 
 ## 11. Updating the Application
 
+### Backend (server-side)
+
+Push to `main` triggers GitHub Actions which SSHes into Lightsail and rebuilds. To deploy manually instead:
+
 ```bash
 cd /opt/evofaceflow/TryOn
 git pull origin main
 docker compose -f docker-compose.prod.yml up -d --build
 docker compose -f docker-compose.prod.yml exec backend npx prisma migrate deploy
 ```
+
+Use `up -d` (without `--build`) for env-var-only changes — `restart` does **not** re-read `.env` reliably with all Compose versions.
+
+### Frontend (mobile app)
+
+The mobile app is **not** deployed to Lightsail. It's compiled into iOS / Android binaries via EAS Build (Expo's cloud build service) and distributed through TestFlight / App Store.
+
+```powershell
+# All commands run on your LOCAL dev machine, not Lightsail.
+cd frontend
+npm install                                    # if dependencies changed
+npx expo prebuild --clean                      # if native deps changed (e.g. new expo-* package)
+eas build --platform ios --profile preview     # for TestFlight / internal QA
+eas build --platform ios --profile production  # for App Store submission
+eas submit --platform ios --profile production --latest  # upload to App Store Connect
+```
+
+#### EAS profiles (`frontend/eas.json`)
+
+| Profile | Use case | Notes |
+|---|---|---|
+| `development` | Dev Client install for hot-reload iteration on a phone | `developmentClient: true`, `distribution: "internal"` |
+| `preview` | TestFlight / internal QA builds | Production-mode JS, internal distribution. No build-number burn. |
+| `production` | App Store submission | Auto-increments build number. |
+
+`eas build --platform ios` with no `--profile` flag defaults to `production` — explicit profile is recommended.
+
+### Connecting the frontend to Lightsail
+
+Always set `USE_LOCAL = false` in `frontend/src/config/api.ts` before any `eas build`. Production builds use `https://api.evofaceflow.com/api`.
 
 ## 12. Rollback Procedure
 
@@ -444,6 +576,8 @@ const LIVE_URL = 'https://api.evofaceflow.com/api';
    npx expo start --tunnel
    ```
 3. The backend is already running on Lightsail
+
+> **⚠️ Expo Go limitation:** Features that depend on native modules (`expo-iap`, custom config plugins) **do not work in Expo Go**. To test in-app purchases, sandbox StoreKit, or App Store Server Notifications you must run inside a Dev Client build (`eas build --profile development`) or a `preview`/`production` build installed on the device. Expo Go is fine for everything else (auth, feed, try-on, profile, settings, blocking, reporting, etc.).
 
 ### Pre-Commit Checklist
 

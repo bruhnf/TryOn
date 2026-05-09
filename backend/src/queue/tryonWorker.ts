@@ -46,10 +46,10 @@ const worker = new Worker<TryOnJobData>(
       log.debug('Processing perspective', {
         jobId,
         perspective: bodyPhoto.perspective,
-        bodyImageUrl: bodyPhoto.url.substring(0, 80),
+        bodyImageRef: bodyPhoto.url.substring(0, 80),
       });
 
-      // grokService now fetches from S3 directly - pass raw URLs
+      // grokService accepts S3 keys (preferred) or full URLs (legacy rows).
       const resultUrl = await generateTryOnImage({
         userBodyImageUrl: bodyPhoto.url,
         perspective: bodyPhoto.perspective,
@@ -81,7 +81,7 @@ const worker = new Worker<TryOnJobData>(
         throw new Error(`Unexpected result format from Grok: ${resultUrl.substring(0, 50)}`);
       }
 
-      // Upload to S3
+      // Upload to S3 — store the key only; presigned URLs are minted at read time.
       log.debug('Uploading result to S3', { jobId, perspective: bodyPhoto.perspective, bufferSize: buffer.length });
       const key = await uploadToS3(
         'tryon-results',
@@ -90,8 +90,7 @@ const worker = new Worker<TryOnJobData>(
         buffer,
         'image/jpeg',
       );
-      const finalUrl = `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
-      
+
       logUpload('completed', {
         userId,
         fileType: 'tryon-result',
@@ -101,7 +100,7 @@ const worker = new Worker<TryOnJobData>(
         perspective: bodyPhoto.perspective,
       });
 
-      results[bodyPhoto.perspective] = finalUrl;
+      results[bodyPhoto.perspective] = key;
     }
 
     const durationMs = Date.now() - startTime;

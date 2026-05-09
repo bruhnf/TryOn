@@ -15,6 +15,7 @@ import {
 import { recordLoginLocation } from '../services/locationService';
 import { logAuth, createChildLogger } from '../services/logger';
 import { isAdminEmail } from '../utils/admin';
+import { presignUserPhotos } from '../services/imageUrlService';
 
 const log = createChildLogger('AuthController');
 
@@ -183,6 +184,12 @@ export async function login(req: Request, res: Response): Promise<void> {
     userAgent: req.headers['user-agent'],
   });
 
+  const presignedPhotos = await presignUserPhotos({
+    avatarUrl: user.avatarUrl,
+    fullBodyUrl: user.fullBodyUrl,
+    mediumBodyUrl: user.mediumBodyUrl,
+  });
+
   res.json({
     accessToken,
     refreshToken: rawRefresh,
@@ -195,9 +202,9 @@ export async function login(req: Request, res: Response): Promise<void> {
       tryOnCount: user.tryOnCount,
       verified: user.verified,
       bio: user.bio,
-      avatarUrl: user.avatarUrl,
-      fullBodyUrl: user.fullBodyUrl,
-      mediumBodyUrl: user.mediumBodyUrl,
+      avatarUrl: presignedPhotos.avatarUrl,
+      fullBodyUrl: presignedPhotos.fullBodyUrl,
+      mediumBodyUrl: presignedPhotos.mediumBodyUrl,
       followingCount: user.followingCount,
       followersCount: user.followersCount,
       likesCount: user.likesCount,
