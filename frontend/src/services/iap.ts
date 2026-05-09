@@ -118,16 +118,20 @@ function toDisplay(p: {
   };
 }
 
-export async function fetchProducts(tier: UserTier): Promise<{
+// Loads the StoreKit catalog for a given user tier: every subscription SKU
+// plus the 4 credit-pack SKUs priced for that tier. Wraps the library's
+// `IAP.fetchProducts` so callers don't deal with separate calls for subs vs.
+// consumables. Named distinctly to avoid colliding with `IAP.fetchProducts`.
+export async function loadProductsForTier(tier: UserTier): Promise<{
   subscriptions: DisplayProduct[];
   credits: DisplayProduct[];
 }> {
   await initIap();
   const creditSkus = creditPackSkusForTier(tier);
   const [subs, credits] = await Promise.all([
-    IAP.requestProducts({ skus: SUBSCRIPTION_SKUS, type: 'subs' as const }),
+    IAP.fetchProducts({ skus: SUBSCRIPTION_SKUS, type: 'subs' as const }),
     creditSkus.length > 0
-      ? IAP.requestProducts({ skus: creditSkus, type: 'inapp' as const })
+      ? IAP.fetchProducts({ skus: creditSkus, type: 'inapp' as const })
       : Promise.resolve([] as unknown[]),
   ]);
   return {

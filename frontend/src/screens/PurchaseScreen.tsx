@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -25,7 +25,7 @@ import {
   MANAGE_SUBSCRIPTIONS_URL,
   creditPackSkusForTier,
   endIap,
-  fetchProducts,
+  loadProductsForTier,
   initIap,
   purchaseCreditPack,
   purchaseSubscription,
@@ -47,20 +47,20 @@ const TIER_FEATURES: Record<UserTier, { name: string; tagline: string; features:
     tier: 'FREE',
     name: 'Free',
     tagline: 'Get started with free credits',
-    features: ['10 free credits when you join', 'Buy credits anytime', 'Full access to community feed'],
+    features: ['10 free credits when you join', 'Extra credits $0.60 each', 'Full access to community feed'],
   },
   BASIC: {
     tier: 'BASIC',
     name: 'Basic',
     tagline: '12 try-ons every week',
-    features: ['12 try-on sessions per week included', 'Cheaper credit pricing', 'Priority queue'],
+    features: ['12 try-on sessions per week included', 'Basic members get lower credit pricing, from $0.40–$0.50 per credit depending on package size.', 'Priority queue'],
     sku: APPLE_PRODUCTS.subscriptions?.basicMonthly,
   },
   PREMIUM: {
     tier: 'PREMIUM',
     name: 'Premium',
     tagline: '24 try-ons every week',
-    features: ['24 try-on sessions per week included', 'Best credit pricing', 'Top-priority queue'],
+    features: ['24 try-on sessions per week included', 'Premium members get the lowest credit pricing, from $0.30–$0.32 per credit depending on package size.', 'Top-priority queue'],
     sku: APPLE_PRODUCTS.subscriptions?.premiumMonthly,
     badge: 'BEST VALUE',
   },
@@ -114,7 +114,7 @@ export default function PurchaseScreen() {
       setProductsLoading(true);
       try {
         await initIap();
-        const products = await fetchProducts(currentTier);
+        const products = await loadProductsForTier(currentTier);
         if (cancelled) return;
         setSubscriptions(products.subscriptions);
         setCreditPacks(products.credits);
@@ -133,13 +133,50 @@ export default function PurchaseScreen() {
     };
   }, [currentTier]);
 
+  // Tracks transaction IDs we've already processed in this screen instance.
+  // expo-iap / StoreKit can fire `purchaseUpdatedListener` more than once for
+  // the same transaction (typically once on `purchased` and again after
+  // `finishTransaction`). The dedupe stops the same listener instance from
+  // processing the same transaction twice. The backend's own idempotency
+  // check still protects true cross-session replays.
+  const processedTxIds = useRef<Set<string>>(new Set());
+
+  // SKU the user just tapped Subscribe / Buy on. The listener uses this to
+  // distinguish a user-initiated purchase (show feedback) from an unsolicited
+  // event StoreKit pushes — a subscription auto-renewal, a transaction
+  // replayed after a previous crash, or a sandbox-environment renewal during
+  // testing. We still verify + finish the transaction on those (so the
+  // backend stays in sync and StoreKit removes it from its queue) but we
+  // don't surface a popup the user didn't ask for.
+  const expectingPurchaseSku = useRef<string | null>(null);
+
   // Listen for purchase results from StoreKit. When a purchase completes we
   // verify the JWS with the backend, which is the actual entitlement grant.
   useEffect(() => {
     const updateSub = IAP.purchaseUpdatedListener(async (purchase: unknown) => {
+      const txId =
+        (purchase as { transactionId?: string; id?: string })?.transactionId ??
+        (purchase as { id?: string })?.id;
+      if (txId && processedTxIds.current.has(txId)) {
+        return;
+      }
+      if (txId) processedTxIds.current.add(txId);
+
+      const purchaseSku = (purchase as { productId?: string })?.productId;
+      const isUserInitiated =
+        !!purchaseSku && purchaseSku === expectingPurchaseSku.current;
+      if (isUserInitiated) {
+        expectingPurchaseSku.current = null;
+      }
+
       try {
         const result = await verifyAndFinish(purchase as never);
         await refreshUser();
+
+        // Don't show toasts for unsolicited events (renewals, replays). The
+        // user didn't ask for this; the entitlement is already applied via
+        // the App Store Server webhook on the backend.
+        if (!isUserInitiated) return;
 
         if (result.fastPathSkipped) {
           // Backend webhook is the source of truth. Poll a few times to pick up
@@ -155,16 +192,19 @@ export default function PurchaseScreen() {
           Alert.alert('Purchase complete', 'Your account has been updated.');
         }
       } catch (err) {
-        Alert.alert(
-          'Purchase verification failed',
-          err instanceof Error ? err.message : 'Please try Restore Purchases.',
-        );
+        if (isUserInitiated) {
+          Alert.alert(
+            'Purchase verification failed',
+            err instanceof Error ? err.message : 'Please try Restore Purchases.',
+          );
+        }
       } finally {
-        setBusy(null);
+        if (isUserInitiated) setBusy(null);
       }
     });
     const errSub = IAP.purchaseErrorListener((err: { code?: string; message?: string }) => {
       setBusy(null);
+      expectingPurchaseSku.current = null;
       // User-cancelled is not an error worth surfacing.
       if (err && err.code !== 'E_USER_CANCELLED') {
         Alert.alert('Purchase failed', err.message ?? 'Unknown error.');
@@ -197,11 +237,13 @@ export default function PurchaseScreen() {
     }
     if (tier === currentTier) return;
     setBusy(config.sku);
+    expectingPurchaseSku.current = config.sku;
     try {
       await purchaseSubscription(config.sku, user.id);
       // Result lands in the purchaseUpdatedListener.
     } catch (err) {
       setBusy(null);
+      expectingPurchaseSku.current = null;
       Alert.alert('Purchase failed', err instanceof Error ? err.message : 'Unknown error.');
     }
   }
@@ -209,10 +251,12 @@ export default function PurchaseScreen() {
   async function handleBuyCredits(sku: string) {
     if (!user) return;
     setBusy(sku);
+    expectingPurchaseSku.current = sku;
     try {
       await purchaseCreditPack(sku, user.id);
     } catch (err) {
       setBusy(null);
+      expectingPurchaseSku.current = null;
       Alert.alert('Purchase failed', err instanceof Error ? err.message : 'Unknown error.');
     }
   }
