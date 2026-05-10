@@ -62,7 +62,7 @@ export default function LoginScreen({ navigation }: Props) {
           'Email Not Verified',
           'Please verify your email before logging in. Check your inbox.',
           [
-            { text: 'Resend Email', onPress: () => resendVerification() },
+            { text: 'Resend Email', onPress: () => resendVerificationFor(email.trim().toLowerCase()) },
             { text: 'OK' },
           ],
         );
@@ -74,12 +74,45 @@ export default function LoginScreen({ navigation }: Props) {
     }
   }
 
-  async function resendVerification() {
+  async function resendVerificationFor(targetEmail: string) {
+    if (!targetEmail) {
+      Alert.alert('Email required', 'Enter your email address above, then tap Resend again.');
+      return;
+    }
     try {
-      await api.post('/auth/resend-verification', { email: email.trim().toLowerCase() });
-      Alert.alert('Sent', 'A verification email has been sent to your inbox.');
+      await api.post('/auth/resend-verification', { email: targetEmail });
+      Alert.alert('Sent', 'A new verification email has been sent. Please check your inbox (and spam folder).');
     } catch {
       Alert.alert('Error', 'Could not resend verification email.');
+    }
+  }
+
+  function handleResendPress() {
+    const typed = email.trim().toLowerCase();
+    if (typed) {
+      resendVerificationFor(typed);
+      return;
+    }
+    // Alert.prompt is iOS-only; on Android the user just gets instructions.
+    if (Alert.prompt) {
+      Alert.prompt(
+        'Resend Verification Email',
+        'Enter the email you signed up with:',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Send',
+            onPress: (e?: string) => {
+              if (e) resendVerificationFor(e.trim().toLowerCase());
+            },
+          },
+        ],
+      );
+    } else {
+      Alert.alert(
+        'Email required',
+        'Type the email you signed up with in the field above, then tap Resend.',
+      );
     }
   }
 
@@ -134,6 +167,10 @@ export default function LoginScreen({ navigation }: Props) {
             >
               Forgot password?
             </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.forgotLink} onPress={handleResendPress}>
+            <Text style={styles.linkText}>Didn't get the verification email?</Text>
           </TouchableOpacity>
 
           <TouchableOpacity

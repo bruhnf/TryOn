@@ -391,18 +391,33 @@ export async function resendVerification(req: Request, res: Response): Promise<v
     return;
   }
 
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user || user.verified) {
-    res.json({ message: 'If applicable, a verification email has been sent.' });
-    return;
-  }
-
-  const verifyToken = uuidv4();
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { verifyToken, verifyTokenExpiry: new Date(Date.now() + 24 * 60 * 60 * 1000) },
+  // Respond immediately with a generic message regardless of whether the email
+  // matches a real account. This prevents account enumeration via both response
+  // body differences AND response-time differences (the DB lookup + SMTP send
+  // would otherwise leak existence through latency).
+  res.json({
+    message:
+      'If an account with that email exists and is unverified, a new verification email has been sent.',
   });
 
-  await sendVerificationEmail(email, verifyToken);
-  res.json({ message: 'Verification email sent.' });
+  // Fire-and-forget the real work. Any failure is logged but never surfaced to
+  // the caller, since doing so would reintroduce the enumeration vector.
+  void (async () => {
+    try {
+      const user = await prisma.user.findUnique({ where: { email } });
+      if (!user || user.verified) return;
+
+      const verifyToken = uuidv4();
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { verifyToken, verifyTokenExpiry: new Date(Date.now() + 24 * 60 * 60 * 1000) },
+      });
+      await sendVerificationEmail(email, verifyToken);
+    } catch (err) {
+      log.error('resendVerification background failure', {
+        email,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  })();
 }

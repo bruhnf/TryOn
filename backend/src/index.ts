@@ -90,6 +90,23 @@ app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/signup', authLimiter);
 app.use('/api/auth/forgot-password', authLimiter);
 
+// Dedicated stricter limit for verification-email resends. Each request triggers
+// a real SES send, so cost and abuse potential are higher than for other auth
+// endpoints. Per-IP, 5 requests per 15 minutes is enough headroom for a
+// legitimate user retrying a typo + retrying once more, but blocks scripted abuse.
+const verificationEmailLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many verification email requests, please try again later.' },
+  handler: (req, res) => {
+    logSecurity('rate_limit', { ip: req.ip, path: req.path, limiter: 'verification_email' });
+    res.status(429).json({ error: 'Too many verification email requests, please try again later.' });
+  },
+});
+app.use('/api/auth/resend-verification', verificationEmailLimiter);
+
 // Upload rate limiter
 const uploadLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
