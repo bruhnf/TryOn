@@ -50,7 +50,10 @@ export type RootStackParams = {
   PublicProfile: { username: string };
   BlockedUsers: undefined;
   ChangePassword: undefined;
-  TryOnComments: { jobId: string };
+  // Optional commentId is used by inbox notifications (COMMENT_REPLY,
+  // COMMENT_LIKE) to deep-link into the thread and auto-scroll/highlight a
+  // specific comment after the screen loads.
+  TryOnComments: { jobId: string; commentId?: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParams>();

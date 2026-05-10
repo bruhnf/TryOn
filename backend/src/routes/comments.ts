@@ -146,11 +146,13 @@ router.post('/tryon/:jobId/comments', async (req: Request, res: Response) => {
     return;
   }
 
-  // Validate the parent if this is a reply.
+  // Validate the parent if this is a reply, and capture parent author so
+  // we can notify them below.
+  let parentAuthorId: string | null = null;
   if (parentId) {
     const parent = await prisma.comment.findUnique({
       where: { id: parentId },
-      select: { id: true, jobId: true, parentId: true },
+      select: { id: true, jobId: true, parentId: true, userId: true },
     });
     if (!parent) {
       res.status(404).json({ error: 'Parent comment not found' });
@@ -164,6 +166,7 @@ router.post('/tryon/:jobId/comments', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'Replies to replies are not supported' });
       return;
     }
+    parentAuthorId = parent.userId;
   }
 
   const isSelfComment = job.userId === req.user.userId;
@@ -185,10 +188,8 @@ router.post('/tryon/:jobId/comments', async (req: Request, res: Response) => {
       data: { commentsCount: { increment: 1 } },
     }),
   ];
-  // Notify the post owner only on top-level comments. Replies don't notify
-  // the post owner (the original comment already did that); a follow-up
-  // change can add a separate "your comment got a reply" notification.
   if (!parentId && !isSelfComment) {
+    // Top-level comment on someone else's TryOn → notify the post owner.
     ops.push(
       prisma.notification.create({
         data: {
@@ -196,6 +197,21 @@ router.post('/tryon/:jobId/comments', async (req: Request, res: Response) => {
           actorId: req.user.userId,
           type: 'COMMENT',
           jobId,
+        },
+      }),
+    );
+  } else if (parentId && parentAuthorId && parentAuthorId !== req.user.userId) {
+    // Reply to someone else's comment → notify the parent comment author
+    // with the parent commentId so the inbox can deep-link straight to
+    // their comment in the thread.
+    ops.push(
+      prisma.notification.create({
+        data: {
+          userId: parentAuthorId,
+          actorId: req.user.userId,
+          type: 'COMMENT_REPLY',
+          jobId,
+          commentId: parentId,
         },
       }),
     );
@@ -288,19 +304,36 @@ router.post('/comments/:commentId/likes', async (req: Request, res: Response) =>
     return;
   }
 
+  let alreadyLiked = false;
   try {
     await prisma.commentLike.create({
       data: { userId: req.user.userId, commentId },
     });
   } catch (err) {
-    // Unique-constraint violation = already liked. Treat as idempotent success.
+    // Unique-constraint violation = already liked. Treat as idempotent success
+    // and don't fire a duplicate notification.
     if (
       err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'P2002'
     ) {
-      // fall through
+      alreadyLiked = true;
     } else {
       throw err;
     }
+  }
+
+  // Notify the comment author on a fresh like (skip self-likes and
+  // re-likes-after-unlike-then-like-again). Aggregation could be added later;
+  // for now we match the existing TryOn LIKE notification pattern.
+  if (!alreadyLiked && comment.userId !== req.user.userId) {
+    await prisma.notification.create({
+      data: {
+        userId: comment.userId,
+        actorId: req.user.userId,
+        type: 'COMMENT_LIKE',
+        jobId: comment.jobId,
+        commentId,
+      },
+    });
   }
 
   const likesCount = await prisma.commentLike.count({ where: { commentId } });

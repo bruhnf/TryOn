@@ -76,7 +76,13 @@ export interface PublicUser {
   bio?: string;
 }
 
-export type NotificationType = 'FOLLOW' | 'LIKE' | 'TRYON_COMPLETE' | 'COMMENT';
+export type NotificationType =
+  | 'FOLLOW'
+  | 'LIKE'
+  | 'TRYON_COMPLETE'
+  | 'COMMENT'
+  | 'COMMENT_REPLY'
+  | 'COMMENT_LIKE';
 
 export interface Notification {
   id: string;
@@ -84,6 +90,10 @@ export interface Notification {
   type: NotificationType;
   actorId?: string | null;
   jobId?: string | null;
+  // Set for COMMENT_REPLY (the parent comment that was replied to) and
+  // COMMENT_LIKE (the comment that was liked). Used by the mobile app to
+  // deep-link straight into the thread and auto-scroll to that comment.
+  commentId?: string | null;
   read: boolean;
   createdAt: string;
   actor?: {

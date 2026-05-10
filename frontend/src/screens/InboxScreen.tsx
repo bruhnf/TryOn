@@ -77,10 +77,22 @@ export default function InboxScreen() {
       api.patch(`/notifications/${n.id}/read`).catch(() => {});
       setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
     }
-    // COMMENT and LIKE notifications carry a jobId — drill into the relevant
-    // try-on. FOLLOW (and anything else) takes you to the actor's profile.
-    if ((n.type === 'COMMENT' || n.type === 'LIKE') && n.jobId) {
-      navigation.navigate('TryOnComments', { jobId: n.jobId });
+    // Notifications with a jobId drill into the relevant TryOn's comment
+    // thread. COMMENT_REPLY and COMMENT_LIKE additionally carry the
+    // commentId so the screen can auto-scroll and briefly highlight the
+    // referenced comment. FOLLOW (and anything missing a jobId) opens
+    // the actor's profile.
+    if (
+      (n.type === 'COMMENT' ||
+        n.type === 'COMMENT_REPLY' ||
+        n.type === 'COMMENT_LIKE' ||
+        n.type === 'LIKE') &&
+      n.jobId
+    ) {
+      navigation.navigate('TryOnComments', {
+        jobId: n.jobId,
+        commentId: n.commentId ?? undefined,
+      });
       return;
     }
     if (n.actor?.username) {
@@ -164,6 +176,8 @@ function NotificationRow({
   if (notification.type === 'FOLLOW') message = 'started following you';
   else if (notification.type === 'LIKE') message = 'liked your try-on';
   else if (notification.type === 'COMMENT') message = 'commented on your try-on';
+  else if (notification.type === 'COMMENT_REPLY') message = 'replied to your comment';
+  else if (notification.type === 'COMMENT_LIKE') message = 'liked your comment';
   else if (notification.type === 'TRYON_COMPLETE') message = 'Your try-on is ready';
 
   const jobThumbUrl = notification.job?.resultFullBodyUrl ?? notification.job?.resultMediumUrl;

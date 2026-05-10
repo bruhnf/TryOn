@@ -57,7 +57,7 @@ export default function TryOnCommentsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
   const route = useRoute<Rt>();
-  const { jobId } = route.params;
+  const { jobId, commentId: focusCommentId } = route.params;
   const { user } = useUserStore();
   const bumpCommentDelta = useCommentDeltas((s) => s.bump);
 
@@ -69,6 +69,10 @@ export default function TryOnCommentsScreen() {
   const [body, setBody] = useState('');
   const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
   const [reportTargetId, setReportTargetId] = useState<string | null>(null);
+  // ID of a comment to render with a transient highlight background. Set
+  // when arriving via a notification with a commentId, cleared after a
+  // short delay.
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const inputRef = useRef<TextInput>(null);
   const listRef = useRef<FlatList<Comment>>(null);
 
@@ -91,6 +95,43 @@ export default function TryOnCommentsScreen() {
   useEffect(() => {
     loadAll();
   }, [loadAll]);
+
+  // When the screen is opened via a notification (commentId set), find the
+  // referenced comment after data loads, scroll to it, and briefly highlight
+  // the row. The targeted comment may be top-level (scroll to its index in
+  // the FlatList) or a reply (scroll to its parent's index — the reply
+  // renders in the same list item).
+  useEffect(() => {
+    if (loading || !focusCommentId || comments.length === 0) return;
+    let parentIndex = -1;
+    for (let i = 0; i < comments.length; i += 1) {
+      const c = comments[i];
+      if (c.id === focusCommentId) {
+        parentIndex = i;
+        break;
+      }
+      if ((c.replies ?? []).some((r) => r.id === focusCommentId)) {
+        parentIndex = i;
+        break;
+      }
+    }
+    if (parentIndex < 0) return;
+
+    setHighlightedId(focusCommentId);
+    // Defer the scroll a tick so the FlatList has measured layout.
+    const t = setTimeout(() => {
+      listRef.current?.scrollToIndex({
+        index: parentIndex,
+        animated: true,
+        viewPosition: 0.3,
+      });
+    }, 120);
+    const clearTimer = setTimeout(() => setHighlightedId(null), 2400);
+    return () => {
+      clearTimeout(t);
+      clearTimeout(clearTimer);
+    };
+  }, [loading, focusCommentId, comments]);
 
   function startReply(parent: Comment) {
     setReplyTarget({ parentId: parent.id, username: parent.user.username });
@@ -331,6 +372,7 @@ export default function TryOnCommentsScreen() {
           <View>
             <CommentRow
               comment={item}
+              highlighted={highlightedId === item.id}
               onMenu={() => openCommentMenu(item)}
               onLike={() => toggleLike(item)}
               onReply={() => startReply(item)}
@@ -340,6 +382,7 @@ export default function TryOnCommentsScreen() {
                 key={reply.id}
                 comment={reply}
                 isReply
+                highlighted={highlightedId === reply.id}
                 onMenu={() => openCommentMenu(reply)}
                 onLike={() => toggleLike(reply)}
               />
@@ -347,6 +390,18 @@ export default function TryOnCommentsScreen() {
           </View>
         )}
         contentContainerStyle={styles.listContent}
+        // FlatList may reject a scrollToIndex if the target row hasn't been
+        // measured yet. Wait, then retry — by the second attempt the row
+        // will be on screen or close to it.
+        onScrollToIndexFailed={(info) => {
+          setTimeout(() => {
+            listRef.current?.scrollToIndex({
+              index: info.index,
+              animated: true,
+              viewPosition: 0.3,
+            });
+          }, 300);
+        }}
       />
 
       <View style={[styles.inputBar, { paddingBottom: insets.bottom + Spacing.sm }]}>
@@ -398,19 +453,27 @@ export default function TryOnCommentsScreen() {
 function CommentRow({
   comment,
   isReply,
+  highlighted,
   onMenu,
   onLike,
   onReply,
 }: {
   comment: Comment;
   isReply?: boolean;
+  highlighted?: boolean;
   onMenu: () => void;
   onLike: () => void;
   onReply?: () => void;
 }) {
   const fullName = [comment.user.firstName, comment.user.lastName].filter(Boolean).join(' ');
   return (
-    <View style={[styles.commentRow, isReply && styles.commentRowReply]}>
+    <View
+      style={[
+        styles.commentRow,
+        isReply && styles.commentRowReply,
+        highlighted && styles.commentRowHighlighted,
+      ]}
+    >
       <View style={[styles.commentAvatar, isReply && styles.commentAvatarReply]}>
         {comment.user.avatarUrl ? (
           <Image source={{ uri: comment.user.avatarUrl }} style={styles.commentAvatarImg} />
@@ -533,6 +596,10 @@ const styles = StyleSheet.create({
   // Replies are inset to make the threading visually clear.
   commentRowReply: {
     paddingLeft: Spacing.xxl,
+  },
+  // Transient highlight when arriving via a notification deep-link.
+  commentRowHighlighted: {
+    backgroundColor: 'rgba(255, 230, 150, 0.6)',
   },
   commentAvatar: {
     width: 32,
