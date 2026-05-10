@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import prisma from '../lib/prisma';
-import { uploadToS3, keyFromUrl } from '../services/s3Service';
+import { uploadToS3, deleteFromS3, keyFromUrl } from '../services/s3Service';
 import { presignTryOnJob, presignTryOnJobs, presignAvatarOnly } from '../services/imageUrlService';
 import { safeFilename } from '../middleware/uploadMiddleware';
 import { enqueueTryOn } from '../queue/tryonQueue';
@@ -11,6 +11,12 @@ import { resizeImageForTryOn } from '../utils/imageProcessor';
 import { createChildLogger, logJob, logUpload } from '../services/logger';
 
 const log = createChildLogger('TryOnController');
+
+// Per-user storage cap for stored TryOn sessions. Result images and the
+// associated clothing/source photos add up over time; users hit this limit
+// and must delete some sessions in their Profile before they can run another
+// try-on.
+export const TRYON_STORAGE_LIMIT = 500;
 
 export async function submitTryOn(req: Request, res: Response): Promise<void> {
   if (!req.user) { res.status(401).json({ error: 'Unauthorized' }); return; }
@@ -39,6 +45,24 @@ export async function submitTryOn(req: Request, res: Response): Promise<void> {
     select: { tier: true, credits: true, fullBodyUrl: true, mediumBodyUrl: true },
   });
   if (!user) { res.status(404).json({ error: 'User not found' }); return; }
+
+  // Storage cap: count non-failed jobs (failed jobs have no stored results
+  // so they don't contribute). If at or above the cap, refuse the new job
+  // before any S3 upload or credit deduction so honest users don't pay for
+  // a try-on they can't store.
+  const storedCount = await prisma.tryOnJob.count({
+    where: { userId, status: { not: 'FAILED' } },
+  });
+  if (storedCount >= TRYON_STORAGE_LIMIT) {
+    log.info('Try-on blocked: storage limit reached', { userId, storedCount });
+    res.status(403).json({
+      error: 'TRYON_LIMIT_REACHED',
+      message: `You've reached the ${TRYON_STORAGE_LIMIT}-session storage limit. Delete some sessions from your Profile to continue.`,
+      stored: storedCount,
+      limit: TRYON_STORAGE_LIMIT,
+    });
+    return;
+  }
 
   const { tier, credits } = user;
   const weeklyLimit = TIER_CONFIG[tier].weeklyLimit;
@@ -197,6 +221,90 @@ export async function getTryOnHistory(req: Request, res: Response): Promise<void
   });
 
   res.json({ jobs: await presignTryOnJobs(jobs), page });
+}
+
+// Bulk-delete sessions owned by the requesting user. Used by the multi-select
+// flow on the user's own Profile screen.
+//
+// We only delete jobs that belong to the requester — Prisma's deleteMany with
+// { userId, id: { in } } enforces this on the DB. Cascades on the FK
+// relationships clean up Likes, Comments, and Notifications referencing the
+// deleted jobs (see schema.prisma).
+//
+// Best-effort S3 cleanup: each job has unique-per-job clothing photo and
+// result image keys; we delete those. We deliberately do NOT delete
+// `bodyPhotoUrl` because it points at the user's own body photo which is
+// shared across many jobs and managed via the Profile photo controls.
+export async function bulkDeleteJobs(req: Request, res: Response): Promise<void> {
+  if (!req.user) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
+  const { jobIds } = req.body as { jobIds?: unknown };
+  if (!Array.isArray(jobIds) || jobIds.length === 0) {
+    res.status(400).json({ error: 'jobIds must be a non-empty array' });
+    return;
+  }
+  if (jobIds.some((id) => typeof id !== 'string')) {
+    res.status(400).json({ error: 'jobIds must be strings' });
+    return;
+  }
+  if (jobIds.length > TRYON_STORAGE_LIMIT) {
+    res.status(400).json({ error: `Cannot delete more than ${TRYON_STORAGE_LIMIT} sessions at once` });
+    return;
+  }
+
+  const userId = req.user.userId;
+  const ids = jobIds as string[];
+
+  // Look up the jobs we're about to delete so we can clean up S3 keys after.
+  // Filter by userId so a malicious caller cannot enumerate or delete other
+  // users' jobs by guessing IDs.
+  const jobs = await prisma.tryOnJob.findMany({
+    where: { id: { in: ids }, userId },
+    select: {
+      id: true,
+      clothingPhoto1Url: true,
+      clothingPhoto2Url: true,
+      resultFullBodyUrl: true,
+      resultMediumUrl: true,
+    },
+  });
+
+  if (jobs.length === 0) {
+    res.json({ deleted: 0 });
+    return;
+  }
+
+  const deletableIds = jobs.map((j) => j.id);
+  const result = await prisma.tryOnJob.deleteMany({
+    where: { id: { in: deletableIds }, userId },
+  });
+
+  // Fire-and-forget S3 cleanup — the user's API response shouldn't wait on
+  // (and shouldn't fail because of) S3 delete latency. Orphaned objects can
+  // be cleaned up later by a sweep job.
+  const keysToDelete: string[] = [];
+  for (const j of jobs) {
+    if (j.clothingPhoto1Url) keysToDelete.push(keyFromUrl(j.clothingPhoto1Url));
+    if (j.clothingPhoto2Url) keysToDelete.push(keyFromUrl(j.clothingPhoto2Url));
+    if (j.resultFullBodyUrl) keysToDelete.push(keyFromUrl(j.resultFullBodyUrl));
+    if (j.resultMediumUrl) keysToDelete.push(keyFromUrl(j.resultMediumUrl));
+  }
+  for (const key of keysToDelete) {
+    deleteFromS3(key).catch((err) => {
+      log.warn('S3 cleanup failed for deleted try-on', {
+        userId, key, error: err instanceof Error ? err.message : String(err),
+      });
+    });
+  }
+
+  log.info('Bulk-deleted try-on sessions', {
+    userId,
+    requestedCount: ids.length,
+    deletedCount: result.count,
+    s3KeysQueued: keysToDelete.length,
+  });
+
+  res.json({ deleted: result.count });
 }
 
 export async function updateJobPrivacy(req: Request, res: Response): Promise<void> {

@@ -50,6 +50,8 @@ export interface Comment {
   jobId: string;
   userId: string;
   body: string;
+  // null for top-level comments; set to a top-level comment's id for replies.
+  parentId: string | null;
   createdAt: string;
   updatedAt: string;
   user: {
@@ -59,6 +61,10 @@ export interface Comment {
     lastName?: string;
     avatarUrl?: string;
   };
+  likesCount: number;
+  liked: boolean;
+  // Only populated on top-level comments; replies have an empty array.
+  replies?: Comment[];
 }
 
 export interface PublicUser {

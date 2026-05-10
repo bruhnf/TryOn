@@ -13,8 +13,17 @@ import {
   NativeScrollEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/theme';
 import AiGeneratedBadge from './AiGeneratedBadge';
+import ImageOverlayBadge from './ImageOverlayBadge';
+
+// Each original-image overlay carries a label and an icon. The icon is
+// optional — pass null to render text only.
+export interface OriginalImageBadge {
+  label: string;
+  iconName?: keyof typeof Ionicons.glyphMap;
+}
 
 interface FullScreenImageModalProps {
   visible: boolean;
@@ -30,6 +39,11 @@ interface FullScreenImageModalProps {
   // Per-image labels shown next to the pagination dots. Index N applies to
   // image N. Falls back to "M of N" when the slot is missing.
   labels?: string[];
+  // Optional per-image overlay badge for non-AI images (clothing, body
+  // photo, etc.). Index N applies to image N; pass null/undefined for any
+  // image that should not get an overlay. AI-generated slots take the AI
+  // disclosure badge instead and ignore this prop.
+  originalBadges?: (OriginalImageBadge | null | undefined)[];
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -41,6 +55,7 @@ export default function FullScreenImageModal({
   onClose,
   aiGenerated = false,
   labels,
+  originalBadges,
 }: FullScreenImageModalProps) {
   function isAiAt(index: number): boolean {
     if (Array.isArray(aiGenerated)) return !!aiGenerated[index];
@@ -93,16 +108,24 @@ export default function FullScreenImageModal({
           contentOffset={{ x: initialIndex * SCREEN_WIDTH, y: 0 }}
           style={styles.carousel}
         >
-          {imageUrls.map((url, index) => (
-            <View key={index} style={styles.imageContainer}>
-              <Image
-                source={{ uri: url }}
-                style={styles.image}
-                resizeMode="contain"
-              />
-              {isAiAt(index) ? <AiGeneratedBadge /> : null}
-            </View>
-          ))}
+          {imageUrls.map((url, index) => {
+            const ai = isAiAt(index);
+            const original = !ai ? originalBadges?.[index] : undefined;
+            return (
+              <View key={index} style={styles.imageContainer}>
+                <Image
+                  source={{ uri: url }}
+                  style={styles.image}
+                  resizeMode="contain"
+                />
+                {ai ? (
+                  <AiGeneratedBadge />
+                ) : original ? (
+                  <ImageOverlayBadge label={original.label} iconName={original.iconName} />
+                ) : null}
+              </View>
+            );
+          })}
         </ScrollView>
 
         {/* Bottom spacer so the image doesn't sit underneath the pagination dots */}

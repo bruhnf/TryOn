@@ -102,6 +102,7 @@ model User {
   creditTransactions CreditTransaction[]
   likes              Like[]
   comments           Comment[]
+  commentLikes       CommentLike[]
   notifications      Notification[]      @relation("NotificationRecipient")
   actorNotifications Notification[]      @relation("NotificationActor")
   applePurchases     ApplePurchase[]
@@ -231,20 +232,45 @@ model TryOnJob {
 // TryOnJob is public; private TryOnJobs are not commentable from the feed.
 // Authors can delete their own comment; the post owner can delete any
 // comment on their own post. Other users can Report instead.
+//
+// Threading: single-level (Instagram/TikTok-style). A reply has parentId set
+// to a top-level comment; replies cannot themselves have replies. Deleting a
+// parent cascades to its replies via the FK ON DELETE CASCADE.
 model Comment {
   id        String   @id @default(uuid())
   jobId     String
   userId    String
   body      String
+  parentId  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  job  TryOnJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job     TryOnJob      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent  Comment?      @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies Comment[]     @relation("CommentReplies")
+  likes   CommentLike[]
 
   @@index([jobId, createdAt])
   @@index([userId])
+  @@index([parentId])
   @@map("comments")
+}
+
+// One row per (user, comment) like. Unique constraint enforces idempotency
+// — a second POST is a no-op rather than creating a duplicate.
+model CommentLike {
+  id        String   @id @default(uuid())
+  userId    String
+  commentId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, commentId])
+  @@index([commentId])
+  @@map("comment_likes")
 }
 
 model UserLocation {

@@ -33,6 +33,11 @@ const MENU_ITEMS = [
   { key: 'logout', label: 'Log Out', danger: true },
 ];
 
+// Mirrors backend TRYON_STORAGE_LIMIT in tryonController.ts. Kept in sync by
+// hand — if the cap changes server-side, update both. Used for the "X/500
+// sessions used" hint and threshold-based warning colors.
+const TRYON_STORAGE_LIMIT = 500;
+
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
@@ -43,6 +48,63 @@ export default function ProfileScreen() {
   const [uploading, setUploading] = useState<string | null>(null);
   const [selectedJob, setSelectedJob] = useState<TryOnJob | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  // Multi-select state for bulk-delete on the user's own try-on history.
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
+
+  function exitSelectionMode() {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  }
+
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function enterSelectionWith(id: string) {
+    setSelectionMode(true);
+    setSelectedIds(new Set([id]));
+  }
+
+  async function deleteSelected() {
+    if (selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    Alert.alert(
+      'Delete Sessions',
+      `Permanently delete ${ids.length} ${ids.length === 1 ? 'session' : 'sessions'}? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setDeleting(true);
+            try {
+              const { data } = await api.post<{ deleted: number }>('/tryon/bulk-delete', { jobIds: ids });
+              setHistory((prev) => prev.filter((j) => !selectedIds.has(j.id)));
+              exitSelectionMode();
+              if (data.deleted < ids.length) {
+                Alert.alert(
+                  'Some sessions could not be deleted',
+                  `${data.deleted} of ${ids.length} were removed.`,
+                );
+              }
+            } catch {
+              Alert.alert('Error', 'Could not delete sessions. Please try again.');
+            } finally {
+              setDeleting(false);
+            }
+          },
+        },
+      ],
+    );
+  }
 
   React.useEffect(() => {
     if (!historyLoaded) loadHistory();
@@ -271,7 +333,37 @@ export default function ProfileScreen() {
 
         {/* Try-On History */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>My Try-On History</Text>
+          <View style={styles.historyHeader}>
+            <Text style={styles.sectionTitle}>My Try-On History</Text>
+            {historyLoaded && history.length > 0 ? (
+              selectionMode ? (
+                <TouchableOpacity onPress={exitSelectionMode} hitSlop={8}>
+                  <Text style={styles.historyHeaderAction}>Cancel</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity onPress={() => setSelectionMode(true)} hitSlop={8}>
+                  <Text style={styles.historyHeaderAction}>Select</Text>
+                </TouchableOpacity>
+              )
+            ) : null}
+          </View>
+          {historyLoaded && history.length > 0 ? (
+            // Storage usage hint. Mirrors the 500-session cap enforced
+            // server-side. Color escalates as the user approaches the limit
+            // so they get a visible warning before the next try-on submission
+            // is rejected with TRYON_LIMIT_REACHED.
+            <Text
+              style={[
+                styles.storageUsage,
+                history.length >= TRYON_STORAGE_LIMIT * 0.95 && styles.storageUsageDanger,
+                history.length >= TRYON_STORAGE_LIMIT * 0.8 &&
+                  history.length < TRYON_STORAGE_LIMIT * 0.95 &&
+                  styles.storageUsageWarn,
+              ]}
+            >
+              {history.length}/{TRYON_STORAGE_LIMIT} sessions used. Save some of your TryOns.
+            </Text>
+          ) : null}
           {!historyLoaded ? (
             <ActivityIndicator color={Colors.gray400} style={{ marginTop: Spacing.lg }} />
           ) : history.length === 0 ? (
@@ -285,11 +377,25 @@ export default function ProfileScreen() {
               renderItem={({ item }) => {
                 const url = item.resultFullBodyUrl ?? item.resultMediumUrl;
                 const hasResults = !!(item.resultFullBodyUrl || item.resultMediumUrl);
+                const isSelected = selectedIds.has(item.id);
                 return (
                   <TouchableOpacity
                     style={styles.historyItem}
-                    onPress={() => hasResults && setSelectedJob(item)}
-                    activeOpacity={hasResults ? 0.7 : 1}
+                    onPress={() => {
+                      if (selectionMode) {
+                        toggleSelected(item.id);
+                        return;
+                      }
+                      if (hasResults) setSelectedJob(item);
+                    }}
+                    onLongPress={() => {
+                      // Long-press anywhere in the history grid enters
+                      // selection mode and selects that item, mirroring the
+                      // platform-native multi-select pattern used by Photos.
+                      if (!selectionMode) enterSelectionWith(item.id);
+                      else toggleSelected(item.id);
+                    }}
+                    activeOpacity={selectionMode || hasResults ? 0.7 : 1}
                   >
                     {url ? (
                       <>
@@ -305,6 +411,26 @@ export default function ProfileScreen() {
                         <Text style={styles.historyStatus}>{item.status}</Text>
                       </View>
                     )}
+                    {selectionMode ? (
+                      <View
+                        style={[
+                          styles.selectionOverlay,
+                          isSelected && styles.selectionOverlayActive,
+                        ]}
+                        pointerEvents="none"
+                      >
+                        <View
+                          style={[
+                            styles.selectionCheck,
+                            isSelected && styles.selectionCheckActive,
+                          ]}
+                        >
+                          {isSelected ? (
+                            <Ionicons name="checkmark" size={16} color={Colors.white} />
+                          ) : null}
+                        </View>
+                      </View>
+                    ) : null}
                   </TouchableOpacity>
                 );
               }}
@@ -312,6 +438,31 @@ export default function ProfileScreen() {
           )}
         </View>
       </ScrollView>
+
+      {/* Floating delete bar — only visible in selection mode. Sits above the
+          tab bar so it remains tappable on every device. */}
+      {selectionMode ? (
+        <View style={[styles.deleteBar, { paddingBottom: insets.bottom + Spacing.sm }]}>
+          <TouchableOpacity
+            style={[
+              styles.deleteButton,
+              (selectedIds.size === 0 || deleting) && styles.deleteButtonDisabled,
+            ]}
+            onPress={deleteSelected}
+            disabled={selectedIds.size === 0 || deleting}
+          >
+            {deleting ? (
+              <ActivityIndicator color={Colors.white} />
+            ) : (
+              <Text style={styles.deleteButtonText}>
+                {selectedIds.size === 0
+                  ? 'Select items to delete'
+                  : `Delete Selected (${selectedIds.size})`}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       {/* Try-On Detail Modal */}
       <TryOnDetailModal
@@ -560,6 +711,83 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   emptyHistory: { fontSize: Typography.fontSizeMD, color: Colors.gray400, fontStyle: 'italic', marginTop: Spacing.sm },
+  historyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.sm,
+  },
+  historyHeaderAction: {
+    fontSize: Typography.fontSizeSM,
+    fontWeight: Typography.fontWeightSemiBold,
+    color: Colors.black,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+  },
+  storageUsage: {
+    fontSize: Typography.fontSizeXS,
+    color: Colors.gray600,
+    marginBottom: Spacing.sm,
+  },
+  storageUsageWarn: { color: Colors.warning },
+  storageUsageDanger: {
+    color: Colors.danger,
+    fontWeight: Typography.fontWeightSemiBold,
+  },
+  selectionOverlay: {
+    position: 'absolute',
+    top: 1,
+    left: 1,
+    right: 1,
+    bottom: 1,
+    borderRadius: 4,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  selectionOverlayActive: {
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    borderWidth: 2,
+    borderColor: Colors.black,
+  },
+  selectionCheck: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderWidth: 1.5,
+    borderColor: Colors.gray400,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectionCheckActive: {
+    backgroundColor: Colors.black,
+    borderColor: Colors.black,
+  },
+  deleteBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.sm,
+    backgroundColor: Colors.white,
+    borderTopWidth: 1,
+    borderTopColor: Colors.gray200,
+  },
+  deleteButton: {
+    backgroundColor: Colors.danger,
+    borderRadius: Radius.full,
+    paddingVertical: Spacing.md,
+    alignItems: 'center',
+  },
+  deleteButtonDisabled: { backgroundColor: Colors.gray400 },
+  deleteButtonText: {
+    color: Colors.white,
+    fontWeight: Typography.fontWeightBold,
+    fontSize: Typography.fontSizeMD,
+  },
   historyItem: { flex: 1 / 3, aspectRatio: 1, padding: 1, position: 'relative' },
   historyImage: { width: '100%', height: '100%', borderRadius: 4 },
   historyPlaceholder: { backgroundColor: Colors.gray100, alignItems: 'center', justifyContent: 'center' },

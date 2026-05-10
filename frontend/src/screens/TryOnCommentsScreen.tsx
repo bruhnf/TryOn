@@ -19,6 +19,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../config/api';
 import { useUserStore } from '../store/useUserStore';
+import { useCommentDeltas } from '../store/useCommentDeltas';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
 import { Comment, TryOnJob } from '../types';
 import { RootStackParams } from '../navigation';
@@ -30,6 +31,13 @@ type Rt = RouteProp<RootStackParams, 'TryOnComments'>;
 
 interface JobWithUser extends TryOnJob {
   user?: { username: string; firstName?: string; lastName?: string; avatarUrl?: string };
+}
+
+// State for the "you're replying to @user" hint above the input. Cleared on
+// post-success or by the Cancel button.
+interface ReplyTarget {
+  parentId: string;
+  username: string;
 }
 
 function timeAgo(iso: string): string {
@@ -51,13 +59,17 @@ export default function TryOnCommentsScreen() {
   const route = useRoute<Rt>();
   const { jobId } = route.params;
   const { user } = useUserStore();
+  const bumpCommentDelta = useCommentDeltas((s) => s.bump);
 
   const [job, setJob] = useState<JobWithUser | null>(null);
+  // Top-level comments only. Each may contain a `replies` array.
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
   const [body, setBody] = useState('');
+  const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
   const [reportTargetId, setReportTargetId] = useState<string | null>(null);
+  const inputRef = useRef<TextInput>(null);
   const listRef = useRef<FlatList<Comment>>(null);
 
   const loadAll = useCallback(async () => {
@@ -80,6 +92,15 @@ export default function TryOnCommentsScreen() {
     loadAll();
   }, [loadAll]);
 
+  function startReply(parent: Comment) {
+    setReplyTarget({ parentId: parent.id, username: parent.user.username });
+    inputRef.current?.focus();
+  }
+
+  function cancelReply() {
+    setReplyTarget(null);
+  }
+
   async function handleSend() {
     const trimmed = body.trim();
     if (!trimmed || posting) return;
@@ -87,10 +108,25 @@ export default function TryOnCommentsScreen() {
     try {
       const { data: created } = await api.post<Comment>(`/tryon/${jobId}/comments`, {
         body: trimmed,
+        parentId: replyTarget?.parentId,
       });
-      setComments((prev) => [...prev, created]);
+      if (replyTarget) {
+        // Append the new reply under its parent.
+        setComments((prev) =>
+          prev.map((c) =>
+            c.id === replyTarget.parentId
+              ? { ...c, replies: [...(c.replies ?? []), created] }
+              : c,
+          ),
+        );
+      } else {
+        // Top-level: append to the end. Server seeds replies to [].
+        setComments((prev) => [...prev, { ...created, replies: created.replies ?? [] }]);
+      }
+      bumpCommentDelta(jobId, 1);
       setBody('');
-      // Scroll to bottom so the new comment is visible.
+      setReplyTarget(null);
+      // Scroll to the bottom of the list so the new entry is visible.
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
     } catch (err: unknown) {
       const response = (err as { response?: { data?: { error?: unknown; message?: string } } })?.response?.data;
@@ -108,12 +144,62 @@ export default function TryOnCommentsScreen() {
     }
   }
 
-  async function deleteComment(commentId: string) {
+  async function deleteComment(target: Comment) {
     try {
-      await api.delete(`/comments/${commentId}`);
-      setComments((prev) => prev.filter((c) => c.id !== commentId));
+      const { data } = await api.delete<{ deleted: boolean; removed: number }>(
+        `/comments/${target.id}`,
+      );
+      if (target.parentId) {
+        // Reply: remove just this row from its parent's replies. Removed
+        // count from the server is always 1 for replies (no children).
+        setComments((prev) =>
+          prev.map((c) =>
+            c.id === target.parentId
+              ? { ...c, replies: (c.replies ?? []).filter((r) => r.id !== target.id) }
+              : c,
+          ),
+        );
+      } else {
+        // Top-level: remove the row entirely (cascade removes replies in DB).
+        setComments((prev) => prev.filter((c) => c.id !== target.id));
+      }
+      bumpCommentDelta(jobId, -(data.removed ?? 1));
     } catch {
       Alert.alert('Error', 'Could not delete comment.');
+    }
+  }
+
+  // Optimistically toggle the like state of a single comment (top-level or
+  // reply). Rolls back on failure. Updates likesCount in lockstep.
+  async function toggleLike(target: Comment) {
+    const wasLiked = target.liked;
+    const apply = (next: boolean) => (c: Comment) =>
+      c.id === target.id
+        ? { ...c, liked: next, likesCount: Math.max(0, c.likesCount + (next ? 1 : -1)) }
+        : c;
+    setComments((prev) =>
+      prev.map((c) => {
+        const updated = apply(!wasLiked)(c);
+        return {
+          ...updated,
+          replies: (updated.replies ?? []).map(apply(!wasLiked)),
+        };
+      }),
+    );
+    try {
+      if (wasLiked) await api.delete(`/comments/${target.id}/likes`);
+      else await api.post(`/comments/${target.id}/likes`);
+    } catch {
+      // Roll back
+      setComments((prev) =>
+        prev.map((c) => {
+          const reverted = apply(wasLiked)(c);
+          return {
+            ...reverted,
+            replies: (reverted.replies ?? []).map(apply(wasLiked)),
+          };
+        }),
+      );
     }
   }
 
@@ -131,7 +217,7 @@ export default function TryOnCommentsScreen() {
         onPress: () =>
           Alert.alert('Delete Comment', 'Are you sure?', [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Delete', style: 'destructive', onPress: () => deleteComment(comment.id) },
+            { text: 'Delete', style: 'destructive', onPress: () => deleteComment(comment) },
           ]),
       });
     }
@@ -242,32 +328,61 @@ export default function TryOnCommentsScreen() {
           </View>
         }
         renderItem={({ item }) => (
-          <CommentRow comment={item} onMenu={() => openCommentMenu(item)} />
+          <View>
+            <CommentRow
+              comment={item}
+              onMenu={() => openCommentMenu(item)}
+              onLike={() => toggleLike(item)}
+              onReply={() => startReply(item)}
+            />
+            {(item.replies ?? []).map((reply) => (
+              <CommentRow
+                key={reply.id}
+                comment={reply}
+                isReply
+                onMenu={() => openCommentMenu(reply)}
+                onLike={() => toggleLike(reply)}
+              />
+            ))}
+          </View>
         )}
         contentContainerStyle={styles.listContent}
       />
 
       <View style={[styles.inputBar, { paddingBottom: insets.bottom + Spacing.sm }]}>
-        <TextInput
-          style={styles.input}
-          placeholder="Add a comment…"
-          placeholderTextColor={Colors.gray400}
-          value={body}
-          onChangeText={setBody}
-          multiline
-          maxLength={500}
-        />
-        <TouchableOpacity
-          style={[styles.sendButton, (!body.trim() || posting) && styles.sendButtonDisabled]}
-          onPress={handleSend}
-          disabled={!body.trim() || posting}
-        >
-          {posting ? (
-            <ActivityIndicator color={Colors.white} size="small" />
-          ) : (
-            <Ionicons name="arrow-up" size={18} color={Colors.white} />
-          )}
-        </TouchableOpacity>
+        {replyTarget ? (
+          <View style={styles.replyHint}>
+            <Text style={styles.replyHintText} numberOfLines={1}>
+              Replying to <Text style={styles.replyHintHandle}>@{replyTarget.username}</Text>
+            </Text>
+            <TouchableOpacity onPress={cancelReply} hitSlop={8}>
+              <Ionicons name="close" size={16} color={Colors.gray600} />
+            </TouchableOpacity>
+          </View>
+        ) : null}
+        <View style={styles.inputRow}>
+          <TextInput
+            ref={inputRef}
+            style={styles.input}
+            placeholder={replyTarget ? `Reply to @${replyTarget.username}…` : 'Add a comment…'}
+            placeholderTextColor={Colors.gray400}
+            value={body}
+            onChangeText={setBody}
+            multiline
+            maxLength={500}
+          />
+          <TouchableOpacity
+            style={[styles.sendButton, (!body.trim() || posting) && styles.sendButtonDisabled]}
+            onPress={handleSend}
+            disabled={!body.trim() || posting}
+          >
+            {posting ? (
+              <ActivityIndicator color={Colors.white} size="small" />
+            ) : (
+              <Ionicons name="arrow-up" size={18} color={Colors.white} />
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ReportSheet
@@ -282,15 +397,21 @@ export default function TryOnCommentsScreen() {
 
 function CommentRow({
   comment,
+  isReply,
   onMenu,
+  onLike,
+  onReply,
 }: {
   comment: Comment;
+  isReply?: boolean;
   onMenu: () => void;
+  onLike: () => void;
+  onReply?: () => void;
 }) {
   const fullName = [comment.user.firstName, comment.user.lastName].filter(Boolean).join(' ');
   return (
-    <View style={styles.commentRow}>
-      <View style={styles.commentAvatar}>
+    <View style={[styles.commentRow, isReply && styles.commentRowReply]}>
+      <View style={[styles.commentAvatar, isReply && styles.commentAvatarReply]}>
         {comment.user.avatarUrl ? (
           <Image source={{ uri: comment.user.avatarUrl }} style={styles.commentAvatarImg} />
         ) : (
@@ -303,10 +424,35 @@ function CommentRow({
           <Text style={styles.commentTime}>{'  '}{timeAgo(comment.createdAt)}</Text>
         </Text>
         <Text style={styles.commentText}>{comment.body}</Text>
+        <View style={styles.commentActions}>
+          {comment.likesCount > 0 ? (
+            <Text style={styles.commentLikesCount}>
+              {comment.likesCount} {comment.likesCount === 1 ? 'like' : 'likes'}
+            </Text>
+          ) : null}
+          {/* Reply is only offered for top-level comments — replies don't
+              have their own thread. Tapping a reply's row to reply still
+              attaches to the same parent (handled by the caller passing
+              onReply only for top-level rows). */}
+          {onReply ? (
+            <TouchableOpacity onPress={onReply} hitSlop={8}>
+              <Text style={styles.commentReplyButton}>Reply</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
       </View>
-      <TouchableOpacity onPress={onMenu} hitSlop={10} style={styles.commentMenu}>
-        <Ionicons name="ellipsis-horizontal" size={18} color={Colors.gray600} />
-      </TouchableOpacity>
+      <View style={styles.commentRightActions}>
+        <TouchableOpacity onPress={onLike} hitSlop={8} accessibilityLabel={comment.liked ? 'Unlike' : 'Like'}>
+          <Ionicons
+            name={comment.liked ? 'heart' : 'heart-outline'}
+            size={18}
+            color={comment.liked ? Colors.danger : Colors.gray600}
+          />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onMenu} hitSlop={8} style={styles.commentMenu}>
+          <Ionicons name="ellipsis-horizontal" size={18} color={Colors.gray600} />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -384,6 +530,10 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     alignItems: 'flex-start',
   },
+  // Replies are inset to make the threading visually clear.
+  commentRowReply: {
+    paddingLeft: Spacing.xxl,
+  },
   commentAvatar: {
     width: 32,
     height: 32,
@@ -392,6 +542,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+  },
+  commentAvatarReply: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
   },
   commentAvatarImg: { width: '100%', height: '100%' },
   commentBody: { flex: 1 },
@@ -407,16 +562,59 @@ const styles = StyleSheet.create({
     marginTop: 2,
     lineHeight: 20,
   },
-  commentMenu: { padding: 4 },
-  inputBar: {
+  commentActions: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
+    gap: Spacing.md,
+    marginTop: 4,
+  },
+  commentLikesCount: {
+    fontSize: Typography.fontSizeXS,
+    color: Colors.gray600,
+    fontWeight: Typography.fontWeightSemiBold,
+  },
+  commentReplyButton: {
+    fontSize: Typography.fontSizeXS,
+    color: Colors.gray600,
+    fontWeight: Typography.fontWeightSemiBold,
+  },
+  commentRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.sm,
-    padding: Spacing.sm,
+    paddingTop: 2,
+  },
+  commentMenu: { padding: 2 },
+  inputBar: {
+    paddingHorizontal: Spacing.sm,
     paddingTop: Spacing.sm,
     borderTopWidth: 1,
     borderTopColor: Colors.gray200,
     backgroundColor: Colors.white,
+  },
+  replyHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.gray100,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: Radius.md,
+    marginBottom: Spacing.xs,
+  },
+  replyHintText: {
+    flex: 1,
+    fontSize: Typography.fontSizeSM,
+    color: Colors.gray600,
+  },
+  replyHintHandle: {
+    color: Colors.black,
+    fontWeight: Typography.fontWeightSemiBold,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: Spacing.sm,
   },
   input: {
     flex: 1,

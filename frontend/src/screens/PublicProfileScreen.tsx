@@ -19,7 +19,8 @@ import { ActionSheetIOS, Platform } from 'react-native';
 import api from '../config/api';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
 import { RootStackParams } from '../navigation';
-import FullScreenImageModal from '../components/FullScreenImageModal';
+import FullScreenImageModal, { OriginalImageBadge } from '../components/FullScreenImageModal';
+import { buildTryOnCarousel } from '../utils/tryonCarousel';
 import ReportSheet, { ReportTargetType } from '../components/ReportSheet';
 
 type Nav = NativeStackNavigationProp<RootStackParams, 'PublicProfile'>;
@@ -64,6 +65,7 @@ export default function PublicProfileScreen() {
   const [fullScreenImages, setFullScreenImages] = useState<string[]>([]);
   const [fullScreenAi, setFullScreenAi] = useState<boolean[]>([]);
   const [fullScreenLabels, setFullScreenLabels] = useState<string[]>([]);
+  const [fullScreenBadges, setFullScreenBadges] = useState<(OriginalImageBadge | null)[]>([]);
   const [fullScreenIndex, setFullScreenIndex] = useState(0);
   const [reportTarget, setReportTarget] = useState<{ type: ReportTargetType; id: string } | null>(null);
   const [blockBusy, setBlockBusy] = useState(false);
@@ -296,35 +298,22 @@ export default function PublicProfileScreen() {
               scrollEnabled={false}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => {
-                const url = item.resultFullBodyUrl ?? item.resultMediumUrl;
-                if (!url) return <View style={styles.gridItem} />;
-                // Build the carousel in the requested order:
-                //   1. Full body (AI)         — default initial slot
-                //   2. Medium (AI)
-                //   3. Original clothing item
-                //   4. Original body photo (full body if available, else medium —
-                //      the backend already populates this field with that priority)
-                // Skip nulls but keep ordering; carry per-image AI flags + labels
-                // so the disclosure badge is only drawn over generated images.
-                const slots: { url?: string; aiGenerated: boolean; label: string }[] = [
-                  { url: item.resultFullBodyUrl, aiGenerated: true,  label: 'Full Body' },
-                  { url: item.resultMediumUrl,   aiGenerated: true,  label: 'Medium' },
-                  { url: item.clothingPhoto1Url, aiGenerated: false, label: 'Clothing' },
-                  { url: item.bodyPhotoUrl,      aiGenerated: false, label: 'Original Body' },
-                ];
-                const present = slots.filter((s): s is { url: string; aiGenerated: boolean; label: string } => !!s.url);
+                const slides = buildTryOnCarousel(item);
+                if (slides.length === 0) return <View style={styles.gridItem} />;
+                const thumbUrl = slides[0].url;
                 return (
                   <TouchableOpacity
                     style={styles.gridItem}
                     onPress={() => {
-                      setFullScreenImages(present.map((s) => s.url));
-                      setFullScreenAi(present.map((s) => s.aiGenerated));
-                      setFullScreenLabels(present.map((s) => s.label));
+                      setFullScreenImages(slides.map((s) => s.url));
+                      setFullScreenAi(slides.map((s) => s.aiGenerated));
+                      setFullScreenLabels(slides.map((s) => s.label));
+                      setFullScreenBadges(slides.map((s) => s.badge));
                       setFullScreenIndex(0);
                     }}
                     activeOpacity={0.85}
                   >
-                    <Image source={{ uri: url }} style={styles.gridImage} resizeMode="cover" />
+                    <Image source={{ uri: thumbUrl }} style={styles.gridImage} resizeMode="cover" />
                   </TouchableOpacity>
                 );
               }}
@@ -340,6 +329,7 @@ export default function PublicProfileScreen() {
         initialIndex={fullScreenIndex}
         aiGenerated={fullScreenAi}
         labels={fullScreenLabels}
+        originalBadges={fullScreenBadges}
         onClose={() => setFullScreenImages([])}
       />
       <ReportSheet

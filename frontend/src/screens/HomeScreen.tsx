@@ -12,18 +12,21 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { ActionSheetIOS, Alert, Platform } from 'react-native';
 import api from '../config/api';
 import { useUserStore } from '../store/useUserStore';
 import { TryOnJob } from '../types';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
-import { RootStackParams } from '../navigation';
-import FullScreenImageModal from '../components/FullScreenImageModal';
+import { RootStackParams, MainTabParams } from '../navigation';
+import FullScreenImageModal, { OriginalImageBadge } from '../components/FullScreenImageModal';
 import CreditDisplay from '../components/CreditDisplay';
 import HeaderMenu from '../components/HeaderMenu';
 import AiGeneratedBadge from '../components/AiGeneratedBadge';
 import ReportSheet, { ReportTargetType } from '../components/ReportSheet';
+import { buildTryOnCarousel, CarouselSlot, indexOfSlot } from '../utils/tryonCarousel';
+import { useCommentDeltas } from '../store/useCommentDeltas';
 
 type Nav = NativeStackNavigationProp<RootStackParams>;
 
@@ -37,6 +40,9 @@ interface FeedJob extends TryOnJob {
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
+  // Same underlying navigation object as `navigation` above, but typed as
+  // the bottom-tab nav so we can subscribe to the 'tabPress' event below.
+  const tabNavigation = useNavigation<BottomTabNavigationProp<MainTabParams, 'Home'>>();
   const { user, refreshUser } = useUserStore();
   const [jobs, setJobs] = useState<FeedJob[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,9 +51,27 @@ export default function HomeScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [fullScreenImages, setFullScreenImages] = useState<string[]>([]);
   const [fullScreenInitialIndex, setFullScreenInitialIndex] = useState(0);
-  const [fullScreenAiGenerated, setFullScreenAiGenerated] = useState(false);
+  const [fullScreenAi, setFullScreenAi] = useState<boolean[]>([]);
+  const [fullScreenLabels, setFullScreenLabels] = useState<string[]>([]);
+  const [fullScreenBadges, setFullScreenBadges] = useState<(OriginalImageBadge | null)[]>([]);
+
+  // Open the 4-slide TryOn carousel anchored to whichever thumbnail the user
+  // tapped. Slots that aren't present on the job are skipped, so the initial
+  // index falls back to the first available slide (which will normally be
+  // the requested one — the source thumbnail wouldn't render otherwise).
+  function openCarousel(item: FeedJob, slot: CarouselSlot) {
+    const slides = buildTryOnCarousel(item);
+    if (slides.length === 0) return;
+    setFullScreenImages(slides.map((s) => s.url));
+    setFullScreenAi(slides.map((s) => s.aiGenerated));
+    setFullScreenLabels(slides.map((s) => s.label));
+    setFullScreenBadges(slides.map((s) => s.badge));
+    setFullScreenInitialIndex(indexOfSlot(slides, slot));
+  }
   const [reportTarget, setReportTarget] = useState<{ type: ReportTargetType; id: string } | null>(null);
   const [feedError, setFeedError] = useState(false);
+  const commentDeltas = useCommentDeltas((s) => s.deltas);
+  const clearCommentDeltas = useCommentDeltas((s) => s.clear);
 
   // Show platform-native action sheet on iOS, basic Alert on Android, with
   // Report and Block options. Required by App Store Review Guideline 1.2.
@@ -113,6 +137,9 @@ export default function HomeScreen() {
       setHasMore(data.jobs.length === 20);
       setPage(p);
       setFeedError(false);
+      // Server counts now reflect every committed change, so the in-flight
+      // deltas would double-count if we kept them.
+      if (refresh) clearCommentDeltas();
     } catch {
       // Surface a retry banner instead of just an empty state — empty + no
       // feedback makes a transient backend hiccup look like an empty feed.
@@ -124,6 +151,24 @@ export default function HomeScreen() {
   }
 
   useEffect(() => { fetchFeed(1, true); }, []);
+
+  // Refresh the Discover feed only when the Home tab button is pressed
+  // while Home is ALREADY the focused tab. Switching back to Home from a
+  // different tab should preserve the user's existing scroll position and
+  // feed cache. The bottom-tab navigator emits 'tabPress' before the focus
+  // change occurs, so `isFocused()` returns true only in the "already on
+  // Home, tapped Home again" case.
+  useEffect(() => {
+    const unsubscribe = tabNavigation.addListener('tabPress', () => {
+      if (!tabNavigation.isFocused()) return;
+      setRefreshing(true);
+      fetchFeed(1, true);
+    });
+    return unsubscribe;
+    // fetchFeed reads only setters (stable across renders) so we don't need
+    // to add it to the dep array.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabNavigation]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -204,16 +249,8 @@ export default function HomeScreen() {
         renderItem={({ item }) => (
           <FeedCard
             job={item}
-            onResultPress={(urls, index) => {
-              setFullScreenImages(urls);
-              setFullScreenInitialIndex(index);
-              setFullScreenAiGenerated(true);
-            }}
-            onClothingPress={(url) => {
-              setFullScreenImages([url]);
-              setFullScreenInitialIndex(0);
-              setFullScreenAiGenerated(false);
-            }}
+            commentsCountOverride={(item.commentsCount ?? 0) + (commentDeltas[item.id] ?? 0)}
+            onPhotoPress={(slot) => openCarousel(item, slot)}
             onUsernamePress={() =>
               navigation.navigate('PublicProfile', { username: item.user.username })
             }
@@ -241,7 +278,9 @@ export default function HomeScreen() {
         visible={fullScreenImages.length > 0}
         imageUrls={fullScreenImages}
         initialIndex={fullScreenInitialIndex}
-        aiGenerated={fullScreenAiGenerated}
+        aiGenerated={fullScreenAi}
+        labels={fullScreenLabels}
+        originalBadges={fullScreenBadges}
         onClose={() => setFullScreenImages([])}
       />
       <ReportSheet
@@ -256,16 +295,21 @@ export default function HomeScreen() {
 
 function FeedCard({
   job,
-  onResultPress,
-  onClothingPress,
+  commentsCountOverride,
+  onPhotoPress,
   onUsernamePress,
   onLikePress,
   onMorePress,
   onCommentsPress,
 }: {
   job: FeedJob;
-  onResultPress: (urls: string[], index: number) => void;
-  onClothingPress: (url: string) => void;
+  // Effective comment count to display on the card. Lets the parent layer in
+  // unsynced state (e.g. comments posted on TryOnCommentsScreen since the
+  // feed was last fetched).
+  commentsCountOverride: number;
+  // Single handler for all three image taps. The slot identifier tells the
+  // parent which carousel slide to anchor on.
+  onPhotoPress: (slot: CarouselSlot) => void;
   onUsernamePress: () => void;
   onLikePress: () => void;
   onMorePress: () => void;
@@ -336,7 +380,9 @@ function FeedCard({
         {displayUrl ? (
           <TouchableOpacity
             style={styles.resultImageContainer}
-            onPress={() => onResultPress(resultImages, 0)}
+            // Result image opens the carousel at "Full Body" — falls back to
+            // first available result if full-body is missing.
+            onPress={() => onPhotoPress(job.resultFullBodyUrl ? 'full' : 'medium')}
             activeOpacity={0.9}
           >
             <Image source={{ uri: displayUrl }} style={styles.resultImage} resizeMode="cover" />
@@ -355,13 +401,13 @@ function FeedCard({
 
         <View style={styles.thumbColumn}>
           {job.bodyPhotoUrl ? (
-            <TouchableOpacity onPress={() => onClothingPress(job.bodyPhotoUrl!)} activeOpacity={0.9}>
+            <TouchableOpacity onPress={() => onPhotoPress('body')} activeOpacity={0.9}>
               <Image source={{ uri: job.bodyPhotoUrl }} style={styles.sideThumb} resizeMode="cover" />
             </TouchableOpacity>
           ) : (
             <View style={[styles.sideThumb, styles.sideThumbPlaceholder]} />
           )}
-          <TouchableOpacity onPress={() => onClothingPress(job.clothingPhoto1Url)} activeOpacity={0.9}>
+          <TouchableOpacity onPress={() => onPhotoPress('clothing')} activeOpacity={0.9}>
             <Image source={{ uri: job.clothingPhoto1Url }} style={styles.sideThumb} resizeMode="cover" />
           </TouchableOpacity>
         </View>
@@ -385,8 +431,8 @@ function FeedCard({
           hitSlop={10}
         >
           <Ionicons name="chatbubble-outline" size={20} color={Colors.black} />
-          {(job.commentsCount ?? 0) > 0 ? (
-            <Text style={styles.commentsCount}>{job.commentsCount}</Text>
+          {commentsCountOverride > 0 ? (
+            <Text style={styles.commentsCount}>{commentsCountOverride}</Text>
           ) : null}
         </TouchableOpacity>
       </View>

@@ -22,6 +22,8 @@ import { TryOnJob } from '../types';
 import api from '../config/api';
 import { downloadImageToGallery, downloadMultipleImages, shareImage } from '../utils/imageUtils';
 import AiGeneratedBadge from './AiGeneratedBadge';
+import ImageOverlayBadge from './ImageOverlayBadge';
+import { buildTryOnCarousel } from '../utils/tryonCarousel';
 
 interface TryOnDetailModalProps {
   visible: boolean;
@@ -58,17 +60,21 @@ export default function TryOnDetailModal({
 
   const jobId = job.id;
 
-  // Collect available images
-  const images: { url: string; label: string }[] = [];
-  if (job.resultFullBodyUrl) images.push({ url: job.resultFullBodyUrl, label: 'Full Body' });
-  if (job.resultMediumUrl) images.push({ url: job.resultMediumUrl, label: 'Medium' });
+  // Build the same 4-slide carousel used everywhere else (HomeScreen feed
+  // taps, PublicProfileScreen). Slots that aren't present are dropped.
+  // Order: Full Body (AI) → Medium (AI) → Original Clothing → Original Body.
+  const slides = buildTryOnCarousel(job);
+  const aiSlides = slides.filter((s) => s.aiGenerated);
 
-  if (images.length === 0) return null;
+  // The only case this can happen is a job that completed with neither
+  // result URL set, AND with no clothing/body inputs we can show — basically
+  // a malformed row. Bail rather than render an empty modal.
+  if (slides.length === 0) return null;
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const offsetX = event.nativeEvent.contentOffset.x;
     const index = Math.round(offsetX / SCREEN_WIDTH);
-    if (index !== currentIndex && index >= 0 && index < images.length) {
+    if (index !== currentIndex && index >= 0 && index < slides.length) {
       setCurrentIndex(index);
     }
   };
@@ -90,25 +96,29 @@ export default function TryOnDetailModal({
   async function handleDownloadCurrent() {
     if (downloading) return;
     setDownloading(true);
-    const currentImage = images[currentIndex];
+    const currentImage = slides[currentIndex];
     const result = await downloadImageToGallery(
       currentImage.url,
-      `TryOn_${currentImage.label.replace(/\s/g, '')}_${Date.now()}.jpg`
+      `TryOn_${currentImage.label.replace(/\s/g, '')}_${Date.now()}.jpg`,
     );
     setDownloading(false);
     Alert.alert(result.success ? 'Saved!' : 'Error', result.message);
   }
 
+  // Save All saves only the AI-generated try-on results — the originals
+  // (clothing photo, body photo) are inputs the user already has elsewhere
+  // and aren't outputs of this session. The button is hidden when there's
+  // only one AI result to save.
   async function handleDownloadAll() {
-    if (downloading || images.length < 2) return;
+    if (downloading || aiSlides.length < 2) return;
     setDownloading(true);
-    const result = await downloadMultipleImages(images);
+    const result = await downloadMultipleImages(aiSlides);
     setDownloading(false);
     Alert.alert(result.success ? 'Saved!' : 'Error', result.message);
   }
 
   async function handleShare() {
-    const currentImage = images[currentIndex];
+    const currentImage = slides[currentIndex];
     await shareImage(currentImage.url);
   }
 
@@ -144,14 +154,18 @@ export default function TryOnDetailModal({
           scrollEventThrottle={16}
           style={styles.carousel}
         >
-          {images.map((img, index) => (
+          {slides.map((slide, index) => (
             <View key={index} style={styles.imageContainer}>
               <Image
-                source={{ uri: img.url }}
+                source={{ uri: slide.url }}
                 style={styles.image}
                 resizeMode="contain"
               />
-              <AiGeneratedBadge />
+              {slide.aiGenerated ? (
+                <AiGeneratedBadge />
+              ) : slide.badge ? (
+                <ImageOverlayBadge label={slide.badge.label} iconName={slide.badge.iconName} />
+              ) : null}
             </View>
           ))}
         </ScrollView>
@@ -159,11 +173,11 @@ export default function TryOnDetailModal({
         {/* Bottom controls */}
         <View style={[styles.controls, { paddingBottom: insets.bottom + 20 }]}>
           {/* Pagination */}
-          {images.length > 1 && (
+          {slides.length > 1 && (
             <View style={styles.pagination}>
-              <Text style={styles.paginationLabel}>{images[currentIndex].label}</Text>
+              <Text style={styles.paginationLabel}>{slides[currentIndex].label}</Text>
               <View style={styles.dots}>
-                {images.map((_, index) => (
+                {slides.map((_, index) => (
                   <View
                     key={index}
                     style={[
@@ -200,7 +214,7 @@ export default function TryOnDetailModal({
               <Text style={styles.actionButtonText}>Save</Text>
             </TouchableOpacity>
 
-            {images.length > 1 && (
+            {aiSlides.length > 1 && (
               <TouchableOpacity
                 style={styles.actionButton}
                 onPress={handleDownloadAll}

@@ -173,6 +173,23 @@ export default function TryOnScreen() {
             { text: 'Get Credits', onPress: () => navigation.navigate('Purchase') },
           ],
         );
+      } else if (error?.error === 'TRYON_LIMIT_REACHED') {
+        Alert.alert(
+          'Storage Full',
+          error.message ??
+            "You've reached the try-on storage limit. Delete some sessions from your Profile to continue.",
+          [
+            { text: 'Not Now', style: 'cancel' },
+            {
+              text: 'Open Profile',
+              // Profile is a tab, not a root-stack screen, so the typed
+              // navigator doesn't know about it directly. The cast lets
+              // React Navigation bubble the name up to the tab navigator
+              // at runtime.
+              onPress: () => (navigation.navigate as (route: string) => void)('Profile'),
+            },
+          ],
+        );
       } else {
         Alert.alert('Error', 'Could not submit try-on. Please try again.');
       }
