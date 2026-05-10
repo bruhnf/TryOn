@@ -750,7 +750,9 @@
       const limit = parseInt(document.getElementById('jobPageSize')?.value ?? '25', 10);
       const skip = (jobsCurrentPage - 1) * limit;
 
-      const params = new URLSearchParams({ limit, skip });
+      const params = new URLSearchParams();
+      params.set('limit', String(limit));
+      params.set('skip', String(skip));
       if (search) params.set('search', search);
       if (status) params.set('status', status);
 
@@ -758,6 +760,10 @@
         const res = await fetch(`${API_BASE}/jobs?${params}`, {
           headers: { 'X-Admin-Key': apiKey }
         });
+        if (!res.ok) {
+          const err = await res.text();
+          throw new Error(`HTTP ${res.status}: ${err}`);
+        }
         const data = await res.json();
         // Support both new { jobs, total } shape and old plain array (backward compat)
         const jobs = Array.isArray(data) ? data : (data.jobs ?? []);
@@ -835,6 +841,12 @@
         }
       } catch (e) {
         console.error('Failed to load jobs', e);
+        const tbody = document.getElementById('jobsBody');
+        if (tbody) {
+          tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:#ff4757;padding:20px;">
+            ⚠ Error loading jobs: ${e.message}
+          </td></tr>`;
+        }
       }
     }
 
