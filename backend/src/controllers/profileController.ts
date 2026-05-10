@@ -92,6 +92,12 @@ export async function getProfile(req: Request, res: Response): Promise<void> {
           id: true,
           resultFullBodyUrl: true,
           resultMediumUrl: true,
+          // The grid-item carousel also shows the original inputs that were
+          // used to generate the result (clothing photo + the body photo
+          // perspective the worker actually fed to Grok). bodyPhotoUrl is
+          // already the full body if available, medium as fallback.
+          clothingPhoto1Url: true,
+          bodyPhotoUrl: true,
           likesCount: true,
           createdAt: true,
         },

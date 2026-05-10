@@ -21,9 +21,15 @@ interface FullScreenImageModalProps {
   imageUrls: string[];
   initialIndex?: number;
   onClose: () => void;
-  // True when imageUrls are AI-generated try-on results (shows disclosure badge).
-  // Leave false/unset for clothing photos, body photos, or other source imagery.
-  aiGenerated?: boolean;
+  // Whether the AI-generated disclosure badge should be drawn over each image.
+  //   - boolean: applies to every image in imageUrls.
+  //   - boolean[]: per-image; index N controls image N. Use when the carousel
+  //     mixes AI results with original inputs (clothing / body photos).
+  //   Default false (no badge).
+  aiGenerated?: boolean | boolean[];
+  // Per-image labels shown next to the pagination dots. Index N applies to
+  // image N. Falls back to "M of N" when the slot is missing.
+  labels?: string[];
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -34,7 +40,12 @@ export default function FullScreenImageModal({
   initialIndex = 0,
   onClose,
   aiGenerated = false,
+  labels,
 }: FullScreenImageModalProps) {
+  function isAiAt(index: number): boolean {
+    if (Array.isArray(aiGenerated)) return !!aiGenerated[index];
+    return aiGenerated;
+  }
   const insets = useSafeAreaInsets();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const scrollRef = useRef<ScrollView>(null);
@@ -49,7 +60,7 @@ export default function FullScreenImageModal({
     }
   };
 
-  const labels = ['Full Body', 'Medium'];
+  const effectiveLabels = labels ?? ['Full Body', 'Medium'];
 
   return (
     <Modal
@@ -89,7 +100,7 @@ export default function FullScreenImageModal({
                 style={styles.image}
                 resizeMode="contain"
               />
-              {aiGenerated ? <AiGeneratedBadge /> : null}
+              {isAiAt(index) ? <AiGeneratedBadge /> : null}
             </View>
           ))}
         </ScrollView>
@@ -100,7 +111,7 @@ export default function FullScreenImageModal({
         {imageUrls.length > 1 && (
           <View style={[styles.pagination, { bottom: insets.bottom + 40 }]}>
             <Text style={styles.paginationLabel}>
-              {labels[currentIndex] || `${currentIndex + 1} of ${imageUrls.length}`}
+              {effectiveLabels[currentIndex] || `${currentIndex + 1} of ${imageUrls.length}`}
             </Text>
             <View style={styles.dots}>
               {imageUrls.map((_, index) => (

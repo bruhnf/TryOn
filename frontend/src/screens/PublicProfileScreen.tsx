@@ -44,6 +44,8 @@ interface PublicProfileData {
     id: string;
     resultFullBodyUrl?: string;
     resultMediumUrl?: string;
+    clothingPhoto1Url?: string;
+    bodyPhotoUrl?: string;
     likesCount: number;
     createdAt: string;
   }>;
@@ -60,6 +62,8 @@ export default function PublicProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
   const [fullScreenImages, setFullScreenImages] = useState<string[]>([]);
+  const [fullScreenAi, setFullScreenAi] = useState<boolean[]>([]);
+  const [fullScreenLabels, setFullScreenLabels] = useState<string[]>([]);
   const [fullScreenIndex, setFullScreenIndex] = useState(0);
   const [reportTarget, setReportTarget] = useState<{ type: ReportTargetType; id: string } | null>(null);
   const [blockBusy, setBlockBusy] = useState(false);
@@ -294,12 +298,28 @@ export default function PublicProfileScreen() {
               renderItem={({ item }) => {
                 const url = item.resultFullBodyUrl ?? item.resultMediumUrl;
                 if (!url) return <View style={styles.gridItem} />;
-                const allUrls = [item.resultFullBodyUrl, item.resultMediumUrl].filter(Boolean) as string[];
+                // Build the carousel in the requested order:
+                //   1. Full body (AI)         — default initial slot
+                //   2. Medium (AI)
+                //   3. Original clothing item
+                //   4. Original body photo (full body if available, else medium —
+                //      the backend already populates this field with that priority)
+                // Skip nulls but keep ordering; carry per-image AI flags + labels
+                // so the disclosure badge is only drawn over generated images.
+                const slots: { url?: string; aiGenerated: boolean; label: string }[] = [
+                  { url: item.resultFullBodyUrl, aiGenerated: true,  label: 'Full Body' },
+                  { url: item.resultMediumUrl,   aiGenerated: true,  label: 'Medium' },
+                  { url: item.clothingPhoto1Url, aiGenerated: false, label: 'Clothing' },
+                  { url: item.bodyPhotoUrl,      aiGenerated: false, label: 'Original Body' },
+                ];
+                const present = slots.filter((s): s is { url: string; aiGenerated: boolean; label: string } => !!s.url);
                 return (
                   <TouchableOpacity
                     style={styles.gridItem}
                     onPress={() => {
-                      setFullScreenImages(allUrls);
+                      setFullScreenImages(present.map((s) => s.url));
+                      setFullScreenAi(present.map((s) => s.aiGenerated));
+                      setFullScreenLabels(present.map((s) => s.label));
                       setFullScreenIndex(0);
                     }}
                     activeOpacity={0.85}
@@ -318,7 +338,8 @@ export default function PublicProfileScreen() {
         visible={fullScreenImages.length > 0}
         imageUrls={fullScreenImages}
         initialIndex={fullScreenIndex}
-        aiGenerated
+        aiGenerated={fullScreenAi}
+        labels={fullScreenLabels}
         onClose={() => setFullScreenImages([])}
       />
       <ReportSheet
