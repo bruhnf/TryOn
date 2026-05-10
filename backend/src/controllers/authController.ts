@@ -312,6 +312,78 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
   res.json({ message: 'Password updated successfully' });
 }
 
+// Authenticated password change. Distinct from the forgot/reset flow: this
+// requires the current password (re-auth) but no email round-trip.
+//
+// On success we delete every refresh token for the user, which means every
+// session — including the one that just submitted this request — is invalid
+// after this returns. The client should immediately drop tokens and route
+// the user back to Login. This matches `resetPassword` semantics and is the
+// safest default if the password change was prompted by suspected compromise.
+export async function changePassword(req: Request, res: Response): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  const { currentPassword, newPassword } = req.body as {
+    currentPassword?: string;
+    newPassword?: string;
+  };
+  if (!currentPassword || !newPassword) {
+    res.status(400).json({ error: 'currentPassword and newPassword are required' });
+    return;
+  }
+
+  // Same complexity requirements as signup / reset-password.
+  const newSchema = z
+    .string()
+    .min(8, 'Must be at least 8 characters')
+    .regex(/[A-Z]/, 'Must contain at least one uppercase letter')
+    .regex(/[0-9]/, 'Must contain at least one number')
+    .regex(/[^A-Za-z0-9]/, 'Must contain at least one special character');
+  const newParse = newSchema.safeParse(newPassword);
+  if (!newParse.success) {
+    res.status(400).json({ error: newParse.error.flatten() });
+    return;
+  }
+
+  if (currentPassword === newPassword) {
+    res.status(400).json({ error: 'New password must be different from the current password' });
+    return;
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: req.user.userId } });
+  if (!user) {
+    res.status(404).json({ error: 'User not found' });
+    return;
+  }
+
+  const ok = await verifyPassword(currentPassword, user.passwordHash);
+  if (!ok) {
+    logAuth('failed_login', {
+      userId: user.id,
+      email: user.email,
+      success: false,
+      reason: 'change_password_wrong_current',
+      ip: req.ip,
+    });
+    res.status(403).json({ error: 'Current password is incorrect' });
+    return;
+  }
+
+  const passwordHash = await hashPassword(newPassword);
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash },
+    }),
+    prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
+  ]);
+
+  log.info('Password changed', { userId: user.id });
+  res.json({ message: 'Password updated successfully. Please sign in again.' });
+}
+
 export async function resendVerification(req: Request, res: Response): Promise<void> {
   const { email } = req.body as { email?: string };
   if (!email) {

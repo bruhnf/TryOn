@@ -405,6 +405,21 @@ router.get('/moderation/reports', async (req: Request, res: Response) => {
         });
         return { ...r, target: job ? await presignTryOnJob(job) : job };
       }
+      if (r.targetType === 'COMMENT') {
+        const comment = await prisma.comment.findUnique({
+          where: { id: r.targetId },
+          select: {
+            id: true, jobId: true, userId: true, body: true, createdAt: true,
+            user: { select: { id: true, username: true, email: true, avatarUrl: true } },
+          },
+        });
+        return {
+          ...r,
+          target: comment
+            ? { ...comment, user: await presignAvatarOnly(comment.user) }
+            : comment,
+        };
+      }
       const user = await prisma.user.findUnique({
         where: { id: r.targetId },
         select: { id: true, username: true, email: true, bio: true, avatarUrl: true },
@@ -439,6 +454,21 @@ router.patch('/moderation/reports/:id', async (req: Request, res: Response) => {
       where: { id: report.targetId },
       data: { isPrivate: true },
     }).catch(() => null);
+  } else if (removeContent && report.targetType === 'COMMENT') {
+    // Hard-delete the offending comment and decrement the parent's count.
+    const comment = await prisma.comment.findUnique({
+      where: { id: report.targetId },
+      select: { id: true, jobId: true },
+    });
+    if (comment) {
+      await prisma.$transaction([
+        prisma.comment.delete({ where: { id: comment.id } }),
+        prisma.tryOnJob.update({
+          where: { id: comment.jobId },
+          data: { commentsCount: { decrement: 1 } },
+        }),
+      ]).catch(() => null);
+    }
   }
 
   const updated = await prisma.report.update({

@@ -31,6 +31,7 @@ interface FeedJob extends TryOnJob {
   user: { username: string; firstName?: string; lastName?: string; avatarUrl?: string };
   liked?: boolean;
   likesCount?: number;
+  commentsCount?: number;
 }
 
 export default function HomeScreen() {
@@ -218,6 +219,7 @@ export default function HomeScreen() {
             }
             onLikePress={() => toggleLike(item.id)}
             onMorePress={() => handleMoreActions(item)}
+            onCommentsPress={() => navigation.navigate('TryOnComments', { jobId: item.id })}
           />
         )}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -259,6 +261,7 @@ function FeedCard({
   onUsernamePress,
   onLikePress,
   onMorePress,
+  onCommentsPress,
 }: {
   job: FeedJob;
   onResultPress: (urls: string[], index: number) => void;
@@ -266,6 +269,7 @@ function FeedCard({
   onUsernamePress: () => void;
   onLikePress: () => void;
   onMorePress: () => void;
+  onCommentsPress: () => void;
 }) {
   // Collect all available result images
   const resultImages: string[] = [];
@@ -363,11 +367,29 @@ function FeedCard({
         </View>
       </View>
 
-      {(job.likesCount ?? 0) > 0 && (
-        <Text style={styles.likesCount}>
-          {job.likesCount} {job.likesCount === 1 ? 'like' : 'likes'}
-        </Text>
-      )}
+      <View style={styles.cardFooter}>
+        {(job.likesCount ?? 0) > 0 ? (
+          <Text style={styles.likesCount}>
+            {job.likesCount} {job.likesCount === 1 ? 'like' : 'likes'}
+          </Text>
+        ) : (
+          <View />
+        )}
+
+        {/* Comments icon — bottom-right of every card. Always visible (even
+            with zero comments) so a user can be the first to comment. */}
+        <TouchableOpacity
+          style={styles.commentsButton}
+          onPress={onCommentsPress}
+          accessibilityLabel="Open comments"
+          hitSlop={10}
+        >
+          <Ionicons name="chatbubble-outline" size={20} color={Colors.black} />
+          {(job.commentsCount ?? 0) > 0 ? (
+            <Text style={styles.commentsCount}>{job.commentsCount}</Text>
+          ) : null}
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -491,12 +513,31 @@ const styles = StyleSheet.create({
   sideThumbPlaceholder: {
     backgroundColor: Colors.gray100,
   },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.md,
+    paddingTop: 4,
+    minHeight: 36,
+  },
   likesCount: {
     fontSize: Typography.fontSizeSM,
     fontWeight: Typography.fontWeightSemiBold,
     color: Colors.black,
-    paddingHorizontal: Spacing.md,
-    paddingBottom: Spacing.md,
+  },
+  commentsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Spacing.xs,
+    paddingVertical: 4,
+  },
+  commentsCount: {
+    fontSize: Typography.fontSizeSM,
+    fontWeight: Typography.fontWeightSemiBold,
+    color: Colors.black,
   },
   footer: { padding: Spacing.lg },
   emptyContainer: { flex: 1 },

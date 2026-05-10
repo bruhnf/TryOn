@@ -159,6 +159,7 @@ export default function SettingsScreen() {
       <SettingRow label="Username" value={`@${user?.username}`} />
       <SettingRow label="Tier" value={user?.tier ?? 'FREE'} />
       <SettingRow label="Credits" value={String(user?.credits ?? 0)} />
+      <SettingButton label="Change Password" onPress={() => navigation.navigate('ChangePassword')} />
 
       <SectionHeader label="Subscription" />
       <SettingButton

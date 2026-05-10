@@ -39,11 +39,23 @@ export default function LoginScreen({ navigation }: Props) {
       );
       await setUser(data.user, data.accessToken, data.refreshToken);
     } catch (err: unknown) {
-      const errorCode = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        errorCode ??
-        'Login failed. Please try again.';
+      // The backend returns either { error: 'STRING_CODE', message: '...' } or
+      // { error: <zod flatten object> } on validation failure. Pulling the
+      // object out and passing it to Alert.alert as `message` will crash on
+      // newer React Native versions ("text strings must be rendered within a
+      // <Text>"). Coerce defensively before showing.
+      const response = (err as { response?: { data?: { error?: unknown; message?: string } } })?.response?.data;
+      const errorCode = typeof response?.error === 'string' ? response.error : undefined;
+
+      let msg = response?.message ?? errorCode ?? 'Login failed. Please try again.';
+      if (!errorCode && response?.error && typeof response.error === 'object') {
+        const fieldErrors = (response.error as { fieldErrors?: Record<string, string[]> }).fieldErrors;
+        if (fieldErrors) {
+          msg = Object.entries(fieldErrors)
+            .map(([field, errors]) => `${field}: ${errors.join(', ')}`)
+            .join('\n') || msg;
+        }
+      }
 
       if (errorCode === 'EMAIL_NOT_VERIFIED') {
         Alert.alert(
@@ -55,7 +67,7 @@ export default function LoginScreen({ navigation }: Props) {
           ],
         );
       } else {
-        Alert.alert('Login Failed', msg);
+        Alert.alert('Login Failed', String(msg));
       }
     } finally {
       setLoading(false);

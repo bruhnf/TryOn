@@ -77,7 +77,12 @@ export default function InboxScreen() {
       api.patch(`/notifications/${n.id}/read`).catch(() => {});
       setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
     }
-    // Navigate based on notification type
+    // COMMENT and LIKE notifications carry a jobId — drill into the relevant
+    // try-on. FOLLOW (and anything else) takes you to the actor's profile.
+    if ((n.type === 'COMMENT' || n.type === 'LIKE') && n.jobId) {
+      navigation.navigate('TryOnComments', { jobId: n.jobId });
+      return;
+    }
     if (n.actor?.username) {
       navigation.navigate('PublicProfile', { username: n.actor.username });
     }
@@ -158,6 +163,7 @@ function NotificationRow({
   let message = '';
   if (notification.type === 'FOLLOW') message = 'started following you';
   else if (notification.type === 'LIKE') message = 'liked your try-on';
+  else if (notification.type === 'COMMENT') message = 'commented on your try-on';
   else if (notification.type === 'TRYON_COMPLETE') message = 'Your try-on is ready';
 
   const jobThumbUrl = notification.job?.resultFullBodyUrl ?? notification.job?.resultMediumUrl;

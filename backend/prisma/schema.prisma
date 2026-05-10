@@ -31,11 +31,13 @@ enum NotificationType {
   FOLLOW
   LIKE
   TRYON_COMPLETE
+  COMMENT
 }
 
 enum ReportTargetType {
   TRYON_JOB
   USER
+  COMMENT
 }
 
 enum ReportReason {
@@ -99,6 +101,7 @@ model User {
   refreshTokens      RefreshToken[]
   creditTransactions CreditTransaction[]
   likes              Like[]
+  comments           Comment[]
   notifications      Notification[]      @relation("NotificationRecipient")
   actorNotifications Notification[]      @relation("NotificationActor")
   applePurchases     ApplePurchase[]
@@ -210,15 +213,38 @@ model TryOnJob {
   perspectivesUsed  String[]
   // denormalized like count for feed performance
   likesCount        Int       @default(0)
+  // denormalized comment count for feed performance
+  commentsCount     Int       @default(0)
   errorMessage      String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   likes         Like[]
+  comments      Comment[]
   notifications Notification[]
 
   @@map("tryon_jobs")
+}
+
+// User-authored comment on a TryOnJob. Comments are public when the parent
+// TryOnJob is public; private TryOnJobs are not commentable from the feed.
+// Authors can delete their own comment; the post owner can delete any
+// comment on their own post. Other users can Report instead.
+model Comment {
+  id        String   @id @default(uuid())
+  jobId     String
+  userId    String
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  job  TryOnJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([jobId, createdAt])
+  @@index([userId])
+  @@map("comments")
 }
 
 model UserLocation {

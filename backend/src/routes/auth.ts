@@ -8,7 +8,9 @@ import {
   forgotPassword,
   resetPassword,
   resendVerification,
+  changePassword,
 } from '../controllers/authController';
+import { requireAuth } from '../middleware/auth';
 
 const router = Router();
 
@@ -20,5 +22,7 @@ router.post('/logout', logout);
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
 router.post('/resend-verification', resendVerification);
+// Authenticated password change — requires JWT + current password as re-auth.
+router.post('/change-password', requireAuth, changePassword);
 
 export default router;

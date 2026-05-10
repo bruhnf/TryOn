@@ -22,6 +22,8 @@ import AdminConsoleScreen from '../screens/AdminConsoleScreen';
 import PurchaseScreen from '../screens/PurchaseScreen';
 import PublicProfileScreen from '../screens/PublicProfileScreen';
 import BlockedUsersScreen from '../screens/BlockedUsersScreen';
+import ChangePasswordScreen from '../screens/ChangePasswordScreen';
+import TryOnCommentsScreen from '../screens/TryOnCommentsScreen';
 
 export type AuthStackParams = {
   Login: undefined;
@@ -47,6 +49,8 @@ export type RootStackParams = {
   Friends: { initialTab?: 'following' | 'followers'; openSearch?: boolean };
   PublicProfile: { username: string };
   BlockedUsers: undefined;
+  ChangePassword: undefined;
+  TryOnComments: { jobId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParams>();
@@ -228,6 +232,19 @@ export default function AppNavigator() {
               // when launched from there. A 'card' presentation would push to the
               // parent stack and render underneath.
               options={{ presentation: 'modal', headerShown: false }}
+            />
+            <Stack.Screen
+              name="ChangePassword"
+              component={ChangePasswordScreen}
+              // Modal so it stacks above Settings (where it's launched from).
+              options={{ presentation: 'modal', headerShown: false }}
+            />
+            <Stack.Screen
+              name="TryOnComments"
+              component={TryOnCommentsScreen}
+              // Card presentation: feels native to drill-into-detail from the
+              // feed. Back swipe returns to Home.
+              options={{ presentation: 'card', headerShown: false }}
             />
           </>
         ) : (

@@ -38,10 +38,27 @@ export interface TryOnJob {
   bodyPhotoUrl?: string;
   perspectivesUsed: string[];
   likesCount?: number;
+  commentsCount?: number;
   liked?: boolean;
   errorMessage?: string;
   createdAt: string;
   user?: { username: string; firstName?: string; lastName?: string; avatarUrl?: string };
+}
+
+export interface Comment {
+  id: string;
+  jobId: string;
+  userId: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+  user: {
+    id: string;
+    username: string;
+    firstName?: string;
+    lastName?: string;
+    avatarUrl?: string;
+  };
 }
 
 export interface PublicUser {
@@ -53,7 +70,7 @@ export interface PublicUser {
   bio?: string;
 }
 
-export type NotificationType = 'FOLLOW' | 'LIKE' | 'TRYON_COMPLETE';
+export type NotificationType = 'FOLLOW' | 'LIKE' | 'TRYON_COMPLETE' | 'COMMENT';
 
 export interface Notification {
   id: string;

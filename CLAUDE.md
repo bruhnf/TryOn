@@ -178,15 +178,34 @@ Located at `/var/log/tryon/` (Docker volume `backend_logs`):
 - `rejections-YYYY-MM-DD.log` - Unhandled promise rejections
 
 ### Viewing Logs
+
+After SSHing into Lightsail and `cd /opt/evofaceflow/TryOn`:
+
 ```bash
-# On Lightsail server
-docker compose -f docker-compose.prod.yml logs -f backend  # Live Docker logs
+# All services together (most useful for live debugging) — backend + postgres
+# + redis + nginx in one stream. Each line is prefixed with the container name.
+docker compose -f docker-compose.prod.yml logs -f --tail=200
+
+# Just the backend Express app
+docker compose -f docker-compose.prod.yml logs -f backend --tail=200
+
+# Structured backend logs (JSON lines with correlationId, userId, service —
+# higher fidelity than `docker compose logs`; best when chasing a specific
+# request)
 docker compose -f docker-compose.prod.yml exec backend tail -f /var/log/tryon/combined-$(date +%Y-%m-%d).log
 
-# Or mount volume directly
+# Just errors (lower noise)
+docker compose -f docker-compose.prod.yml exec backend tail -f /var/log/tryon/error-$(date +%Y-%m-%d).log
+
+# Filter live for one user / correlation ID
+docker compose -f docker-compose.prod.yml logs -f backend | grep --line-buffered "<userId>"
+
+# Or mount the log volume directly from the host (no `exec` needed)
 docker volume inspect www_backend_logs  # Find mount point
 tail -f /var/lib/docker/volumes/www_backend_logs/_data/combined-*.log
 ```
+
+Hit `Ctrl+C` to stop tailing. Day-to-day, the first command (all services, last 200 lines) is the one you'll reach for most.
 
 ### Log Management Strategy
 1. **Daily rotation** prevents single files from growing too large
@@ -233,7 +252,7 @@ Static landing page for evoFaceFlow with web authentication. Hosted via the ngin
 Express app with JWT authentication and BullMQ job queue for async AI image generation.
 
 - **Entry point**: `index.ts` — mounts all middleware (Helmet, CORS, rate limiting) and routes
-- **Routes**: `routes/` — `auth`, `upload`, `tryon`, `admin`, `friends`, `feed`, `profile`, `credits`, `notifications`, `likes`, `appleWebhook` (mounted at `/api/webhooks/apple`), `moderation` (mounted under `/api`, exposes `/reports`, `/users/:id/block`, `/users/me/blocks`)
+- **Routes**: `routes/` — `auth` (signup / login / refresh / logout / forgot-password / reset-password / resend-verification, plus authenticated `POST /change-password` which requires the current password and rotates the bcrypt hash + revokes every refresh token for the user), `upload`, `tryon`, `admin`, `friends`, `feed`, `profile`, `credits`, `notifications`, `likes`, `appleWebhook` (mounted at `/api/webhooks/apple`), `moderation` (mounted under `/api`, exposes `/reports`, `/users/:id/block`, `/users/me/blocks`), `comments` (mounted under `/api`, exposes `GET/POST /tryon/:jobId/comments` and `DELETE /comments/:commentId`)
 - **Controllers**: `controllers/` — one per route group
 - **Services**: `services/grokService.ts` — calls xAI Grok Imagine API for AI image generation
 - **Services**: `services/locationService.ts` — geo-IP lookup and suspicious-location detection
@@ -269,8 +288,10 @@ React Native app using Expo with React Navigation and Zustand for state.
   - `PublicProfileScreen` — view another user's public profile and try-on history. Header three-dot menu for Report/Block. Shows "you've blocked this user" empty state when applicable.
   - `EditProfileScreen` — edit bio, username, body photos
   - `FriendsScreen` — Following / Followers tabs + search
-  - `InboxScreen` — in-app notifications (FOLLOW / LIKE / TRYON_COMPLETE)
-  - `SettingsScreen` — account, subscription (Restore Purchases, Manage Subscription deep link), Privacy & Data (Blocked Users, Delete Body Photos, Export My Data, Delete Account), Legal (Privacy/Terms in WebBrowser), Admin (only visible to admin allowlist)
+  - `InboxScreen` — in-app notifications (FOLLOW / LIKE / COMMENT / TRYON_COMPLETE). LIKE and COMMENT taps open the relevant try-on's comment thread; FOLLOW taps open the actor's profile.
+  - `TryOnCommentsScreen` — full-screen comment thread for a single TryOn. Reached from the comments icon on every Home feed card and from COMMENT/LIKE notifications. Comment authors can delete their own comments; TryOn owners can delete any comment on their own post; other users can Report.
+  - `SettingsScreen` — account (Email, Username, Tier, Credits, Change Password), subscription (Restore Purchases, Manage Subscription deep link), Privacy & Data (Blocked Users, Delete Body Photos, Export My Data, Delete Account), Legal (Privacy/Terms in WebBrowser), Admin (only visible to admin allowlist)
+  - `ChangePasswordScreen` — modal launched from Settings → Account → Change Password. Requires current password as re-auth, enforces the same complexity rules as signup, and forces re-login on success (server invalidates all refresh tokens).
   - `BlockedUsersScreen` — list and unblock previously-blocked users (modal presentation so it stacks above Settings)
   - `AdminConsoleScreen` — admin-only screen, route only registered when `__DEV__ || user.isAdmin`
   - `PurchaseScreen` — StoreKit-driven purchase flow. Fetches localized prices from Apple, presents tiers + credit packs, real Restore Purchases. Auto-renew disclosure rendered adjacent to each subscribe button (App Store Guideline 3.1.2(a)).
@@ -358,9 +379,9 @@ In-app notifications shown on the Inbox screen. Distinct from Apple Server Notif
 ```
 id        String           @id @default(uuid())
 userId    String           // recipient
-type      NotificationType // FOLLOW | LIKE | TRYON_COMPLETE
+type      NotificationType // FOLLOW | LIKE | TRYON_COMPLETE | COMMENT
 actorId   String?          // who triggered it
-jobId     String?          // related TryOnJob, if any
+jobId     String?          // related TryOnJob, if any (set for LIKE / COMMENT / TRYON_COMPLETE)
 read      Boolean          @default(false)
 createdAt DateTime         @default(now())
 ```
@@ -387,9 +408,21 @@ resultMediumUrl   String?    // S3 key — result image for medium perspective
 bodyPhotoUrl      String?    // S3 key — primary body photo used as input (full body preferred, medium fallback)
 perspectivesUsed  String[]   // ["full_body", "medium"] — records which inputs were used
 likesCount        Int        @default(0)  // denormalized for feed performance
+commentsCount     Int        @default(0)  // denormalized for feed performance
 errorMessage      String?
 createdAt         DateTime  @default(now())
 updatedAt         DateTime  @updatedAt
+```
+
+### Comment
+User-authored comment on a public TryOnJob. Stored in the `comments` table. Threading is flat (no replies). The frontend renders comments oldest-first below the TryOn image in `TryOnCommentsScreen`.
+```
+id        String   @id @default(uuid())
+jobId     String   // parent TryOnJob
+userId    String   // author
+body      String   // 1-500 chars, trimmed
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
 ```
 
 ### UserLocations
@@ -440,7 +473,7 @@ User-submitted content/user reports. Required by App Store Review Guideline 1.2.
 ```
 id           String           @id @default(uuid())
 reporterId   String
-targetType   ReportTargetType // TRYON_JOB | USER
+targetType   ReportTargetType // TRYON_JOB | USER | COMMENT
 targetId     String           // TryOnJob.id or User.id depending on targetType
 reason       ReportReason     // INAPPROPRIATE | HARASSMENT | IMPERSONATION | SPAM | COPYRIGHT | OTHER
 details      String?          // optional free-text from reporter
@@ -525,7 +558,7 @@ Production uses **only** the `/api/credits/verify-receipt` path plus App Store S
 
 ### Content Moderation (App Store Guideline 1.2)
 The app supports user-generated content (public try-on feed) and so must provide reporting, blocking, and content filtering.
-- **Report:** Three-dot menu on every feed card (HomeScreen) and on PublicProfileScreen. Opens `ReportSheet` with 6 reason options. Submits to `POST /api/reports`. Reports are listed in admin moderation endpoints (`GET /api/admin/moderation/reports`) and resolved with `PATCH /api/admin/moderation/reports/:id` (optional `removeContent: true` flips `TryOnJob.isPrivate = true`).
+- **Report:** Three-dot menu on every feed card (HomeScreen), on PublicProfileScreen, and on each comment in TryOnCommentsScreen. Opens `ReportSheet` with 6 reason options. Submits to `POST /api/reports`. Supported `targetType` values: `TRYON_JOB`, `USER`, `COMMENT`. Reports are listed in admin moderation endpoints (`GET /api/admin/moderation/reports`) and resolved with `PATCH /api/admin/moderation/reports/:id`. `removeContent: true` flips `TryOnJob.isPrivate = true` for `TRYON_JOB` targets and hard-deletes the comment (and decrements `TryOnJob.commentsCount`) for `COMMENT` targets.
 - **Block:** Same three-dot menus expose Block. `POST /api/users/:userId/block` creates a `UserBlock` row; mutual filtering is applied to feed, public-profile, and search queries via `getInvisibleUserIds()` in `backend/src/utils/blocks.ts`. Blocking also deletes any existing follow links between the two users.
 - **Unblock:** Settings → Privacy & Data → Blocked Users (`BlockedUsersScreen`) lists current blocks and allows unblocking via `DELETE /api/users/:userId/block`.
 - **Filtering objectionable material from posting:** combination of (a) ToS prohibition, (b) xAI Grok's built-in content filters on AI-generated images, (c) user reports, (d) admin removal. There is no automated image moderation — adding AWS Rekognition or similar would harden this further.

@@ -40,6 +40,17 @@ router.post('/reports', async (req: Request, res: Response) => {
   if (targetType === 'TRYON_JOB') {
     const job = await prisma.tryOnJob.findUnique({ where: { id: targetId }, select: { id: true } });
     if (!job) { res.status(404).json({ error: 'Reported content not found' }); return; }
+  } else if (targetType === 'COMMENT') {
+    const comment = await prisma.comment.findUnique({
+      where: { id: targetId },
+      select: { id: true, userId: true },
+    });
+    if (!comment) { res.status(404).json({ error: 'Reported comment not found' }); return; }
+    // Disallow self-reports of one's own comment.
+    if (comment.userId === req.user.userId) {
+      res.status(400).json({ error: 'Cannot report your own comment' });
+      return;
+    }
   } else {
     const user = await prisma.user.findUnique({ where: { id: targetId }, select: { id: true } });
     if (!user) { res.status(404).json({ error: 'Reported user not found' }); return; }

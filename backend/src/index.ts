@@ -20,6 +20,7 @@ import notificationsRoutes from './routes/notifications';
 import likesRoutes from './routes/likes';
 import appleWebhookRoutes from './routes/appleWebhook';
 import moderationRoutes from './routes/moderation';
+import commentsRoutes from './routes/comments';
 
 import './queue/tryonWorker';
 import './queue/vulnerabilityWorker';
@@ -136,6 +137,10 @@ app.use('/api/notifications', notificationsRoutes);
 app.use('/api/likes', likesRoutes);
 app.use('/api/webhooks', appleWebhookRoutes);
 app.use('/api', moderationRoutes);
+// Mounted at /api so paths can be `/tryon/:jobId/comments` (extending the
+// existing /api/tryon namespace without modifying tryonRoutes) and
+// `/comments/:commentId` for delete.
+app.use('/api', commentsRoutes);
 
 // Health check (no auth required)
 app.get('/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
