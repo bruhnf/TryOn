@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import prisma from '../lib/prisma';
 import { uploadToS3, keyFromUrl } from '../services/s3Service';
-import { presignTryOnJob, presignTryOnJobs } from '../services/imageUrlService';
+import { presignTryOnJob, presignTryOnJobs, presignAvatarOnly } from '../services/imageUrlService';
 import { safeFilename } from '../middleware/uploadMiddleware';
 import { enqueueTryOn } from '../queue/tryonQueue';
 import { MAX_CLOTHING_ITEMS } from '../middleware/subscription';
@@ -153,13 +153,34 @@ export async function getJobStatus(req: Request, res: Response): Promise<void> {
   if (!req.user) { res.status(401).json({ error: 'Unauthorized' }); return; }
 
   const { jobId } = req.params;
-  const job = await prisma.tryOnJob.findUnique({ where: { id: jobId } });
-  if (!job || job.userId !== req.user.userId) {
+  const job = await prisma.tryOnJob.findUnique({
+    where: { id: jobId },
+    include: {
+      user: {
+        select: { id: true, username: true, firstName: true, lastName: true, avatarUrl: true },
+      },
+    },
+  });
+  if (!job) {
+    res.status(404).json({ error: 'Job not found' });
+    return;
+  }
+  // Visibility: owner can always read (including in-progress / failed jobs);
+  // non-owners can only read public completed posts. This is also what the
+  // mobile poll loop hits for its own jobs and what TryOnCommentsScreen hits
+  // when opening someone else's post from the feed.
+  const isOwner = job.userId === req.user.userId;
+  if (!isOwner && job.isPrivate) {
     res.status(404).json({ error: 'Job not found' });
     return;
   }
 
-  res.json(await presignTryOnJob(job));
+  const { user, ...rest } = job;
+  const [presignedJob, presignedUser] = await Promise.all([
+    presignTryOnJob(rest),
+    presignAvatarOnly(user),
+  ]);
+  res.json({ ...presignedJob, user: presignedUser });
 }
 
 export async function getTryOnHistory(req: Request, res: Response): Promise<void> {
