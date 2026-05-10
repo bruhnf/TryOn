@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { ReportStatus } from '@prisma/client';
+import { JobStatus, Prisma, ReportStatus } from '@prisma/client';
 import { requireAdmin } from '../middleware/auth';
 import prisma from '../lib/prisma';
 import { hashPassword } from '../utils/password';
@@ -110,13 +110,35 @@ router.get('/user/:userId', async (req: Request, res: Response) => {
   res.json(await presignUserPhotos(user));
 });
 
-router.get('/jobs', async (_req: Request, res: Response) => {
-  const jobs = await prisma.tryOnJob.findMany({
-    orderBy: { createdAt: 'desc' },
-    take: 100,
-    include: { user: { select: { username: true } } },
-  });
-  res.json(await presignTryOnJobs(jobs));
+router.get('/jobs', async (req: Request, res: Response) => {
+  const limit = Math.min(Math.max(1, parseInt(req.query.limit as string ?? '25', 10)), 100);
+  const skip = Math.max(0, parseInt(req.query.skip as string ?? '0', 10));
+  const search = ((req.query.search as string) ?? '').trim();
+  const statusParam = req.query.status as string | undefined;
+
+  const where: Prisma.TryOnJobWhereInput = {};
+  if (statusParam && ['PENDING', 'PROCESSING', 'COMPLETE', 'FAILED'].includes(statusParam)) {
+    where.status = statusParam as JobStatus;
+  }
+  if (search) {
+    where.OR = [
+      { user: { username: { contains: search, mode: 'insensitive' } } },
+      { id: { startsWith: search } },
+    ];
+  }
+
+  const [jobs, total] = await Promise.all([
+    prisma.tryOnJob.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+      include: { user: { select: { username: true } } },
+    }),
+    prisma.tryOnJob.count({ where }),
+  ]);
+
+  res.json({ jobs: await presignTryOnJobs(jobs), total });
 });
 
 router.delete('/user/:userId', async (req: Request, res: Response) => {

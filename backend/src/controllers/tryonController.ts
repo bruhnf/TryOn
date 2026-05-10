@@ -164,6 +164,7 @@ export async function submitTryOn(req: Request, res: Response): Promise<void> {
       clothingPhoto2Url: clothingKeys[1] ?? null,
       bodyPhotoUrl,
       perspectivesUsed: [],
+      creditsAtTime: user.credits,
     },
   });
 

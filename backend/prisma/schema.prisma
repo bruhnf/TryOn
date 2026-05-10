@@ -218,6 +218,8 @@ model TryOnJob {
   likesCount        Int       @default(0)
   // denormalized comment count for feed performance
   commentsCount     Int       @default(0)
+  // user's credit balance at the moment the try-on was submitted (before any deduction)
+  creditsAtTime     Int?
   errorMessage      String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt

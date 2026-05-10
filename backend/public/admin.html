@@ -257,6 +257,46 @@
       min-width: 80px !important;
       flex: none !important;
     }
+
+    /* Resizable columns for jobs table */
+    #jobsTable {
+      table-layout: fixed;
+    }
+    #jobsTable th, #jobsTable td {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .resizable-th {
+      position: relative;
+    }
+    .col-resize-handle {
+      position: absolute;
+      right: 0;
+      top: 0;
+      width: 6px;
+      height: 100%;
+      cursor: col-resize;
+      background: transparent;
+      z-index: 1;
+      user-select: none;
+    }
+    .col-resize-handle:hover, .col-resize-handle.dragging {
+      background: rgba(255, 255, 255, 0.25);
+    }
+    /* Pagination controls */
+    .pagination-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 14px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .pagination-bar .btn-secondary:disabled {
+      opacity: 0.35;
+      cursor: default;
+    }
   </style>
 </head>
 <body>
@@ -346,25 +386,58 @@
       <div id="jobs-tab" style="display: none;">
         <div class="section">
           <h2>Recent Try-On Jobs</h2>
-          <div style="margin-bottom: 15px;">
+          <!-- Search / filter / bulk-action bar -->
+          <div style="display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; align-items: center;">
+            <input type="text" id="jobSearch" placeholder="Search username or job ID…"
+                   style="flex: 1; min-width: 200px; padding: 8px 10px; border: 1px solid #333; border-radius: 6px; background: #0a0a0a; color: #fff;"
+                   oninput="onJobSearchInput()">
+            <select id="jobStatusFilter" onchange="loadJobs(1)"
+                    style="padding: 8px 10px; border: 1px solid #333; border-radius: 6px; background: #0a0a0a; color: #fff;">
+              <option value="">All Statuses</option>
+              <option value="COMPLETE">Complete</option>
+              <option value="PENDING">Pending</option>
+              <option value="PROCESSING">Processing</option>
+              <option value="FAILED">Failed</option>
+            </select>
+            <select id="jobPageSize" onchange="loadJobs(1)"
+                    style="padding: 8px 10px; border: 1px solid #333; border-radius: 6px; background: #0a0a0a; color: #fff;">
+              <option value="25">25 / page</option>
+              <option value="50">50 / page</option>
+              <option value="100">100 / page</option>
+            </select>
             <button class="btn btn-danger" id="deleteSelectedBtn" onclick="deleteSelectedJobs()" style="display: none;">Delete Selected (<span id="selectedCount">0</span>)</button>
-            <span id="deleteResult" style="margin-left: 10px;"></span>
+            <span id="deleteResult"></span>
           </div>
-          <table id="jobsTable">
-            <thead>
-              <tr>
-                <th style="width: 40px;"><input type="checkbox" id="selectAllJobs" onchange="toggleSelectAll(this)"></th>
-                <th>ID</th>
-                <th>User</th>
-                <th>Status</th>
-                <th>Privacy</th>
-                <th>Perspectives</th>
-                <th>Created</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="jobsBody"></tbody>
-          </table>
+          <!-- Jobs table (resizable columns) -->
+          <div style="overflow-x: auto;">
+            <table id="jobsTable">
+              <thead>
+                <tr>
+                  <th style="width: 40px;"><input type="checkbox" id="selectAllJobs" onchange="toggleSelectAll(this)"></th>
+                  <th class="resizable-th" style="width: 100px;">ID</th>
+                  <th class="resizable-th" style="width: 120px;">User</th>
+                  <th class="resizable-th" style="width: 105px;">Status</th>
+                  <th class="resizable-th" style="width: 80px;">Privacy</th>
+                  <th class="resizable-th" style="width: 130px;">Perspectives</th>
+                  <th class="resizable-th" style="width: 72px;">Credits</th>
+                  <th class="resizable-th" style="width: 165px;">Created</th>
+                  <th class="resizable-th" style="width: 210px;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="jobsBody"></tbody>
+            </table>
+          </div>
+          <!-- Pagination -->
+          <div class="pagination-bar">
+            <span id="jobsPageInfo" style="color: #666; font-size: 0.85rem;"></span>
+            <div style="display: flex; gap: 5px; align-items: center;">
+              <button class="btn btn-secondary" id="jobsFirstBtn" onclick="loadJobs(1)">«</button>
+              <button class="btn btn-secondary" id="jobsPrevBtn" onclick="loadJobs(jobsCurrentPage - 1)">‹</button>
+              <span id="jobsPageNum" style="padding: 6px 12px; color: #aaa; font-size: 0.85rem; min-width: 80px; text-align: center;"></span>
+              <button class="btn btn-secondary" id="jobsNextBtn" onclick="loadJobs(jobsCurrentPage + 1)">›</button>
+              <button class="btn btn-secondary" id="jobsLastBtn" onclick="loadJobs(jobsTotalPages)">»</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -657,14 +730,61 @@
       }
     }
 
-    async function loadJobs() {
+    // Jobs pagination state
+    let jobsCurrentPage = 1;
+    let jobsTotalPages = 1;
+    let jobsSearchTimer = null;
+    let jobsResizableInitialized = false;
+
+    function onJobSearchInput() {
+      clearTimeout(jobsSearchTimer);
+      jobsSearchTimer = setTimeout(() => loadJobs(1), 350);
+    }
+
+    async function loadJobs(page) {
+      if (page === undefined) page = jobsCurrentPage;
+      jobsCurrentPage = Math.max(1, page);
+
+      const search = (document.getElementById('jobSearch')?.value ?? '').trim();
+      const status = document.getElementById('jobStatusFilter')?.value ?? '';
+      const limit = parseInt(document.getElementById('jobPageSize')?.value ?? '25', 10);
+      const skip = (jobsCurrentPage - 1) * limit;
+
+      const params = new URLSearchParams({ limit, skip });
+      if (search) params.set('search', search);
+      if (status) params.set('status', status);
+
       try {
-        const res = await fetch(`${API_BASE}/jobs`, {
+        const res = await fetch(`${API_BASE}/jobs?${params}`, {
           headers: { 'X-Admin-Key': apiKey }
         });
-        const jobs = await res.json();
-        
+        const data = await res.json();
+        // Support both new { jobs, total } shape and old plain array (backward compat)
+        const jobs = Array.isArray(data) ? data : (data.jobs ?? []);
+        const total = Array.isArray(data) ? jobs.length : (data.total ?? jobs.length);
+
+        jobsTotalPages = Math.max(1, Math.ceil(total / limit));
+
+        // Update pagination info
+        const start = total === 0 ? 0 : skip + 1;
+        const end = Math.min(skip + limit, total);
+        document.getElementById('jobsPageInfo').textContent =
+          total === 0 ? 'No jobs found' : `Showing ${start}–${end} of ${total} jobs`;
+        document.getElementById('jobsPageNum').textContent =
+          `Page ${jobsCurrentPage} of ${jobsTotalPages}`;
+        document.getElementById('jobsFirstBtn').disabled = jobsCurrentPage <= 1;
+        document.getElementById('jobsPrevBtn').disabled = jobsCurrentPage <= 1;
+        document.getElementById('jobsNextBtn').disabled = jobsCurrentPage >= jobsTotalPages;
+        document.getElementById('jobsLastBtn').disabled = jobsCurrentPage >= jobsTotalPages;
+
         const tbody = document.getElementById('jobsBody');
+        if (!jobs.length) {
+          tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#666;padding:20px;">No jobs found</td></tr>';
+          document.getElementById('selectAllJobs').checked = false;
+          updateSelectedCount();
+          return;
+        }
+
         tbody.innerHTML = jobs.map(j => {
           const statusClass = {
             'COMPLETE': 'badge-success',
@@ -672,14 +792,11 @@
             'PENDING': 'badge-warning',
             'FAILED': 'badge-danger'
           }[j.status] || 'badge-muted';
-          
-          // Build clothing links
+
           let clothingLinks = '';
           if (j.clothingPhoto1Url) {
             clothingLinks += `<a href="${j.clothingPhoto1Url}" target="_blank" class="btn btn-primary" style="padding: 2px 8px;">Clothing</a> `;
           }
-          
-          // Build result links
           let resultLinks = '';
           if (j.resultFullBodyUrl) {
             resultLinks += `<a href="${j.resultFullBodyUrl}" target="_blank" class="btn btn-secondary" style="padding: 2px 8px;">Full</a> `;
@@ -687,30 +804,64 @@
           if (j.resultMediumUrl) {
             resultLinks += `<a href="${j.resultMediumUrl}" target="_blank" class="btn btn-secondary" style="padding: 2px 8px;">Medium</a> `;
           }
-          
+
+          const creditsDisplay = j.creditsAtTime != null ? j.creditsAtTime : '—';
+
           return `
             <tr>
               <td><input type="checkbox" class="job-checkbox" value="${j.id}" onchange="updateSelectedCount()"></td>
-              <td style="font-family: monospace; font-size: 0.8rem;">${j.id.slice(0, 8)}...</td>
+              <td style="font-family:monospace;font-size:0.8rem;">${j.id.slice(0, 8)}…</td>
               <td><span class="username-link" onclick="showUserDetails('${j.userId}')">${j.user?.username || j.userId.slice(0, 8)}</span></td>
               <td><span class="badge ${statusClass}">${j.status}</span></td>
               <td><span class="badge ${j.isPrivate ? 'badge-muted' : 'badge-info'}">${j.isPrivate ? 'Private' : 'Public'}</span></td>
-              <td>${(j.perspectivesUsed || []).join(', ') || '-'}</td>
+              <td>${(j.perspectivesUsed || []).join(', ') || '—'}</td>
+              <td style="text-align:right;font-family:monospace;">${creditsDisplay}</td>
               <td>${new Date(j.createdAt).toLocaleString()}</td>
               <td>
-                ${clothingLinks}${resultLinks || '-'}
-                <button class="btn btn-danger" style="padding: 2px 8px; margin-left: 5px;" onclick="deleteJob('${j.id}')">×</button>
+                ${clothingLinks}${resultLinks || '—'}
+                <button class="btn btn-danger" style="padding:2px 8px;margin-left:4px;" onclick="deleteJob('${j.id}')">×</button>
               </td>
             </tr>
           `;
         }).join('');
-        
-        // Reset selection state
+
         document.getElementById('selectAllJobs').checked = false;
         updateSelectedCount();
+
+        // Wire up resizable columns once
+        if (!jobsResizableInitialized) {
+          makeColumnsResizable('jobsTable');
+          jobsResizableInitialized = true;
+        }
       } catch (e) {
         console.error('Failed to load jobs', e);
       }
+    }
+
+    function makeColumnsResizable(tableId) {
+      const table = document.getElementById(tableId);
+      if (!table) return;
+      table.querySelectorAll('th.resizable-th').forEach(th => {
+        const handle = document.createElement('div');
+        handle.className = 'col-resize-handle';
+        handle.addEventListener('mousedown', e => {
+          e.preventDefault();
+          const startX = e.pageX;
+          const startWidth = th.offsetWidth;
+          handle.classList.add('dragging');
+          const onMove = e => {
+            th.style.width = Math.max(50, startWidth + (e.pageX - startX)) + 'px';
+          };
+          const onUp = () => {
+            handle.classList.remove('dragging');
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+          };
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+        });
+        th.appendChild(handle);
+      });
     }
 
     async function loadSecurity() {
