@@ -220,6 +220,11 @@ model TryOnJob {
   commentsCount     Int       @default(0)
   // user's credit balance at the moment the try-on was submitted (before any deduction)
   creditsAtTime     Int?
+  // When the worker is scheduled to actually start this job. Null = start
+  // immediately. Non-null when the soft throttle deferred the submission so
+  // the client can render a "starts in X:XX" countdown. The BullMQ delay is
+  // the authoritative timer; this column is for client display only.
+  scheduledStartAt  DateTime?
   errorMessage      String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt

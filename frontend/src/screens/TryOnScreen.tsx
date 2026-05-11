@@ -144,11 +144,31 @@ export default function TryOnScreen() {
       }
       formData.append('isPrivate', isPrivate.toString());
 
-      const { data } = await api.post<{ jobId: string; status: string }>('/tryon', formData, {
+      const { data } = await api.post<{
+        jobId: string;
+        status: string;
+        scheduledStartAt?: string | null;
+        queueDelayMs?: number;
+      }>('/tryon', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      setActiveJob({ id: data.jobId, status: 'PENDING' } as TryOnJob);
+      setActiveJob({
+        id: data.jobId,
+        status: 'PENDING',
+        scheduledStartAt: data.scheduledStartAt ?? null,
+      } as TryOnJob);
+
+      // Set expectations *before* the countdown view appears so users
+      // understand they're being paced rather than waiting on a stuck job.
+      if (data.queueDelayMs && data.queueDelayMs > 0) {
+        const minutes = Math.round(data.queueDelayMs / 60000);
+        Alert.alert(
+          'Queued',
+          `You've been moving fast. Your next try-on will start in about ${minutes} minute${minutes === 1 ? '' : 's'}.`,
+        );
+      }
+
       pollJobStatus(data.jobId);
     } catch (err: unknown) {
       const error =
@@ -356,6 +376,20 @@ function ResultView({ job, onReset }: { job: TryOnJob; onReset: () => void }) {
   const isPending = job.status === 'PENDING' || job.status === 'PROCESSING';
   const isFailed = job.status === 'FAILED';
 
+  // Throttle countdown. Ticks once per second while a `scheduledStartAt` in
+  // the future exists. When it elapses we fall through to the normal
+  // "Generating…" view; the worker will pick the job up at that moment.
+  const startAt = job.scheduledStartAt ? new Date(job.scheduledStartAt).getTime() : 0;
+  const [now, setNow] = useState<number>(() => Date.now());
+  const remainingMs = Math.max(0, startAt - now);
+  const isQueued = isPending && startAt > 0 && remainingMs > 0;
+
+  useEffect(() => {
+    if (!isQueued) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [isQueued]);
+
   if (isFailed) {
     return (
       <View style={styles.resultContainer}>
@@ -366,6 +400,24 @@ function ResultView({ job, onReset }: { job: TryOnJob; onReset: () => void }) {
         <TouchableOpacity style={styles.submitBtn} onPress={onReset}>
           <Text style={styles.submitBtnText}>Try Again</Text>
         </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (isQueued) {
+    const totalSec = Math.ceil(remainingMs / 1000);
+    const mm = Math.floor(totalSec / 60);
+    const ss = totalSec % 60;
+    const pad = (n: number) => (n < 10 ? `0${n}` : String(n));
+    return (
+      <View style={styles.resultContainer}>
+        <Text style={styles.queuedEmoji}>⏳</Text>
+        <Text style={styles.queuedTitle}>Queued</Text>
+        <Text style={styles.queuedCountdown}>{`Starts in ${mm}:${pad(ss)}`}</Text>
+        <Text style={styles.queuedSubtext}>
+          We slow rapid bursts so everyone gets a fair turn. You can close the app —
+          your try-on will be ready in your Profile when it finishes.
+        </Text>
       </View>
     );
   }
@@ -557,6 +609,25 @@ const styles = StyleSheet.create({
     marginTop: Spacing.md,
   },
   generatingSubtext: { fontSize: Typography.fontSizeSM, color: Colors.gray600 },
+  queuedEmoji: { fontSize: 44 },
+  queuedTitle: {
+    fontSize: Typography.fontSizeLG,
+    fontWeight: Typography.fontWeightSemiBold,
+    color: Colors.black,
+  },
+  queuedCountdown: {
+    fontSize: Typography.fontSizeXXL,
+    fontWeight: Typography.fontWeightBold,
+    color: Colors.black,
+    fontVariant: ['tabular-nums'],
+  },
+  queuedSubtext: {
+    fontSize: Typography.fontSizeSM,
+    color: Colors.gray600,
+    textAlign: 'center',
+    lineHeight: 20,
+    paddingHorizontal: Spacing.lg,
+  },
   resultTitle: {
     fontSize: Typography.fontSizeXL,
     fontWeight: Typography.fontWeightBold,

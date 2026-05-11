@@ -42,6 +42,11 @@ export interface TryOnJob {
   liked?: boolean;
   errorMessage?: string;
   createdAt: string;
+  // ISO timestamp set when the backend's soft throttle deferred this
+  // submission. Null/absent = the worker will pick it up immediately. The
+  // TryOn screen uses this to render a "starts in X:XX" countdown while
+  // the job sits in BullMQ's delayed set.
+  scheduledStartAt?: string | null;
   user?: { username: string; firstName?: string; lastName?: string; avatarUrl?: string };
 }
 

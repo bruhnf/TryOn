@@ -7,6 +7,7 @@ import { safeFilename } from '../middleware/uploadMiddleware';
 import { enqueueTryOn } from '../queue/tryonQueue';
 import { MAX_CLOTHING_ITEMS } from '../middleware/subscription';
 import { TIER_CONFIG } from '../services/tierService';
+import { computeQueueDelayMs } from '../services/throttleService';
 import { resizeImageForTryOn } from '../utils/imageProcessor';
 import { createChildLogger, logJob, logUpload } from '../services/logger';
 
@@ -161,6 +162,26 @@ export async function submitTryOn(req: Request, res: Response): Promise<void> {
     clothingKeys.push(key);
   }
   const isPrivate = req.body?.isPrivate === true || req.body?.isPrivate === 'true';
+
+  // Soft per-user throttle. Bursts beyond the tier-specific free quota get
+  // a BullMQ delay (1/3/5/10 min ladder) so rapid-fire submissions are
+  // paced without a hard 429. The client renders a countdown from
+  // `scheduledStartAt`.
+  const throttle = await computeQueueDelayMs(userId, tier);
+  const scheduledStartAt = throttle.delayMs > 0
+    ? new Date(Date.now() + throttle.delayMs)
+    : null;
+  if (throttle.delayMs > 0) {
+    log.info('Try-on submission throttled', {
+      userId,
+      tier,
+      ordinal: throttle.ordinal,
+      burst: throttle.burst,
+      delayMs: throttle.delayMs,
+      jobId,
+    });
+  }
+
   await prisma.tryOnJob.create({
     data: {
       id: jobId,
@@ -171,13 +192,22 @@ export async function submitTryOn(req: Request, res: Response): Promise<void> {
       bodyPhotoUrl,
       perspectivesUsed: [],
       creditsAtTime: user.credits,
+      scheduledStartAt,
     },
   });
 
   // Worker reads from S3 via SDK using these keys — no public URL needed.
-  await enqueueTryOn({ jobId, userId, clothingUrls: clothingKeys, bodyPhotos });
+  await enqueueTryOn(
+    { jobId, userId, clothingUrls: clothingKeys, bodyPhotos },
+    throttle.delayMs,
+  );
 
-  res.status(202).json({ jobId, status: 'PENDING' });
+  res.status(202).json({
+    jobId,
+    status: 'PENDING',
+    scheduledStartAt,
+    queueDelayMs: throttle.delayMs,
+  });
 }
 
 export async function getJobStatus(req: Request, res: Response): Promise<void> {
