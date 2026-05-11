@@ -28,6 +28,16 @@ CORE FEATURE WALKTHROUGH (testuser1)
 3. Tap "Generate Try-On". Result returns in 10-30 seconds with a clear
    "AI-generated" disclosure pill on every surface (Guideline 4.0).
 
+NOTE ON RAPID-FIRE TESTING
+To control Grok API cost, a soft per-user throttle paces bursts. The
+first 5 submissions in a rolling 15 minutes run immediately for Premium
+users (testuser1). Beyond that, subsequent submissions are accepted but
+queued with a visible "starts in 1:00" countdown that ladders up to a
+10-minute cap. This is intentional pacing — the job still runs, just
+deferred. Cancelling and resubmitting does not bypass it. If your test
+plan involves many sequential generations, expect the countdown screen
+after the 5th in the window.
+
 NAVIGATION
 Five tabs: Home (Discover) | Friends | TryOn (centered FAB) | Inbox |
 Profile. Settings, Edit Profile, and Purchase are modals.

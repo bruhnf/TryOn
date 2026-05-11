@@ -265,10 +265,14 @@ Express app with JWT authentication and BullMQ job queue for async AI image gene
 1. Client uploads 1 item of clothing or outfit photo → S3 via multer-s3
 2. Backend determines which user body photos exist (full body, medium — never close-up/profile)
 3. If neither full body nor medium exists → return 422 with `NO_BODY_PHOTOS` error code; frontend shows the upload prompt dialog
-4. Job queued in Redis (BullMQ) with S3 URLs for clothing photo + available user body photo URLs
-5. Worker calls Grok Imagine API once per available body photo perspective
-6. Result images stored in S3; job result written back to DB
-7. Client polls or receives push notification on completion
+4. Weekly + storage caps enforced (`TRYON_LIMIT_REACHED` if user has 500 stored sessions; `WEEKLY_LIMIT_REACHED` for subscribers without credits)
+5. Credit deduction tagged with `(job=<jobId>)` in the `CreditTransaction.description` so the worker can refund on terminal failure
+6. **Soft throttle** runs (`services/throttleService.ts`) — see "Soft per-user throttle" under Key Business Rules. Computes a BullMQ `delay` and stores the effective start time on `TryOnJob.scheduledStartAt` so the client can render a "starts in X:XX" countdown.
+7. Job queued in Redis (BullMQ) with S3 keys for clothing photo + available user body photo keys
+8. Worker calls Grok Imagine API once per available body photo perspective
+9. Result images stored in S3; job result written back to DB
+10. Client polls or receives push notification on completion
+11. **Terminal failure path:** after BullMQ exhausts retries (3 attempts with exponential backoff), the worker's `failed` handler marks the row `FAILED`, looks up the `(job=<jobId>)`-tagged `USAGE` CreditTransaction, and — if found — creates a matching `REFUND` transaction + increments `User.credits`. Idempotent on the REFUND tag so duplicate failure events don't double-refund.
 
 **Body photo priority rule (enforced in service layer):**
 - Primary output: full body photo perspective
@@ -288,8 +292,8 @@ React Native app using Expo with React Navigation and Zustand for state.
   - `PublicProfileScreen` — view another user's public profile and try-on history. Header three-dot menu for Report/Block. Shows "you've blocked this user" empty state when applicable.
   - `EditProfileScreen` — edit bio, username, body photos
   - `FriendsScreen` — Following / Followers tabs + search
-  - `InboxScreen` — in-app notifications (FOLLOW / LIKE / COMMENT / TRYON_COMPLETE). LIKE and COMMENT taps open the relevant try-on's comment thread; FOLLOW taps open the actor's profile.
-  - `TryOnCommentsScreen` — full-screen comment thread for a single TryOn. Reached from the comments icon on every Home feed card and from COMMENT/LIKE notifications. Comment authors can delete their own comments; TryOn owners can delete any comment on their own post; other users can Report.
+  - `InboxScreen` — in-app notifications (FOLLOW / LIKE / COMMENT / COMMENT_REPLY / COMMENT_LIKE / TRYON_COMPLETE). LIKE / COMMENT / COMMENT_REPLY / COMMENT_LIKE taps open the relevant try-on's comment thread (deep-linking to the specific comment when `commentId` is set); FOLLOW taps open the actor's profile.
+  - `TryOnCommentsScreen` — full-screen comment thread for a single TryOn. Reached from the comments icon on every Home feed card and from COMMENT / COMMENT_REPLY / COMMENT_LIKE / LIKE notifications. Supports single-level replies (Instagram-style) and per-comment likes. Comment authors can delete their own comments; TryOn owners can delete any comment on their own post (cascade-deletes its replies); other users can Report.
   - `SettingsScreen` — account (Email, Username, Tier, Credits, Change Password), subscription (Restore Purchases, Manage Subscription deep link), Privacy & Data (Blocked Users, Delete Body Photos, Export My Data, Delete Account), Legal (Privacy/Terms in WebBrowser), Admin (only visible to admin allowlist)
   - `ChangePasswordScreen` — modal launched from Settings → Account → Change Password. Requires current password as re-auth, enforces the same complexity rules as signup, and forces re-login on success (server invalidates all refresh tokens).
   - `BlockedUsersScreen` — list and unblock previously-blocked users (modal presentation so it stacks above Settings)
@@ -379,9 +383,10 @@ In-app notifications shown on the Inbox screen. Distinct from Apple Server Notif
 ```
 id        String           @id @default(uuid())
 userId    String           // recipient
-type      NotificationType // FOLLOW | LIKE | TRYON_COMPLETE | COMMENT
+type      NotificationType // FOLLOW | LIKE | TRYON_COMPLETE | COMMENT | COMMENT_REPLY | COMMENT_LIKE
 actorId   String?          // who triggered it
-jobId     String?          // related TryOnJob, if any (set for LIKE / COMMENT / TRYON_COMPLETE)
+jobId     String?          // related TryOnJob, if any (set for LIKE / COMMENT / COMMENT_REPLY / COMMENT_LIKE / TRYON_COMPLETE)
+commentId String?          // set for COMMENT_REPLY (the parent comment that was replied to) and COMMENT_LIKE (the comment that was liked). Lets the inbox deep-link straight to that comment in the thread.
 read      Boolean          @default(false)
 createdAt DateTime         @default(now())
 ```
@@ -409,20 +414,33 @@ bodyPhotoUrl      String?    // S3 key — primary body photo used as input (ful
 perspectivesUsed  String[]   // ["full_body", "medium"] — records which inputs were used
 likesCount        Int        @default(0)  // denormalized for feed performance
 commentsCount     Int        @default(0)  // denormalized for feed performance
+creditsAtTime     Int?       // user's credit balance at submit time (pre-deduction)
+scheduledStartAt  DateTime?  // set when the soft throttle deferred this submission; null = run immediately. Used by the client to render a "starts in X:XX" countdown.
 errorMessage      String?
 createdAt         DateTime  @default(now())
 updatedAt         DateTime  @updatedAt
 ```
 
 ### Comment
-User-authored comment on a public TryOnJob. Stored in the `comments` table. Threading is flat (no replies). The frontend renders comments oldest-first below the TryOn image in `TryOnCommentsScreen`.
+User-authored comment on a public TryOnJob. Stored in the `comments` table. **Threading is single-level** (Instagram-style): a top-level comment has `parentId = null`; a reply has `parentId` set to a top-level comment's id. Replies cannot themselves have replies — the API rejects `parentId` pointing to a non-top-level comment. Deleting a parent cascades to its replies via FK ON DELETE CASCADE; `TryOnJob.commentsCount` is decremented by 1 + replies on cascade. The frontend renders comments oldest-first below the TryOn image in `TryOnCommentsScreen`, with replies nested under their parent.
 ```
 id        String   @id @default(uuid())
 jobId     String   // parent TryOnJob
 userId    String   // author
 body      String   // 1-500 chars, trimmed
+parentId  String?  // null = top-level; set = reply to a top-level comment
 createdAt DateTime @default(now())
 updatedAt DateTime @updatedAt
+```
+
+### CommentLike
+Per-(user, comment) like. Backs the heart icon on each comment in `TryOnCommentsScreen`. Unique constraint enforces idempotency — a second POST is a no-op rather than a duplicate row. Notifies the comment author with type `COMMENT_LIKE` (skipped on self-like and on relike-after-unlike).
+```
+id        String   @id @default(uuid())
+userId    String
+commentId String
+createdAt DateTime @default(now())
+@@unique([userId, commentId])
 ```
 
 ### UserLocations
@@ -539,6 +557,36 @@ The following endpoints exist but are gated to **dev only** and return **HTTP 41
 
 Production uses **only** the `/api/credits/verify-receipt` path plus App Store Server Notifications. Granting entitlement via these legacy endpoints in production violates App Store Review Guideline 3.1.1.
 
+### Soft per-user throttle (rate limiting in minutes)
+
+A *soft* layer sitting above the existing per-IP rate limit (`tryonPostLimiter`: 5 POST/min) and the weekly/credit gates. Where those refuse the request with a 429, this layer accepts it but defers execution by setting a BullMQ `delay`. Implemented in `backend/src/services/throttleService.ts`.
+
+**Algorithm:** rolling 15-minute window, per-user, counts non-`FAILED` jobs. The user's free burst is tier-scaled; beyond it, each subsequent submission steps down a delay ladder.
+
+| Submission # in 15-min window | FREE | BASIC | PREMIUM |
+|---|---|---|---|
+| 1–3 | 0 | 0 | 0 |
+| 4 | 1 min | 0 | 0 |
+| 5 | 3 min | 1 min | 0 |
+| 6 | 5 min | 3 min | 1 min |
+| 7 | 10 min | 5 min | 3 min |
+| 8 | 10 min | 10 min | 5 min |
+| 9+ | 10 min | 10 min | 10 min |
+
+Tunables (`THROTTLE_WINDOW_MS`, `TIER_FREE_BURST`, `DELAY_LADDER_MS`) are exported constants on `throttleService.ts` so a future admin endpoint can read/override them.
+
+**Wire-up:** `tryonController.submitTryOn` calls `computeQueueDelayMs(userId, tier)` after the credit/weekly gates pass. The result is:
+- Persisted on `TryOnJob.scheduledStartAt` (null when delay = 0)
+- Passed as the `delay` option to `enqueueTryOn`
+- Returned in the 202 response as `{ scheduledStartAt, queueDelayMs }`
+
+**Client UX:** `TryOnScreen.tsx` shows a one-shot "Queued — starting in ~N minutes" Alert when `queueDelayMs > 0`, then the `ResultView` renders a live `MM:SS` countdown that ticks every second until `scheduledStartAt` elapses, at which point it falls through to the normal "Generating…" view.
+
+**Notes:**
+- The BullMQ retry backoff is independent — `delay` only defers the initial run; retries still use the configured exponential backoff.
+- Failed jobs are excluded from the count to match the weekly-limit semantics (a failed-and-refunded job didn't consume Grok cost, so it shouldn't penalize the user's pacing budget).
+- App killed during countdown: the job lives in Redis/Postgres and runs anyway; the user finds it in Profile history. No data loss.
+
 ### Apple In-App Purchases
 - Two ingestion paths run in parallel for redundancy. **Both are idempotent on `transactionId`**:
   1. **Fast path (client → backend):** `POST /api/credits/verify-receipt` — the mobile app posts the StoreKit JWS immediately after a purchase succeeds. Backend verifies the JWS via Apple's CA chain, checks `appAccountToken === userId`, and applies the entitlement. Used so credits / tier appear instantly in the UI.
@@ -565,6 +613,7 @@ The app supports user-generated content (public try-on feed) and so must provide
 
 ### AI-Generated Content Disclosure (Guideline 4.0)
 Every visible try-on result image carries an `AiGeneratedBadge` overlay ("✨ AI-generated"). Surfaces:
+- `TryOnScreen` inline result image (the screen where the user first sees their generated try-on)
 - `TryOnResultCard` (used in profile history)
 - `HomeScreen` feed card result image
 - `TryOnDetailModal` carousel
@@ -771,6 +820,7 @@ APPLE_ROOT_CERTS_DIR  # path to dir holding Apple root CA .cer files inside the 
 - Body photo S3 keys are prefixed with the userId and are not guessable.
 - Rate limiting applied to `/api/auth` and `/api/tryon` endpoints.
 - GDPR/CCPA: users can export and delete all personal data including body photos and AI results.
+- **Account deletion (App Store Guideline 5.1.1(v)):** `profileController.deleteAccount` enumerates every S3 key the user owns (avatar, full-body, medium-body, all clothing photos, all result images) from `User` + `TryOnJob` rows, deletes the `User` row (Prisma cascades clean up Likes, Follows, Comments, CommentLikes, CreditTransactions, ApplePurchases, Notifications, RefreshTokens, UserLocations, TryOnJobs, Reports, UserBlocks), then fires async S3 deletes. DB-first ordering ensures the account is unreachable even if S3 partially fails; failures are logged for an orphan sweep.
 - The close-up photo path (`avatarUrl`) is validated server-side and excluded from all Grok API calls.
 
 ### Fail2ban & Rate Limiting
