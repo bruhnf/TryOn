@@ -165,7 +165,7 @@ export default function TryOnScreen() {
         const minutes = Math.round(data.queueDelayMs / 60000);
         Alert.alert(
           'Queued',
-          `You've been moving fast. Your next try-on will start in about ${minutes} minute${minutes === 1 ? '' : 's'}.`,
+          `Your try-on is in the queue and will start in about ${minutes} minute${minutes === 1 ? '' : 's'}. You can close the app — it'll be ready in your Profile.`,
         );
       }
 
@@ -412,11 +412,11 @@ function ResultView({ job, onReset }: { job: TryOnJob; onReset: () => void }) {
     return (
       <View style={styles.resultContainer}>
         <Text style={styles.queuedEmoji}>⏳</Text>
-        <Text style={styles.queuedTitle}>Queued</Text>
+        <Text style={styles.queuedTitle}>In Queue</Text>
         <Text style={styles.queuedCountdown}>{`Starts in ${mm}:${pad(ss)}`}</Text>
         <Text style={styles.queuedSubtext}>
-          We slow rapid bursts so everyone gets a fair turn. You can close the app —
-          your try-on will be ready in your Profile when it finishes.
+          Your try-on will start automatically. You can close the app —
+          we'll have the result ready in your Profile.
         </Text>
       </View>
     );
