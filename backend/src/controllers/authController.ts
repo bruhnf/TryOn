@@ -120,8 +120,12 @@ export async function verifyEmail(req: Request, res: Response): Promise<void> {
     }),
   ]);
 
-  // Deep link back into the app
-  res.redirect(`tryon://verified`);
+  // Redirect to a small success page rather than the bare `tryon://` deep
+  // link. The deep link alone breaks on desktop browsers (no scheme handler =
+  // blank "can't open URL" screen) and even on mobile shows an ugly system
+  // prompt before opening the app. The /verified page renders a clear success
+  // state and an "Open the TryOn app" button that triggers the deep link.
+  res.redirect('/verified');
 }
 
 export async function login(req: Request, res: Response): Promise<void> {

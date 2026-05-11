@@ -76,6 +76,9 @@ export const env = {
 
   appUrl: optional('APP_URL', 'http://localhost:3000'),
   frontendDeepLink: optional('FRONTEND_DEEP_LINK', 'tryon://'),
+  // Public-facing website root, used for redirects in flows that finish on the
+  // marketing site (e.g. the post-verification success page).
+  websiteUrl: optional('WEBSITE_URL', 'https://evofaceflow.com'),
 
   apple: {
     // iOS bundle identifier — must match the receipt's bundleId.
@@ -91,3 +94,22 @@ export const env = {
     rootCertsDir: optional('APPLE_ROOT_CERTS_DIR', './certs/apple'),
   },
 };
+
+// Fail loud at boot if obvious misconfigurations are present in production.
+// The signup verification flow constructs links like `${APP_URL}/api/auth/verify/<token>`
+// — if APP_URL is the localhost default in production, every signup email will
+// contain a broken link and users won't be able to verify. Better to crash the
+// container at boot than to silently bounce real users.
+if (env.nodeEnv === 'production') {
+  const productionMisconfigurations: string[] = [];
+  if (!env.appUrl || env.appUrl === 'http://localhost:3000') {
+    productionMisconfigurations.push(
+      'APP_URL is unset or still the localhost default. Set it to the public API URL (e.g. https://api.evofaceflow.com).',
+    );
+  }
+  if (productionMisconfigurations.length > 0) {
+    throw new Error(
+      `Production env misconfiguration:\n  - ${productionMisconfigurations.join('\n  - ')}`,
+    );
+  }
+}

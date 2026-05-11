@@ -41,6 +41,15 @@ app.get('/admin', (_req, res) => {
   res.sendFile(path.join(__dirname, '../public/admin.html'));
 });
 
+// Post-verification success page. Loaded via redirect from /api/auth/verify/:token
+// after the DB update succeeds. Has an "Open the TryOn app" button that triggers
+// the tryon:// deep link — works on both mobile (opens the app) and desktop
+// (shows a clear success state instead of a broken "page can't be displayed").
+app.get('/verified', (_req, res) => {
+  res.setHeader('Content-Security-Policy', "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:");
+  res.sendFile(path.join(__dirname, '../public/verified.html'));
+});
+
 // Security headers
 app.use(helmet({
   crossOriginResourcePolicy: env.isDev ? false : { policy: 'same-origin' },
