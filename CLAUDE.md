@@ -1,4 +1,4 @@
-# CLAUDE.md
+# CLAUDE.md 5-10-2026 11:19pm  v 1.0.9
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
