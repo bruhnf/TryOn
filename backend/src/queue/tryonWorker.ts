@@ -134,32 +134,95 @@ const worker = new Worker<TryOnJobData>(
 );
 
 worker.on('failed', async (job, err) => {
+  const attemptsMade = job?.attemptsMade ?? 0;
+  const maxAttempts = (job?.opts?.attempts as number | undefined) ?? 1;
+  const isTerminal = attemptsMade >= maxAttempts;
+
   logJob('failed', {
     jobId: job?.data?.jobId || job?.id || 'unknown',
     jobType: 'tryon',
     userId: job?.data?.userId,
-    attempt: job?.attemptsMade,
+    attempt: attemptsMade,
+    maxAttempts,
+    isTerminal,
     error: err.message,
   });
 
-  // Log full stack for debugging
   log.error('Job failed with stack trace', {
     jobId: job?.data?.jobId,
     stack: err.stack,
   });
-  
-  if (job?.data?.jobId) {
-    try {
-      await prisma.tryOnJob.update({
-        where: { id: job.data.jobId },
-        data: { status: 'FAILED', errorMessage: err.message?.substring(0, 500) || 'Unknown error' },
-      });
-    } catch (dbErr: unknown) {
-      log.error('Failed to update job status in database', { 
-        jobId: job.data.jobId, 
-        error: (dbErr as Error).message,
-      });
+
+  // Non-terminal failure: BullMQ will retry. Leave the DB row in PROCESSING
+  // (set at the start of the attempt) and don't refund — the credit only
+  // needs returning if the final attempt also fails.
+  if (!isTerminal) return;
+
+  const jobId = job?.data?.jobId;
+  const userId = job?.data?.userId;
+  if (!jobId) return;
+
+  try {
+    await prisma.tryOnJob.update({
+      where: { id: jobId },
+      data: { status: 'FAILED', errorMessage: err.message?.substring(0, 500) || 'Unknown error' },
+    });
+  } catch (dbErr: unknown) {
+    log.error('Failed to update job status in database', {
+      jobId,
+      error: (dbErr as Error).message,
+    });
+  }
+
+  // Refund the credit if one was deducted at submit time. tryonController
+  // tags the USAGE transaction with `(job=<jobId>)` for exactly this lookup.
+  // Idempotency: if a REFUND for this jobId already exists (e.g. a prior
+  // failed handler invocation), skip — avoids double-refund on duplicate
+  // failure events.
+  if (!userId) return;
+  try {
+    const usage = await prisma.creditTransaction.findFirst({
+      where: {
+        userId,
+        type: 'USAGE',
+        description: { contains: `job=${jobId}` },
+      },
+    });
+    if (!usage) return;
+
+    const existingRefund = await prisma.creditTransaction.findFirst({
+      where: {
+        userId,
+        type: 'REFUND',
+        description: { contains: `job=${jobId}` },
+      },
+    });
+    if (existingRefund) {
+      log.info('Refund already issued for failed job — skipping', { jobId, userId });
+      return;
     }
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: userId },
+        data: { credits: { increment: 1 } },
+      }),
+      prisma.creditTransaction.create({
+        data: {
+          userId,
+          type: 'REFUND',
+          amount: 1,
+          description: `Refund: try-on failed (job=${jobId})`,
+        },
+      }),
+    ]);
+    log.info('Refunded credit for terminally failed job', { jobId, userId });
+  } catch (refundErr: unknown) {
+    log.error('Failed to refund credit for failed job', {
+      jobId,
+      userId,
+      error: (refundErr as Error).message,
+    });
   }
 });
 

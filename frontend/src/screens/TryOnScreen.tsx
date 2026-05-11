@@ -20,6 +20,7 @@ import { TryOnJob } from '../types';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
 import FullScreenImageModal from '../components/FullScreenImageModal';
 import CreditDisplay from '../components/CreditDisplay';
+import AiGeneratedBadge from '../components/AiGeneratedBadge';
 import { RootStackParams } from '../navigation';
 import { processImageForUpload } from '../utils/imageUtils';
 
@@ -399,7 +400,11 @@ function ResultView({ job, onReset }: { job: TryOnJob; onReset: () => void }) {
           }}
           activeOpacity={0.9}
         >
-          <Image source={{ uri: img.url }} style={styles.resultImage} resizeMode="contain" />
+          <View style={styles.resultImageContainer}>
+            <Image source={{ uri: img.url }} style={styles.resultImage} resizeMode="contain" />
+            {/* Guideline 4.0: visible AI-generated disclosure on every result surface. */}
+            <AiGeneratedBadge variant="overlay" />
+          </View>
           <Text style={styles.resultLabel}>{img.label}</Text>
         </TouchableOpacity>
       ))}
@@ -559,6 +564,12 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   resultImageWrap: { width: '100%', alignItems: 'center' },
+  resultImageContainer: {
+    width: '100%',
+    position: 'relative',
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+  },
   resultImage: { width: '100%', aspectRatio: 3 / 4, borderRadius: Radius.lg },
   resultLabel: {
     fontSize: Typography.fontSizeSM,

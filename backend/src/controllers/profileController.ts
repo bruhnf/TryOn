@@ -9,6 +9,10 @@ import {
   presignTryOnJobs,
   presignAvatarOnly,
 } from '../services/imageUrlService';
+import { deleteFromS3, keyFromUrl } from '../services/s3Service';
+import { createChildLogger } from '../services/logger';
+
+const log = createChildLogger('ProfileController');
 
 const updateSchema = z.object({
   firstName: z.string().max(50).optional(),
@@ -187,9 +191,68 @@ export async function getMyProfile(req: Request, res: Response): Promise<void> {
   res.json({ ...presigned, isAdmin: isAdminEmail(user.email) });
 }
 
+// App Store Review Guideline 5.1.1(v): account deletion must remove the data
+// the developer has collected from the user. DB rows are handled by Prisma
+// cascade rules; this function additionally enumerates and removes every S3
+// object owned by the user (avatar, body photos, clothing photos, results)
+// before deleting the User row.
 export async function deleteAccount(req: Request, res: Response): Promise<void> {
   if (!req.user) { res.status(401).json({ error: 'Unauthorized' }); return; }
-  await prisma.user.delete({ where: { id: req.user.userId } });
+  const userId = req.user.userId;
+
+  // Gather S3 keys BEFORE deletion — once we delete the User row Prisma
+  // cascades the TryOnJob rows and we lose the keys.
+  const [user, jobs] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { avatarUrl: true, fullBodyUrl: true, mediumBodyUrl: true },
+    }),
+    prisma.tryOnJob.findMany({
+      where: { userId },
+      select: {
+        clothingPhoto1Url: true,
+        clothingPhoto2Url: true,
+        resultFullBodyUrl: true,
+        resultMediumUrl: true,
+        // bodyPhotoUrl points at the same object as user.fullBodyUrl /
+        // mediumBodyUrl — already covered by the user select above.
+      },
+    }),
+  ]);
+
+  if (!user) { res.status(404).json({ error: 'User not found' }); return; }
+
+  const s3Keys = new Set<string>();
+  if (user.avatarUrl) s3Keys.add(keyFromUrl(user.avatarUrl));
+  if (user.fullBodyUrl) s3Keys.add(keyFromUrl(user.fullBodyUrl));
+  if (user.mediumBodyUrl) s3Keys.add(keyFromUrl(user.mediumBodyUrl));
+  for (const j of jobs) {
+    if (j.clothingPhoto1Url) s3Keys.add(keyFromUrl(j.clothingPhoto1Url));
+    if (j.clothingPhoto2Url) s3Keys.add(keyFromUrl(j.clothingPhoto2Url));
+    if (j.resultFullBodyUrl) s3Keys.add(keyFromUrl(j.resultFullBodyUrl));
+    if (j.resultMediumUrl) s3Keys.add(keyFromUrl(j.resultMediumUrl));
+  }
+
+  // Delete the DB row first. Cascades clean up Likes, Follows, Comments,
+  // CreditTransactions, ApplePurchases, Notifications, RefreshTokens,
+  // UserLocations, TryOnJobs, Reports, UserBlocks. Doing this before S3
+  // ensures the account is unreachable even if S3 deletes partially fail.
+  await prisma.user.delete({ where: { id: userId } });
+
+  // Fire-and-forget S3 cleanup — don't block the response on S3 latency or
+  // make account deletion fail because of transient S3 errors. Failures are
+  // logged so they can be reconciled by an orphan sweep.
+  for (const key of s3Keys) {
+    deleteFromS3(key).catch((err) => {
+      log.warn('S3 delete failed during account deletion', {
+        userId,
+        key,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+  }
+
+  log.info('Account deleted', { userId, s3KeysQueued: s3Keys.size, jobsScanned: jobs.length });
   res.json({ message: 'Account deleted' });
 }
 

@@ -107,6 +107,11 @@ export async function submitTryOn(req: Request, res: Response): Promise<void> {
     useCredit = true;
   }
 
+  // Pre-allocate the jobId so we can tag the credit-deduction transaction
+  // with it. The worker's failure handler uses this tag to find and refund
+  // the deduction if the job fails terminally.
+  const jobId = uuidv4();
+
   // Deduct credit if needed
   if (useCredit) {
     await prisma.$transaction([
@@ -119,7 +124,10 @@ export async function submitTryOn(req: Request, res: Response): Promise<void> {
           userId,
           type: 'USAGE',
           amount: -1,
-          description: 'Try-on generation',
+          // The `job=<id>` token is parsed by the worker on terminal failure
+          // to refund the user. Don't change this format without updating
+          // queue/tryonWorker.ts.
+          description: `Try-on generation (job=${jobId})`,
         },
       }),
     ]);
@@ -152,8 +160,6 @@ export async function submitTryOn(req: Request, res: Response): Promise<void> {
     const key = await uploadToS3('clothing-photos', userId, filename, processed.buffer, processed.mimeType);
     clothingKeys.push(key);
   }
-
-  const jobId = uuidv4();
   const isPrivate = req.body?.isPrivate === true || req.body?.isPrivate === 'true';
   await prisma.tryOnJob.create({
     data: {
