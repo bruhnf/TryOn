@@ -1,4 +1,4 @@
-# CLAUDE.md 5-10-2026 11:19pm  v 1.0.9
+# CLAUDE.md 5-11-2026 9:30pm  v 1.0.9
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -148,7 +148,7 @@ docker-compose -f docker-compose.prod.yml up --build
 - ngrok tunnel — set up separately if needed for physical device testing
 
 ### CI/CD
-GitHub Actions workflow (`.github/workflows/deploy.yml`) triggers on push to `main`. It runs a TypeScript build check and Prisma migration check, then SSHs into AWS Lightsail to pull and restart containers via `docker-compose.prod.yml`.
+**Deploys are manual.** No GitHub Actions workflow is configured — `.github/` does not exist in the repo. Production changes happen only when you SSH into Lightsail and run `git pull` + `docker compose -f docker-compose.prod.yml up -d --build` (see the DEPLOYMENT CHECKLIST at the top of this file and DEPLOYMENT.md §13). This is deliberate: it prevents accidental pushes from reaching production, which is especially important during App Store review windows.
 
 ---
 
@@ -675,12 +675,34 @@ All uploaded images (body photos, clothing photos) undergo a two-stage resizing 
 
 - **Database**: PostgreSQL 15 (Prisma ORM)
 - **Queue**: Redis 7 + BullMQ
-- **Storage**: AWS S3 (`evofaceflow-uploads`) — separate prefixes: `body-photos/`, `clothing-photos/`, `tryon-results/`. Bucket has Block Public Access enabled and **no** bucket policy granting `s3:GetObject` to `Principal: "*"`. All reads go through the backend.
+- **Storage**: AWS S3 (`evofaceflow-uploads`) — separate prefixes: `body-photos/`, `clothing-photos/`, `tryon-results/`. Bucket has Block Public Access enabled and **no** bucket policy granting `s3:GetObject` to `Principal: "*"`. All reads go through the backend. **Bucket versioning is enabled** with a lifecycle rule expiring noncurrent object versions after 30 days — provides a rolling 30-day undo window for accidental deletes / overwrites of user photos.
 - **Reverse proxy**: Nginx (production) with SSL via Let's Encrypt
 - **Hosting**: AWS Lightsail Ubuntu 22.04
 - **Email**: AWS SES (transactional) — verification emails, suspicious login alerts
 - **Geo-IP**: ip-api.com or MaxMind GeoLite2 (server-side, never exposed to client)
 - **Intrusion Prevention**: Fail2ban for automated IP banning
+
+## Backups & External Monitoring
+
+Production data is protected at three independent layers. Details and restore procedures live in [DEPLOYMENT.md §10–12](DEPLOYMENT.md).
+
+| Layer | What it covers | Restore via |
+|---|---|---|
+| Lightsail automatic snapshots (daily) | Whole-VM rollback | Lightsail console → create new instance from snapshot |
+| S3 versioning + lifecycle on `evofaceflow-uploads` | Per-photo undo, 30-day window | S3 console "Show versions" |
+| Nightly `pg_dump` → `s3://evofaceflow-backups/postgres/` | Database restore, 365-day retention (Glacier IR after 30 days) | `aws s3 cp` + `psql` — DEPLOYMENT.md §10.4 |
+
+**Nightly Postgres dump details:**
+- Script `/usr/local/bin/backup-postgres.sh` (on the Lightsail host, not in the repo) streams `pg_dump | gzip | aws s3 cp` so no unencrypted dump ever touches disk
+- Config + AWS keys in `/etc/tryon-backup.env` (`chmod 600 root:root`, vars `export`ed)
+- Runs daily at 02:00 UTC via root crontab; logs to `/var/log/tryon-backup.log` (logrotate, 8-week retention)
+- Uploads use the IAM user `tryon-backup-uploader` with a write-only scoped policy — it cannot read, list, or delete completed backups, so a host compromise cannot exfiltrate or destroy historical dumps
+- Bucket `evofaceflow-backups` has versioning enabled and a lifecycle policy: Glacier Instant Retrieval after 30 days, expire after 365 days
+
+**External monitoring:**
+- UptimeRobot free tier monitors `https://api.evofaceflow.com/health` every 5 minutes from outside AWS. Alerts go to email after 2 consecutive failures (~10 minutes of downtime). This catches outages the application itself cannot report (network partition, VM down, nginx misconfig, DNS failure).
+- The `/health` endpoint today returns 200 as long as the Express process is running. A deep healthcheck that probes Postgres + Redis is planned post-launch — when shipped, the same UptimeRobot monitor will automatically begin reporting dep health with no reconfig.
+- **SSL certificate expiry alerting is currently passive** — UptimeRobot's SSL monitoring is now paid, so expiry surfaces only when (a) certbot's renewal-failure email fires or (b) the cert actually expires and UptimeRobot's HTTPS check fails. A preemptive check via the existing vulnerability scanner is planned (the `SSL_CERTIFICATE` enum value in `VulnerabilityReport.scanType` is reserved for this).
 
 ---
 
