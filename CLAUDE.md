@@ -150,6 +150,9 @@ docker-compose -f docker-compose.prod.yml up --build
 ### CI/CD
 **Deploys are manual.** No GitHub Actions workflow is configured — `.github/` does not exist in the repo. Production changes happen only when you SSH into Lightsail and run `git pull` + `docker compose -f docker-compose.prod.yml up -d --build` (see the DEPLOYMENT CHECKLIST at the top of this file and DEPLOYMENT.md §13). This is deliberate: it prevents accidental pushes from reaching production, which is especially important during App Store review windows.
 
+### Git workflow
+The branch-PR-merge workflow for making code changes lives in [CONTRIBUTING.md](CONTRIBUTING.md). When the user asks "how do I commit / merge / branch / push" type questions, refer them to the relevant section there rather than re-explaining inline.
+
 ---
 
 ## Logging

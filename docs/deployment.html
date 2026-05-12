@@ -1,0 +1,854 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DEPLOYMENT — TryOn Docs</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <a href="index.html" class="brand">TryOn Docs</a>
+  <nav class="docnav"><a href="index.html">Index</a><a href="claude.html">CLAUDE</a><a href="deployment.html" class="active">DEPLOYMENT</a><a href="contributing.html">CONTRIBUTING</a></nav>
+</header>
+<div class="layout">
+  <aside class="sidebar">
+    <h2 class="toc-title">On this page</h2>
+    <ul class="toc"><li><a href="#quick-deploy-reference-read-this-first">⚠️ QUICK DEPLOY REFERENCE (Read This First!)</a></li><li><a href="#database-migrations-explained">Database Migrations Explained</a><ul><li><a href="#what-are-migrations">What Are Migrations?</a></li><li><a href="#when-to-run-migrations">When to Run Migrations</a></li><li><a href="#what-happens-if-you-skip-it">What Happens If You Skip It?</a></li><li><a href="#migration-commands">Migration Commands</a></li><li><a href="#current-migrations">Current Migrations</a></li></ul></li><li><a href="#prerequisites">Prerequisites</a></li><li><a href="#1-initial-server-setup">1. Initial Server Setup</a><ul><li><a href="#install-docker-and-docker-compose">Install Docker and Docker Compose</a></li><li><a href="#install-certbot-for-ssl">Install Certbot for SSL</a></li></ul></li><li><a href="#2-clone-repository">2. Clone Repository</a></li><li><a href="#3-configure-environment-variables">3. Configure Environment Variables</a><ul><li><a href="#root-env-file-for-docker-compose">Root .env file (for Docker Compose)</a></li><li><a href="#backend-env-file">Backend .env file</a></li><li><a href="#apple-root-ca-certificates">Apple Root CA Certificates</a></li></ul></li><li><a href="#4-ssl-certificate-setup">4. SSL Certificate Setup</a><ul><li><a href="#create-certbot-directory-structure">Create certbot directory structure</a></li><li><a href="#get-initial-certificate-before-nginx-starts">Get initial certificate (before nginx starts)</a></li><li><a href="#auto-renewal-cron-job">Auto-renewal cron job</a></li></ul></li><li><a href="#5-deploy-application">5. Deploy Application</a><ul><li><a href="#build-and-start-all-services">Build and start all services</a></li><li><a href="#run-database-migrations">Run database migrations</a></li><li><a href="#verify-services-are-running">Verify services are running</a></li><li><a href="#test-health-endpoint">Test health endpoint</a></li></ul></li><li><a href="#5b-apple-in-app-purchase-configuration">5b. Apple In-App Purchase Configuration</a><ul><li><a href="#app-store-server-notifications-v2">App Store Server Notifications V2</a></li><li><a href="#iap-products">IAP Products</a></li><li><a href="#verifying-the-webhook-end-to-end">Verifying the webhook end-to-end</a></li></ul></li><li><a href="#6-lightsail-firewall-configuration">6. Lightsail Firewall Configuration</a></li><li><a href="#7-fail2ban-setup">7. Fail2ban Setup</a><ul><li><a href="#verify-fail2ban-is-running">Verify fail2ban is running</a></li><li><a href="#check-banned-ips">Check banned IPs</a></li><li><a href="#unban-an-ip">Unban an IP</a></li><li><a href="#configuration-files">Configuration files</a></li></ul></li><li><a href="#8-admin-dashboard">8. Admin Dashboard</a></li><li><a href="#9-monitoring-logs">9. Monitoring &amp;amp; Logs</a><ul><li><a href="#application-logging-winston">Application Logging (Winston)</a></li><li><a href="#viewing-logs">Viewing Logs</a></li><li><a href="#log-management">Log Management</a></li><li><a href="#request-tracing">Request Tracing</a></li><li><a href="#resource-monitoring">Resource Monitoring</a></li></ul></li><li><a href="#10-database-backup">10. Database Backup</a><ul><li><a href="#101-whats-running">10.1 What's running</a></li><li><a href="#102-verify-its-working">10.2 Verify it's working</a></li><li><a href="#103-initial-setup-one-time-if-rebuilding-the-host">10.3 Initial setup (one-time, if rebuilding the host)</a></li><li><a href="#104-restore-from-a-backup">10.4 Restore from a backup</a></li><li><a href="#105-ad-hoc-pre-migration-manual-dump">10.5 Ad-hoc / pre-migration manual dump</a></li></ul></li><li><a href="#11-backups-snapshots-disaster-recovery">11. Backups, Snapshots &amp;amp; Disaster Recovery</a><ul><li><a href="#111-lightsail-automatic-snapshots">11.1 Lightsail automatic snapshots</a></li><li><a href="#112-s3-versioning-on-evofaceflow-uploads">11.2 S3 versioning on evofaceflow-uploads</a></li><li><a href="#113-postgres-dumps-to-s3">11.3 Postgres dumps to S3</a></li></ul></li><li><a href="#12-external-monitoring">12. External Monitoring</a><ul><li><a href="#121-uptimerobot">12.1 UptimeRobot</a></li><li><a href="#122-ssl-certificate-expiry-deferred">12.2 SSL certificate expiry (deferred)</a></li></ul></li><li><a href="#13-updating-the-application">13. Updating the Application</a><ul><li><a href="#backend-server-side">Backend (server-side)</a></li><li><a href="#frontend-mobile-app">Frontend (mobile app)</a></li><li><a href="#connecting-the-frontend-to-lightsail">Connecting the frontend to Lightsail</a></li></ul></li><li><a href="#14-rollback-procedure">14. Rollback Procedure</a></li><li><a href="#15-local-vs-live-development">15. Local vs Live Development</a><ul><li><a href="#configuration">Configuration</a></li><li><a href="#local-development">Local Development</a></li><li><a href="#testing-against-live-server">Testing Against Live Server</a></li><li><a href="#pre-commit-checklist">Pre-Commit Checklist</a></li></ul></li><li><a href="#troubleshooting">Troubleshooting</a><ul><li><a href="#backend-wont-start">Backend won't start</a></li><li><a href="#ssl-certificate-issues">SSL certificate issues</a></li><li><a href="#database-connection-issues">Database connection issues</a></li><li><a href="#out-of-memory">Out of memory</a></li></ul></li></ul>
+  </aside>
+  <main class="content">
+<h1 id="aws-lightsail-deployment-guide" tabindex="-1"><a class="header-anchor" href="#aws-lightsail-deployment-guide" aria-hidden="true">#</a> AWS Lightsail Deployment Guide</h1>
+<hr>
+<h2 id="quick-deploy-reference-read-this-first" tabindex="-1"><a class="header-anchor" href="#quick-deploy-reference-read-this-first" aria-hidden="true">#</a> ⚠️ QUICK DEPLOY REFERENCE (Read This First!)</h2>
+<p><strong>Every time you deploy changes to Lightsail:</strong></p>
+<pre><code class="language-bash"># SSH into Lightsail
+ssh ubuntu@&lt;your-lightsail-ip&gt;
+cd /opt/evofaceflow/TryOn
+
+# Pull latest code
+git pull
+
+# Rebuild and restart containers
+docker compose -f docker-compose.prod.yml up -d --build
+
+# ⚠️ CRITICAL: Apply any database migrations
+docker compose -f docker-compose.prod.yml exec backend npx prisma migrate deploy
+</code></pre>
+<blockquote>
+<p><strong>🚨 WARNING:</strong> If you skip the <code>prisma migrate deploy</code> step after schema changes, the backend will crash with database errors!</p>
+</blockquote>
+<hr>
+<h2 id="database-migrations-explained" tabindex="-1"><a class="header-anchor" href="#database-migrations-explained" aria-hidden="true">#</a> Database Migrations Explained</h2>
+<h3 id="what-are-migrations" tabindex="-1"><a class="header-anchor" href="#what-are-migrations" aria-hidden="true">#</a> What Are Migrations?</h3>
+<p>Prisma migrations are SQL scripts that update your database schema (tables, columns, indexes) to match changes in <code>backend/prisma/schema.prisma</code>. They're stored in <code>backend/prisma/migrations/</code>.</p>
+<h3 id="when-to-run-migrations" tabindex="-1"><a class="header-anchor" href="#when-to-run-migrations" aria-hidden="true">#</a> When to Run Migrations</h3>
+<p>Run <code>npx prisma migrate deploy</code> whenever:</p>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>First-time setup</strong> (fresh database)</td>
+<td>Required — creates all tables</td>
+</tr>
+<tr>
+<td><strong>After <code>git pull</code></strong> with schema changes</td>
+<td>Required — applies new migrations</td>
+</tr>
+<tr>
+<td><strong>After adding new fields/models</strong></td>
+<td>Required — adds columns/tables</td>
+</tr>
+<tr>
+<td><strong>Routine deploy with no schema changes</strong></td>
+<td>Safe to run (no-op if nothing new)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="what-happens-if-you-skip-it" tabindex="-1"><a class="header-anchor" href="#what-happens-if-you-skip-it" aria-hidden="true">#</a> What Happens If You Skip It?</h3>
+<p>The backend will crash with errors like:</p>
+<pre><code>PrismaClientKnownRequestError: The table `public.users` does not exist
+</code></pre>
+<h3 id="migration-commands" tabindex="-1"><a class="header-anchor" href="#migration-commands" aria-hidden="true">#</a> Migration Commands</h3>
+<pre><code class="language-bash"># Production (Lightsail) — apply existing migrations
+docker compose -f docker-compose.prod.yml exec backend npx prisma migrate deploy
+
+# Local Docker — apply existing migrations  
+docker compose exec backend npx prisma migrate deploy
+
+# Local development (no Docker) — create + apply migrations
+cd backend &amp;&amp; npx prisma migrate dev
+</code></pre>
+<h3 id="current-migrations" tabindex="-1"><a class="header-anchor" href="#current-migrations" aria-hidden="true">#</a> Current Migrations</h3>
+<p>The authoritative list is the contents of <code>backend/prisma/migrations/</code>. List them with:</p>
+<pre><code class="language-bash">ls backend/prisma/migrations/
+</code></pre>
+<p><code>prisma migrate deploy</code> applies all unapplied migrations in chronological order — you don't need to track them by hand. If you need to know what's currently applied vs pending on the server:</p>
+<pre><code class="language-bash">docker compose -f docker-compose.prod.yml exec backend npx prisma migrate status
+</code></pre>
+<hr>
+<h2 id="prerequisites" tabindex="-1"><a class="header-anchor" href="#prerequisites" aria-hidden="true">#</a> Prerequisites</h2>
+<ul>
+<li>AWS Lightsail instance running Ubuntu 22.04</li>
+<li>Domain <code>evofaceflow.com</code> pointing to the Lightsail instance IP</li>
+<li>SSH access configured</li>
+</ul>
+<h2 id="1-initial-server-setup" tabindex="-1"><a class="header-anchor" href="#1-initial-server-setup" aria-hidden="true">#</a> 1. Initial Server Setup</h2>
+<p>SSH into your Lightsail instance:</p>
+<pre><code class="language-bash">ssh ubuntu@&lt;your-lightsail-ip&gt;
+</code></pre>
+<h3 id="install-docker-and-docker-compose" tabindex="-1"><a class="header-anchor" href="#install-docker-and-docker-compose" aria-hidden="true">#</a> Install Docker and Docker Compose</h3>
+<pre><code class="language-bash"># Update packages
+sudo apt update &amp;&amp; sudo apt upgrade -y
+
+# Install Docker
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo usermod -aG docker ubuntu
+
+# Install Docker Compose plugin
+sudo apt install docker-compose-plugin -y
+
+# Verify installation
+docker --version
+docker compose version
+
+# Log out and back in for group changes to take effect
+exit
+</code></pre>
+<h3 id="install-certbot-for-ssl" tabindex="-1"><a class="header-anchor" href="#install-certbot-for-ssl" aria-hidden="true">#</a> Install Certbot for SSL</h3>
+<pre><code class="language-bash">ssh ubuntu@&lt;your-lightsail-ip&gt;
+
+sudo apt install certbot -y
+</code></pre>
+<h2 id="2-clone-repository" tabindex="-1"><a class="header-anchor" href="#2-clone-repository" aria-hidden="true">#</a> 2. Clone Repository</h2>
+<pre><code class="language-bash">sudo mkdir -p /opt/evofaceflow
+sudo chown ubuntu:ubuntu /opt/evofaceflow
+cd /opt/evofaceflow
+git clone https://github.com/YOUR_USERNAME/TryOn.git
+cd TryOn
+</code></pre>
+<h2 id="3-configure-environment-variables" tabindex="-1"><a class="header-anchor" href="#3-configure-environment-variables" aria-hidden="true">#</a> 3. Configure Environment Variables</h2>
+<h3 id="root-env-file-for-docker-compose" tabindex="-1"><a class="header-anchor" href="#root-env-file-for-docker-compose" aria-hidden="true">#</a> Root .env file (for Docker Compose)</h3>
+<pre><code class="language-bash">cp .env.example .env
+nano .env
+</code></pre>
+<p>Set secure values:</p>
+<pre><code>POSTGRES_USER=tryon_prod
+POSTGRES_PASSWORD=&lt;generate: openssl rand -hex 32&gt;
+POSTGRES_DB=tryon_db
+</code></pre>
+<h3 id="backend-env-file" tabindex="-1"><a class="header-anchor" href="#backend-env-file" aria-hidden="true">#</a> Backend .env file</h3>
+<pre><code class="language-bash">cp backend/.env.example backend/.env
+nano backend/.env
+</code></pre>
+<p>Fill in all required values. Generate secrets with:</p>
+<pre><code class="language-bash">openssl rand -hex 32  # For JWT_SECRET, JWT_REFRESH_SECRET, ADMIN_API_KEY
+</code></pre>
+<p><strong>Important values:</strong></p>
+<pre><code># CORS — must include the marketing site so the web auth flow works
+ALLOWED_ORIGINS=https://evofaceflow.com
+
+# Admin Console UI gate (comma-separated lowercase emails). Distinct from
+# ADMIN_API_KEY which protects the actual /api/admin/* endpoints.
+ADMIN_EMAILS=you@example.com
+
+# Apple In-App Purchases — App Store Server Notifications V2 verifier
+APPLE_BUNDLE_ID=com.evofaceflow.tryon.app
+APPLE_APP_APPLE_ID=&lt;numeric ID from App Store Connect URL&gt;
+APPLE_ENVIRONMENT=Production         # or &quot;Sandbox&quot; for the sandbox webhook
+# Leave APPLE_ROOT_CERTS_DIR unset to use the default ./certs/apple inside
+# the container (the path is relative to /app, the container WORKDIR).
+</code></pre>
+<blockquote>
+<p><strong>🚨 Path gotcha:</strong> <code>APPLE_ROOT_CERTS_DIR</code> must point to a path inside the container (e.g. <code>/app/certs/apple</code>), not the host. The default <code>./certs/apple</code> resolves correctly inside the container; setting it to a host path like <code>/opt/evofaceflow/TryOn/backend/certs/apple</code> will fail because the container has no view of the host filesystem.</p>
+</blockquote>
+<h3 id="apple-root-ca-certificates" tabindex="-1"><a class="header-anchor" href="#apple-root-ca-certificates" aria-hidden="true">#</a> Apple Root CA Certificates</h3>
+<p>The backend's JWS verifier needs Apple's root CAs to validate App Store Server Notifications and StoreKit receipts. They are public certificates and are baked into the Docker image at build time.</p>
+<pre><code class="language-bash"># On your dev machine (one-time)
+mkdir -p backend/certs/apple
+# Download AppleRootCA-G3.cer (and optionally G2 + AppleIncRoot) from:
+# https://www.apple.com/certificateauthority/
+# Place the .cer files inside backend/certs/apple/
+git add backend/certs/apple/*.cer
+git commit -m &quot;Add Apple root CAs for App Store Server Notifications V2&quot;
+</code></pre>
+<p>The Dockerfile contains <code>COPY certs ./certs</code> which embeds these into the production image. Verify after deploy:</p>
+<pre><code class="language-bash">docker compose -f docker-compose.prod.yml exec backend ls certs/apple
+# Should list the .cer files
+</code></pre>
+<h2 id="4-ssl-certificate-setup" tabindex="-1"><a class="header-anchor" href="#4-ssl-certificate-setup" aria-hidden="true">#</a> 4. SSL Certificate Setup</h2>
+<h3 id="create-certbot-directory-structure" tabindex="-1"><a class="header-anchor" href="#create-certbot-directory-structure" aria-hidden="true">#</a> Create certbot directory structure</h3>
+<pre><code class="language-bash">cd /opt/evofaceflow/TryOn
+mkdir -p certbot/www
+</code></pre>
+<h3 id="get-initial-certificate-before-nginx-starts" tabindex="-1"><a class="header-anchor" href="#get-initial-certificate-before-nginx-starts" aria-hidden="true">#</a> Get initial certificate (before nginx starts)</h3>
+<p>Stop any running services using port 80:</p>
+<pre><code class="language-bash">sudo docker compose -f docker-compose.prod.yml down 2&gt;/dev/null || true
+</code></pre>
+<p>Get certificate:</p>
+<pre><code class="language-bash">sudo certbot certonly --standalone -d evofaceflow.com -d www.evofaceflow.com -d api.evofaceflow.com
+</code></pre>
+<h3 id="auto-renewal-cron-job" tabindex="-1"><a class="header-anchor" href="#auto-renewal-cron-job" aria-hidden="true">#</a> Auto-renewal cron job</h3>
+<pre><code class="language-bash">sudo crontab -e
+</code></pre>
+<p>Add:</p>
+<pre><code>0 0 * * * certbot renew --quiet --post-hook &quot;docker compose -f /opt/evofaceflow/TryOn/docker-compose.prod.yml restart nginx&quot;
+</code></pre>
+<h2 id="5-deploy-application" tabindex="-1"><a class="header-anchor" href="#5-deploy-application" aria-hidden="true">#</a> 5. Deploy Application</h2>
+<h3 id="build-and-start-all-services" tabindex="-1"><a class="header-anchor" href="#build-and-start-all-services" aria-hidden="true">#</a> Build and start all services</h3>
+<pre><code class="language-bash">cd /opt/evofaceflow/TryOn
+docker compose -f docker-compose.prod.yml up -d --build
+</code></pre>
+<h3 id="run-database-migrations" tabindex="-1"><a class="header-anchor" href="#run-database-migrations" aria-hidden="true">#</a> Run database migrations</h3>
+<pre><code class="language-bash">docker compose -f docker-compose.prod.yml exec backend npx prisma migrate deploy
+</code></pre>
+<h3 id="verify-services-are-running" tabindex="-1"><a class="header-anchor" href="#verify-services-are-running" aria-hidden="true">#</a> Verify services are running</h3>
+<pre><code class="language-bash">docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs backend
+</code></pre>
+<h3 id="test-health-endpoint" tabindex="-1"><a class="header-anchor" href="#test-health-endpoint" aria-hidden="true">#</a> Test health endpoint</h3>
+<pre><code class="language-bash">curl https://api.evofaceflow.com/health
+</code></pre>
+<h2 id="5b-apple-in-app-purchase-configuration" tabindex="-1"><a class="header-anchor" href="#5b-apple-in-app-purchase-configuration" aria-hidden="true">#</a> 5b. Apple In-App Purchase Configuration</h2>
+<p>In addition to env vars and the root CAs above, the App Store Connect side must be configured.</p>
+<h3 id="app-store-server-notifications-v2" tabindex="-1"><a class="header-anchor" href="#app-store-server-notifications-v2" aria-hidden="true">#</a> App Store Server Notifications V2</h3>
+<p>In App Store Connect: <strong>My Apps → [your app] → App Information → App Store Server Notifications</strong></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Production Server URL</td>
+<td><code>https://api.evofaceflow.com/api/webhooks/apple</code></td>
+</tr>
+<tr>
+<td>Sandbox Server URL</td>
+<td>Same URL (or a separate one — see below)</td>
+</tr>
+<tr>
+<td>Version</td>
+<td><strong>Version 2</strong> (V1 is deprecated)</td>
+</tr>
+</tbody>
+</table>
+<p>The endpoint must respond with HTTP 200 within a few seconds. Apple retries on non-2xx with exponential backoff. The webhook is exempt from the global rate limiter (see <code>index.ts</code>).</p>
+<p><strong>Notification environments:</strong> A single <code>APPLE_ENVIRONMENT</code> env var controls which environment the verifier accepts. To handle both Sandbox (TestFlight) and Production from the same backend you need either:</p>
+<ul>
+<li>Two backends with different <code>APPLE_ENVIRONMENT</code> values, OR</li>
+<li>Separate URLs in App Store Connect for Sandbox vs Production, with one of them rejecting the other's notifications.</li>
+</ul>
+<p>For initial setup, point both URLs at the same backend with <code>APPLE_ENVIRONMENT=Sandbox</code>. Flip to <code>Production</code> and restart the stack just before public launch.</p>
+<h3 id="iap-products" tabindex="-1"><a class="header-anchor" href="#iap-products" aria-hidden="true">#</a> IAP Products</h3>
+<p>Products must be configured in App Store Connect → <strong>In-App Purchases &amp; Subscriptions</strong>. Product IDs must match <code>frontend/app.json</code> (<code>extra.appleProducts</code>) and <code>backend/src/config/appleIap.ts</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Product ID</th>
+<th>Type</th>
+<th>Tier / Credits</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>com.evofaceflow.tryon.app.basic.monthly</code></td>
+<td>Auto-renewing subscription</td>
+<td>BASIC</td>
+</tr>
+<tr>
+<td><code>com.evofaceflow.tryon.app.premium.monthly</code></td>
+<td>Auto-renewing subscription</td>
+<td>PREMIUM</td>
+</tr>
+<tr>
+<td><code>com.evofaceflow.tryon.app.credits.10.free</code></td>
+<td>Consumable</td>
+<td>10 credits (Free-tier price)</td>
+</tr>
+<tr>
+<td><code>com.evofaceflow.tryon.app.credits.25.free</code></td>
+<td>Consumable</td>
+<td>25 credits (Free-tier price)</td>
+</tr>
+<tr>
+<td><code>com.evofaceflow.tryon.app.credits.50.free</code></td>
+<td>Consumable</td>
+<td>50 credits (Free-tier price)</td>
+</tr>
+<tr>
+<td><code>com.evofaceflow.tryon.app.credits.100.free</code></td>
+<td>Consumable</td>
+<td>100 credits (Free-tier price)</td>
+</tr>
+<tr>
+<td><code>com.evofaceflow.tryon.app.credits.10.basic</code></td>
+<td>Consumable</td>
+<td>10 credits (Basic-tier price)</td>
+</tr>
+<tr>
+<td><code>com.evofaceflow.tryon.app.credits.25.basic.v2</code></td>
+<td>Consumable</td>
+<td>25 credits (Basic-tier price) — <code>.v2</code> because the original ID couldn't be reused after deletion in App Store Connect</td>
+</tr>
+<tr>
+<td><code>com.evofaceflow.tryon.app.credits.50.basic</code></td>
+<td>Consumable</td>
+<td>50 credits (Basic-tier price)</td>
+</tr>
+<tr>
+<td><code>com.evofaceflow.tryon.app.credits.100.basic</code></td>
+<td>Consumable</td>
+<td>100 credits (Basic-tier price)</td>
+</tr>
+<tr>
+<td><code>com.evofaceflow.tryon.app.credits.10.premium</code></td>
+<td>Consumable</td>
+<td>10 credits (Premium-tier price)</td>
+</tr>
+<tr>
+<td><code>com.evofaceflow.tryon.app.credits.25.premium</code></td>
+<td>Consumable</td>
+<td>25 credits (Premium-tier price)</td>
+</tr>
+<tr>
+<td><code>com.evofaceflow.tryon.app.credits.50.premium</code></td>
+<td>Consumable</td>
+<td>50 credits (Premium-tier price)</td>
+</tr>
+<tr>
+<td><code>com.evofaceflow.tryon.app.credits.100.premium</code></td>
+<td>Consumable</td>
+<td>100 credits (Premium-tier price)</td>
+</tr>
+</tbody>
+</table>
+<p>The 12 credit-pack SKUs come in 4 sizes × 3 tier variants. <strong>All variants of the same size grant the same number of credits</strong> — only the price differs (Free = highest, Premium = lowest). The mobile client offers the user only the variant priced for their current tier.</p>
+<p>Each product needs a price tier and at least one localization (display name + description). Sandbox testing requires &quot;Ready to Submit&quot; status minimum.</p>
+<h3 id="verifying-the-webhook-end-to-end" tabindex="-1"><a class="header-anchor" href="#verifying-the-webhook-end-to-end" aria-hidden="true">#</a> Verifying the webhook end-to-end</h3>
+<p>Once env vars are set and the stack is up, you can fire a TEST notification from your dev machine using the helper script:</p>
+<pre><code class="language-powershell">cd frontend
+$env:APPLE_ISSUER_ID=&quot;...&quot;         # from App Store Connect → Users and Access → Integrations
+$env:APPLE_KEY_ID=&quot;...&quot;
+$env:APPLE_PRIVATE_KEY_PATH=&quot;.\secrets\AuthKey_&lt;KEYID&gt;.p8&quot;
+$env:APPLE_BUNDLE_ID=&quot;com.evofaceflow.tryon.app&quot;
+npx ts-node ../backend/scripts/sendAppleTestNotification.ts sandbox
+</code></pre>
+<p>Watch the backend logs on Lightsail:</p>
+<pre><code class="language-bash">docker compose -f docker-compose.prod.yml logs --tail 200 backend | grep -iE &quot;apple|webhook&quot;
+</code></pre>
+<p>You should see four log lines: verifier initialized, notification enqueued, processing, TEST received.</p>
+<h2 id="6-lightsail-firewall-configuration" tabindex="-1"><a class="header-anchor" href="#6-lightsail-firewall-configuration" aria-hidden="true">#</a> 6. Lightsail Firewall Configuration</h2>
+<p>In the AWS Lightsail console, go to your instance &gt; Networking &gt; Firewall:</p>
+<ul>
+<li>Allow TCP 80 (HTTP)</li>
+<li>Allow TCP 443 (HTTPS)</li>
+<li>Allow TCP 22 (SSH)</li>
+<li>Block all other ports</li>
+</ul>
+<h2 id="7-fail2ban-setup" tabindex="-1"><a class="header-anchor" href="#7-fail2ban-setup" aria-hidden="true">#</a> 7. Fail2ban Setup</h2>
+<p>Fail2ban is included in the Docker Compose configuration and will automatically ban IPs that:</p>
+<ul>
+<li>Generate too many 404 errors (vulnerability scanners)</li>
+<li>Request PHP files (we don't serve PHP)</li>
+<li>Request WordPress paths (we don't run WordPress)</li>
+<li>Send malicious requests (SQL injection, XSS attempts)</li>
+<li>Have excessive failed auth attempts</li>
+</ul>
+<h3 id="verify-fail2ban-is-running" tabindex="-1"><a class="header-anchor" href="#verify-fail2ban-is-running" aria-hidden="true">#</a> Verify fail2ban is running</h3>
+<pre><code class="language-bash">docker compose -f docker-compose.prod.yml logs fail2ban
+</code></pre>
+<h3 id="check-banned-ips" tabindex="-1"><a class="header-anchor" href="#check-banned-ips" aria-hidden="true">#</a> Check banned IPs</h3>
+<pre><code class="language-bash">docker compose -f docker-compose.prod.yml exec fail2ban fail2ban-client status
+docker compose -f docker-compose.prod.yml exec fail2ban fail2ban-client status nginx-404
+</code></pre>
+<h3 id="unban-an-ip" tabindex="-1"><a class="header-anchor" href="#unban-an-ip" aria-hidden="true">#</a> Unban an IP</h3>
+<pre><code class="language-bash">docker compose -f docker-compose.prod.yml exec fail2ban fail2ban-client set nginx-404 unbanip 1.2.3.4
+</code></pre>
+<h3 id="configuration-files" tabindex="-1"><a class="header-anchor" href="#configuration-files" aria-hidden="true">#</a> Configuration files</h3>
+<ul>
+<li><code>fail2ban/jail.local</code> — jail definitions (ban times, retry limits)</li>
+<li><code>fail2ban/filter.d/*.conf</code> — regex patterns for each jail</li>
+</ul>
+<h2 id="8-admin-dashboard" tabindex="-1"><a class="header-anchor" href="#8-admin-dashboard" aria-hidden="true">#</a> 8. Admin Dashboard</h2>
+<p>Access the admin dashboard at <code>https://api.evofaceflow.com/admin</code></p>
+<p>Login with the <code>ADMIN_API_KEY</code> from your backend <code>.env</code> file.</p>
+<p>Features:</p>
+<ul>
+<li>View user statistics, try-on jobs, and credits</li>
+<li>Create test users</li>
+<li>Verify/unverify user accounts</li>
+<li>Toggle subscriptions</li>
+<li>Adjust user credits</li>
+<li>View suspicious login attempts and security stats</li>
+</ul>
+<h2 id="9-monitoring-logs" tabindex="-1"><a class="header-anchor" href="#9-monitoring-logs" aria-hidden="true">#</a> 9. Monitoring &amp; Logs</h2>
+<h3 id="application-logging-winston" tabindex="-1"><a class="header-anchor" href="#application-logging-winston" aria-hidden="true">#</a> Application Logging (Winston)</h3>
+<p>The backend uses Winston for structured logging with daily file rotation.</p>
+<p><strong>Log Levels:</strong></p>
+<ul>
+<li><code>error</code> - Application errors, exceptions, failed operations</li>
+<li><code>warn</code> - Warnings, suspicious activity (e.g., suspicious login locations)</li>
+<li><code>info</code> - Key business events, successful operations</li>
+<li><code>http</code> - HTTP request/response logging</li>
+<li><code>debug</code> - Detailed debugging information</li>
+</ul>
+<p><strong>Environment Variables:</strong></p>
+<pre><code class="language-bash">LOG_LEVEL=debug       # Set log level (default: debug in dev, info in prod)
+LOG_DIR=/var/log/tryon  # Log file directory (default: ./logs)
+LOG_TO_FILE=true      # Enable file logging in development
+</code></pre>
+<p><strong>Log Files (Production):</strong></p>
+<p>Located at <code>/var/log/tryon/</code> (Docker volume <code>backend_logs</code>):</p>
+<ul>
+<li><code>combined-YYYY-MM-DD.log</code> - All logs, rotated daily, 14-day retention</li>
+<li><code>error-YYYY-MM-DD.log</code> - Errors only, 30-day retention</li>
+<li><code>exceptions-YYYY-MM-DD.log</code> - Unhandled exceptions</li>
+<li><code>rejections-YYYY-MM-DD.log</code> - Unhandled promise rejections</li>
+</ul>
+<h3 id="viewing-logs" tabindex="-1"><a class="header-anchor" href="#viewing-logs" aria-hidden="true">#</a> Viewing Logs</h3>
+<pre><code class="language-bash"># Live Docker stdout/stderr logs (all services)
+docker compose -f docker-compose.prod.yml logs -f
+
+# Specific service Docker logs
+docker compose -f docker-compose.prod.yml logs -f backend
+docker compose -f docker-compose.prod.yml logs -f nginx
+docker compose -f docker-compose.prod.yml logs -f postgres
+docker compose -f docker-compose.prod.yml logs -f fail2ban
+
+# Backend application log files (Winston)
+docker compose -f docker-compose.prod.yml exec backend tail -f /var/log/tryon/combined-$(date +%Y-%m-%d).log
+
+# View only errors
+docker compose -f docker-compose.prod.yml exec backend tail -f /var/log/tryon/error-$(date +%Y-%m-%d).log
+
+# View all log files
+docker compose -f docker-compose.prod.yml exec backend ls -la /var/log/tryon/
+
+# Access log volume directly on host
+docker volume inspect www_backend_logs  # Find mount point
+tail -f /var/lib/docker/volumes/www_backend_logs/_data/combined-*.log
+</code></pre>
+<h3 id="log-management" tabindex="-1"><a class="header-anchor" href="#log-management" aria-hidden="true">#</a> Log Management</h3>
+<p>Log files are automatically managed:</p>
+<ul>
+<li><strong>Daily rotation</strong> - New file each day, prevents large files</li>
+<li><strong>14-day retention</strong> - Combined logs auto-deleted after 14 days</li>
+<li><strong>30-day retention</strong> - Error logs kept longer for debugging</li>
+<li><strong>Gzip compression</strong> - Rotated logs are compressed</li>
+</ul>
+<p>To manually clean old logs:</p>
+<pre><code class="language-bash">docker compose -f docker-compose.prod.yml exec backend find /var/log/tryon -name &quot;*.log.gz&quot; -mtime +30 -delete
+</code></pre>
+<h3 id="request-tracing" tabindex="-1"><a class="header-anchor" href="#request-tracing" aria-hidden="true">#</a> Request Tracing</h3>
+<p>All requests get a unique correlation ID (<code>x-correlation-id</code> header). Use this to trace a specific request through logs:</p>
+<pre><code class="language-bash">docker compose -f docker-compose.prod.yml exec backend grep &quot;abc12345&quot; /var/log/tryon/combined-$(date +%Y-%m-%d).log
+</code></pre>
+<h3 id="resource-monitoring" tabindex="-1"><a class="header-anchor" href="#resource-monitoring" aria-hidden="true">#</a> Resource Monitoring</h3>
+<pre><code class="language-bash">docker stats
+</code></pre>
+<h2 id="10-database-backup" tabindex="-1"><a class="header-anchor" href="#10-database-backup" aria-hidden="true">#</a> 10. Database Backup</h2>
+<p>Backups are <strong>nightly, automated, and off-host</strong>. A cron job on the Lightsail host streams a <code>pg_dump</code> from the postgres container directly to S3 (<code>s3://evofaceflow-backups/postgres/</code>) without writing any unencrypted dump to local disk. Backups are immutable from the backup user (write-only IAM scope) and survive any disk failure on the VM.</p>
+<h3 id="101-whats-running" tabindex="-1"><a class="header-anchor" href="#101-whats-running" aria-hidden="true">#</a> 10.1 What's running</h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Location</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/usr/local/bin/backup-postgres.sh</code></td>
+<td>Lightsail host</td>
+<td>The backup script — sourced from <code>/etc/tryon-backup.env</code>, streams <code>pg_dump</code> | <code>gzip</code> | <code>aws s3 cp</code></td>
+</tr>
+<tr>
+<td><code>/etc/tryon-backup.env</code></td>
+<td>Lightsail host (root-only, <code>chmod 600</code>)</td>
+<td>AWS credentials + Postgres connection details. NEVER committed.</td>
+</tr>
+<tr>
+<td><code>/etc/logrotate.d/tryon-backup</code></td>
+<td>Lightsail host</td>
+<td>Weekly rotation of <code>/var/log/tryon-backup.log</code>, 8-week retention, gzipped</td>
+</tr>
+<tr>
+<td>Root crontab entry</td>
+<td>Lightsail host</td>
+<td><code>0 2 * * * /usr/local/bin/backup-postgres.sh &gt;&gt; /var/log/tryon-backup.log 2&gt;&amp;1</code> — runs daily at 02:00 UTC</td>
+</tr>
+<tr>
+<td><code>evofaceflow-backups</code> S3 bucket</td>
+<td>AWS S3 (us-east-1)</td>
+<td>Destination. Versioning enabled. Lifecycle: Glacier IR after 30 days, expire after 365 days.</td>
+</tr>
+<tr>
+<td>IAM user <code>tryon-backup-uploader</code></td>
+<td>AWS IAM</td>
+<td>Long-lived access keys used by the script. Inline policy allows <code>s3:PutObject</code> + <code>s3:AbortMultipartUpload</code> on <code>evofaceflow-backups/postgres/*</code> and <code>s3:ListBucketMultipartUploads</code> on the bucket. <strong>No</strong> read, no delete on completed objects.</td>
+</tr>
+</tbody>
+</table>
+<p>The script uses <code>set -euo pipefail</code>, so any stage failure (container down, pg_dump error, network failure, upload reject) aborts the run with a non-zero exit code. Output goes to <code>/var/log/tryon-backup.log</code>.</p>
+<h3 id="102-verify-its-working" tabindex="-1"><a class="header-anchor" href="#102-verify-its-working" aria-hidden="true">#</a> 10.2 Verify it's working</h3>
+<p>After-the-fact health check (run any time):</p>
+<pre><code class="language-bash"># Last 20 backup runs from the log
+sudo tail -20 /var/log/tryon-backup.log
+
+# List the last 7 days of dumps in S3 (requires read-capable AWS principal — not the backup user)
+aws s3 ls s3://evofaceflow-backups/postgres/ --human-readable | tail -7
+</code></pre>
+<p>A healthy log line pair looks like:</p>
+<pre><code>[2026-05-12T02:00:01Z] backup start: postgres/20260512T020001Z.sql.gz
+[2026-05-12T02:00:03Z] backup ok: s3://evofaceflow-backups/postgres/20260512T020001Z.sql.gz
+</code></pre>
+<p>If a run fails, the script exits non-zero and the corresponding line will read <code>backup start: ...</code> with no matching <code>backup ok:</code>. Cron does not email on failure unless you set <code>MAILTO</code> in the crontab.</p>
+<h3 id="103-initial-setup-one-time-if-rebuilding-the-host" tabindex="-1"><a class="header-anchor" href="#103-initial-setup-one-time-if-rebuilding-the-host" aria-hidden="true">#</a> 10.3 Initial setup (one-time, if rebuilding the host)</h3>
+<blockquote>
+<p>If the Lightsail host already has <code>/usr/local/bin/backup-postgres.sh</code> installed, skip this section. Steps below are only for fresh installs or recovery after a host rebuild.</p>
+</blockquote>
+<p><strong>Step A — AWS resources (run once, in the AWS console):</strong></p>
+<ol>
+<li>Create S3 bucket <code>evofaceflow-backups</code> in the same region as <code>evofaceflow-uploads</code>. Enable <strong>Bucket Versioning</strong>. Add a lifecycle rule transitioning current versions to Glacier Instant Retrieval after 30 days and expiring them after 365 days.</li>
+<li>Create IAM user <code>tryon-backup-uploader</code> (no console access). Attach an inline policy:</li>
+</ol>
+<pre><code class="language-json">{
+  &quot;Version&quot;: &quot;2012-10-17&quot;,
+  &quot;Statement&quot;: [
+    {
+      &quot;Sid&quot;: &quot;PutBackups&quot;,
+      &quot;Effect&quot;: &quot;Allow&quot;,
+      &quot;Action&quot;: [&quot;s3:PutObject&quot;, &quot;s3:AbortMultipartUpload&quot;],
+      &quot;Resource&quot;: &quot;arn:aws:s3:::evofaceflow-backups/postgres/*&quot;
+    },
+    {
+      &quot;Sid&quot;: &quot;ListMultipartsInBucket&quot;,
+      &quot;Effect&quot;: &quot;Allow&quot;,
+      &quot;Action&quot;: &quot;s3:ListBucketMultipartUploads&quot;,
+      &quot;Resource&quot;: &quot;arn:aws:s3:::evofaceflow-backups&quot;
+    }
+  ]
+}
+</code></pre>
+<ol start="3">
+<li>Generate an access key for the user and save both halves somewhere safe.</li>
+</ol>
+<p><strong>Step B — host setup (on the Lightsail VM):</strong></p>
+<pre><code class="language-bash">sudo apt-get update &amp;&amp; sudo apt-get install -y awscli
+
+# Credentials and config (root-only, exported so child processes inherit them)
+sudo tee /etc/tryon-backup.env &gt; /dev/null &lt;&lt;'EOF'
+export AWS_ACCESS_KEY_ID=&lt;paste-from-step-A3&gt;
+export AWS_SECRET_ACCESS_KEY=&lt;paste-from-step-A3&gt;
+export AWS_DEFAULT_REGION=us-east-1
+export PG_USER=tryon_prod
+export PG_DB=tryon_db
+export S3_BUCKET=evofaceflow-backups
+export PROJECT_DIR=/opt/evofaceflow/TryOn
+export COMPOSE_FILE=docker-compose.prod.yml
+EOF
+sudo chmod 600 /etc/tryon-backup.env
+sudo chown root:root /etc/tryon-backup.env
+</code></pre>
+<blockquote>
+<p><strong><code>export</code> is required</strong>, not optional. <code>source</code>d shell variables without <code>export</code> are not inherited by the <code>aws</code> subprocess; CLI then falls back to the Lightsail instance role and fails with <code>AccessDenied</code>.</p>
+</blockquote>
+<p>Install the backup script:</p>
+<pre><code class="language-bash">sudo tee /usr/local/bin/backup-postgres.sh &gt; /dev/null &lt;&lt;'SCRIPT'
+#!/usr/bin/env bash
+# Nightly Postgres -&gt; S3 backup for TryOn.
+set -euo pipefail
+# shellcheck disable=SC1091
+source /etc/tryon-backup.env
+
+TIMESTAMP=&quot;$(date -u +%Y%m%dT%H%M%SZ)&quot;
+S3_KEY=&quot;postgres/${TIMESTAMP}.sql.gz&quot;
+HOSTNAME_TAG=&quot;$(hostname -s)&quot;
+
+cd &quot;$PROJECT_DIR&quot;
+
+echo &quot;[$(date -u +%FT%TZ)] backup start: $S3_KEY&quot;
+
+docker compose -f &quot;$COMPOSE_FILE&quot; exec -T postgres \
+  pg_dump -U &quot;$PG_USER&quot; -d &quot;$PG_DB&quot; --no-owner --clean --if-exists \
+  | gzip -9 \
+  | aws s3 cp - &quot;s3://${S3_BUCKET}/${S3_KEY}&quot; \
+      --expected-size 1073741824 \
+      --metadata &quot;host=${HOSTNAME_TAG},timestamp=${TIMESTAMP}&quot; \
+      --no-progress
+
+echo &quot;[$(date -u +%FT%TZ)] backup ok: s3://${S3_BUCKET}/${S3_KEY}&quot;
+SCRIPT
+
+sudo chmod +x /usr/local/bin/backup-postgres.sh
+sudo chown root:root /usr/local/bin/backup-postgres.sh
+</code></pre>
+<p>Test once by hand, then install cron + logrotate:</p>
+<pre><code class="language-bash">sudo /usr/local/bin/backup-postgres.sh
+
+# Cron: nightly at 02:00 UTC, log to its own file
+sudo crontab -e
+# Add:
+#   MAILTO=&quot;&quot;
+#   0 2 * * * /usr/local/bin/backup-postgres.sh &gt;&gt; /var/log/tryon-backup.log 2&gt;&amp;1
+
+# Log rotation
+sudo tee /etc/logrotate.d/tryon-backup &gt; /dev/null &lt;&lt;'EOF'
+/var/log/tryon-backup.log {
+    weekly
+    rotate 8
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 644 root root
+}
+EOF
+</code></pre>
+<h3 id="104-restore-from-a-backup" tabindex="-1"><a class="header-anchor" href="#104-restore-from-a-backup" aria-hidden="true">#</a> 10.4 Restore from a backup</h3>
+<blockquote>
+<p><strong>Test this procedure at least once on a staging instance</strong> before you ever need it in production. An untested backup is a hope, not a backup.</p>
+</blockquote>
+<pre><code class="language-bash"># 1. Download the dump (use your normal admin AWS credentials, NOT tryon-backup-uploader
+#    — that user has no read permission)
+aws s3 cp s3://evofaceflow-backups/postgres/20260512T020001Z.sql.gz ./restore.sql.gz
+
+# 2. Verify the file looks reasonable (size, gzip integrity)
+ls -lh restore.sql.gz
+gunzip -t restore.sql.gz &amp;&amp; echo &quot;gzip OK&quot;
+
+# 3. (PRODUCTION ONLY — irreversible) Stop the backend so no writes happen during restore
+cd /opt/evofaceflow/TryOn
+docker compose -f docker-compose.prod.yml stop backend
+
+# 4. Restore. The dump uses --clean --if-exists, so it drops and recreates objects.
+gunzip -c restore.sql.gz | \
+  docker compose -f docker-compose.prod.yml exec -T postgres \
+  psql -U tryon_prod -d tryon_db
+
+# 5. Apply any newer Prisma migrations (only relevant if the dump pre-dates a migration)
+docker compose -f docker-compose.prod.yml run --rm backend npx prisma migrate deploy
+
+# 6. Start the backend
+docker compose -f docker-compose.prod.yml start backend
+
+# 7. Smoke-test
+curl https://api.evofaceflow.com/health
+</code></pre>
+<h3 id="105-ad-hoc-pre-migration-manual-dump" tabindex="-1"><a class="header-anchor" href="#105-ad-hoc-pre-migration-manual-dump" aria-hidden="true">#</a> 10.5 Ad-hoc / pre-migration manual dump</h3>
+<p>For one-off safety dumps (e.g. immediately before a risky migration), bypass S3 and just write to local disk:</p>
+<pre><code class="language-bash">docker compose -f docker-compose.prod.yml exec postgres \
+  pg_dump -U tryon_prod tryon_db &gt; backup_$(date +%Y%m%d_%H%M%S).sql
+</code></pre>
+<p>Keep these local files for the duration of the migration only — they contain unencrypted user data and should be deleted (or moved to S3) afterwards.</p>
+<h2 id="11-backups-snapshots-disaster-recovery" tabindex="-1"><a class="header-anchor" href="#11-backups-snapshots-disaster-recovery" aria-hidden="true">#</a> 11. Backups, Snapshots &amp; Disaster Recovery</h2>
+<p>The production stack is protected at three independent layers. Each survives different failure modes; together they cover everything from a fat-fingered <code>DELETE</code> to a total VM loss.</p>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Granularity</th>
+<th>Cadence</th>
+<th>Restore time</th>
+<th>What it survives</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Lightsail automatic snapshots</td>
+<td>Whole-VM (disk + state)</td>
+<td>Daily (configured in Lightsail console)</td>
+<td>~10 min to spin a new instance from snapshot</td>
+<td>VM corruption, accidental host-level rm, disk failure</td>
+</tr>
+<tr>
+<td>S3 versioning + lifecycle on <code>evofaceflow-uploads</code></td>
+<td>Object-level (per-photo)</td>
+<td>Per-write (automatic)</td>
+<td>Seconds — restore the prior version in the S3 console</td>
+<td>Accidental overwrite or delete of user photos. 30-day undo window via lifecycle rule expiring noncurrent versions.</td>
+</tr>
+<tr>
+<td>Off-host Postgres dumps to <code>evofaceflow-backups</code></td>
+<td>Database snapshot</td>
+<td>Daily (02:00 UTC)</td>
+<td>Minutes — see §10.4</td>
+<td>Total VM loss, DB corruption, dropped tables. 365-day retention.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="111-lightsail-automatic-snapshots" tabindex="-1"><a class="header-anchor" href="#111-lightsail-automatic-snapshots" aria-hidden="true">#</a> 11.1 Lightsail automatic snapshots</h3>
+<p>Enabled in the AWS Lightsail console (Instances → instance → <strong>Snapshots</strong> tab → <strong>Enable automatic snapshots</strong>). Lightsail keeps the seven most recent automatic snapshots by default; older ones roll off. Manual snapshots can be taken before a risky migration and are retained until explicitly deleted.</p>
+<p>To restore from a snapshot: Lightsail console → Snapshots → <strong>Create new instance from snapshot</strong>. The new instance gets a new public IP, so DNS for <code>evofaceflow.com</code> and <code>api.evofaceflow.com</code> must be repointed (or the static IP detached from the old instance and reattached to the new one).</p>
+<h3 id="112-s3-versioning-on-evofaceflow-uploads" tabindex="-1"><a class="header-anchor" href="#112-s3-versioning-on-evofaceflow-uploads" aria-hidden="true">#</a> 11.2 S3 versioning on <code>evofaceflow-uploads</code></h3>
+<p>Enabled in the S3 console with a lifecycle rule that permanently deletes noncurrent object versions after 30 days. Recovering an overwritten or deleted photo:</p>
+<ol>
+<li>AWS Console → S3 → <code>evofaceflow-uploads</code> → toggle <strong>Show versions</strong> (top-right).</li>
+<li>Locate the object's prior version; either copy it to a new key or delete the current (delete-marker) version to expose the old one.</li>
+<li>If the object was deleted entirely, look for a delete marker on the key — removing the delete marker restores the most recent non-deleted version.</li>
+</ol>
+<h3 id="113-postgres-dumps-to-s3" tabindex="-1"><a class="header-anchor" href="#113-postgres-dumps-to-s3" aria-hidden="true">#</a> 11.3 Postgres dumps to S3</h3>
+<p>Covered in detail in §10. The script is idempotent (writes a uniquely timestamped object per run) and immutable from the backup user (no overwrite, no delete).</p>
+<h2 id="12-external-monitoring" tabindex="-1"><a class="header-anchor" href="#12-external-monitoring" aria-hidden="true">#</a> 12. External Monitoring</h2>
+<h3 id="121-uptimerobot" tabindex="-1"><a class="header-anchor" href="#121-uptimerobot" aria-hidden="true">#</a> 12.1 UptimeRobot</h3>
+<p>A free UptimeRobot account monitors <code>https://api.evofaceflow.com/health</code> every 5 minutes with a 30-second timeout. Alerts go to the configured email contact when the monitor records ≥2 consecutive failures (~10 minutes total downtime before paging).</p>
+<p>This is intentionally <strong>external</strong> — it probes from outside AWS so it catches outages that the application itself can't report (network partitions, Lightsail VM down, nginx misconfig, DNS failure, expired SSL handshake).</p>
+<blockquote>
+<p>The <code>/health</code> endpoint today returns 200 as long as the Express process is running — it does not yet probe Postgres or Redis. A deep health check that probes dependencies is planned (see internal post-launch readiness plan). Once shipped, the same UptimeRobot monitor automatically begins reporting on dep health with no reconfiguration.</p>
+</blockquote>
+<h3 id="122-ssl-certificate-expiry-deferred" tabindex="-1"><a class="header-anchor" href="#122-ssl-certificate-expiry-deferred" aria-hidden="true">#</a> 12.2 SSL certificate expiry (deferred)</h3>
+<p>UptimeRobot's SSL expiry monitoring is a paid feature on their newer plans. For now, expiry alerting falls back to:</p>
+<ol>
+<li><strong>Let's Encrypt's own renewal-failure emails</strong> to the address registered with certbot (fires only if auto-renewal breaks).</li>
+<li><strong>UptimeRobot's HTTPS check</strong> itself — when a cert expires, the monitor goes red immediately because the TLS handshake fails. Not preemptive, but it does fire.</li>
+</ol>
+<p>A preemptive SSL expiry check is planned via the existing vulnerability scanner — <code>VulnerabilityReport.scanType</code> already reserves a <code>SSL_CERTIFICATE</code> enum value (see <code>backend/prisma/schema.prisma</code>). Implementing the worker handler will surface days-remaining in the admin dashboard with no third-party service.</p>
+<h2 id="13-updating-the-application" tabindex="-1"><a class="header-anchor" href="#13-updating-the-application" aria-hidden="true">#</a> 13. Updating the Application</h2>
+<h3 id="backend-server-side" tabindex="-1"><a class="header-anchor" href="#backend-server-side" aria-hidden="true">#</a> Backend (server-side)</h3>
+<p>Deploys are <strong>manual</strong>. A <code>.github/workflows/deploy.yml</code> is occasionally referenced in older notes but <strong>is not present in the repo</strong> and no auto-deploy is configured. To deploy:</p>
+<pre><code class="language-bash">cd /opt/evofaceflow/TryOn
+git pull origin main
+docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml exec backend npx prisma migrate deploy
+</code></pre>
+<p>Use <code>up -d</code> (without <code>--build</code>) for env-var-only changes — <code>restart</code> does <strong>not</strong> re-read <code>.env</code> reliably with all Compose versions.</p>
+<h3 id="frontend-mobile-app" tabindex="-1"><a class="header-anchor" href="#frontend-mobile-app" aria-hidden="true">#</a> Frontend (mobile app)</h3>
+<p>The mobile app is <strong>not</strong> deployed to Lightsail. It's compiled into iOS / Android binaries via EAS Build (Expo's cloud build service) and distributed through TestFlight / App Store.</p>
+<pre><code class="language-powershell"># All commands run on your LOCAL dev machine, not Lightsail.
+cd frontend
+npm install                                    # if dependencies changed
+npx expo prebuild --clean                      # if native deps changed (e.g. new expo-* package)
+eas build --platform ios --profile preview     # for TestFlight / internal QA
+eas build --platform ios --profile production  # for App Store submission
+eas submit --platform ios --profile production --latest  # upload to App Store Connect
+</code></pre>
+<h4 id="eas-profiles-frontendeasjson" tabindex="-1"><a class="header-anchor" href="#eas-profiles-frontendeasjson" aria-hidden="true">#</a> EAS profiles (<code>frontend/eas.json</code>)</h4>
+<table>
+<thead>
+<tr>
+<th>Profile</th>
+<th>Use case</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>development</code></td>
+<td>Dev Client install for hot-reload iteration on a phone</td>
+<td><code>developmentClient: true</code>, <code>distribution: &quot;internal&quot;</code></td>
+</tr>
+<tr>
+<td><code>preview</code></td>
+<td>TestFlight / internal QA builds</td>
+<td>Production-mode JS, internal distribution. No build-number burn.</td>
+</tr>
+<tr>
+<td><code>production</code></td>
+<td>App Store submission</td>
+<td>Auto-increments build number.</td>
+</tr>
+</tbody>
+</table>
+<p><code>eas build --platform ios</code> with no <code>--profile</code> flag defaults to <code>production</code> — explicit profile is recommended.</p>
+<h3 id="connecting-the-frontend-to-lightsail" tabindex="-1"><a class="header-anchor" href="#connecting-the-frontend-to-lightsail" aria-hidden="true">#</a> Connecting the frontend to Lightsail</h3>
+<p>Always set <code>USE_LOCAL = false</code> in <code>frontend/src/config/api.ts</code> before any <code>eas build</code>. Production builds use <code>https://api.evofaceflow.com/api</code>.</p>
+<h2 id="14-rollback-procedure" tabindex="-1"><a class="header-anchor" href="#14-rollback-procedure" aria-hidden="true">#</a> 14. Rollback Procedure</h2>
+<p>If deployment fails:</p>
+<pre><code class="language-bash"># Check which version is running
+git log --oneline -5
+
+# Rollback to previous commit
+git checkout &lt;previous-commit-hash&gt;
+
+# Rebuild and restart
+docker compose -f docker-compose.prod.yml up -d --build
+</code></pre>
+<h2 id="15-local-vs-live-development" tabindex="-1"><a class="header-anchor" href="#15-local-vs-live-development" aria-hidden="true">#</a> 15. Local vs Live Development</h2>
+<p>The frontend can connect to either a local backend or the live Lightsail server.</p>
+<h3 id="configuration" tabindex="-1"><a class="header-anchor" href="#configuration" aria-hidden="true">#</a> Configuration</h3>
+<p>Edit <code>frontend/src/config/api.ts</code>:</p>
+<pre><code class="language-typescript">// Change USE_LOCAL to switch environments:
+const USE_LOCAL = false;  // false = live server, true = local
+
+const LOCAL_URL = 'http://localhost:3000/api';
+const LIVE_URL = 'https://api.evofaceflow.com/api';
+</code></pre>
+<h3 id="local-development" tabindex="-1"><a class="header-anchor" href="#local-development" aria-hidden="true">#</a> Local Development</h3>
+<ol>
+<li>Set <code>USE_LOCAL = true</code> in <code>frontend/src/config/api.ts</code></li>
+<li>Start backend locally:<pre><code class="language-bash">cd backend
+npm run dev
+</code></pre>
+</li>
+<li>Start frontend:<pre><code class="language-bash">cd frontend
+npx expo start
+</code></pre>
+</li>
+</ol>
+<h3 id="testing-against-live-server" tabindex="-1"><a class="header-anchor" href="#testing-against-live-server" aria-hidden="true">#</a> Testing Against Live Server</h3>
+<ol>
+<li>Set <code>USE_LOCAL = false</code> in <code>frontend/src/config/api.ts</code></li>
+<li>Start the metro bundler with tunnel (so a physical device can reach it):<pre><code class="language-bash">cd frontend
+npx expo start --tunnel
+</code></pre>
+</li>
+<li>Open the <strong>dev client</strong> app on your device (NOT Expo Go) and scan the QR code or pick the project from &quot;Recently opened&quot;.</li>
+<li>The backend is already running on Lightsail — no local backend needed.</li>
+</ol>
+<blockquote>
+<p><strong>🚨 Expo Go does NOT work for this app.</strong> The app depends on native modules outside Expo Go's fixed module set (<code>expo-iap</code>, <code>expo-secure-store</code>, etc.). Launching in Expo Go fails at startup with <code>Cannot find native module 'ExpoIap'</code>. <strong>Every device-testing flow requires a dev client build</strong> — either a simulator/emulator build via <code>npx expo run:ios</code> / <code>npx expo run:android</code>, or an installed dev-client app via <code>eas build --profile development</code>. Once the dev client is installed, JS still hot-reloads from <code>npx expo start</code> like normal; only native dependency changes require a rebuild.</p>
+</blockquote>
+<h3 id="pre-commit-checklist" tabindex="-1"><a class="header-anchor" href="#pre-commit-checklist" aria-hidden="true">#</a> Pre-Commit Checklist</h3>
+<p>Before committing changes:</p>
+<ul>
+<li>Ensure <code>USE_LOCAL = false</code> in <code>frontend/src/config/api.ts</code></li>
+<li>This ensures production builds always use the live server</li>
+</ul>
+<h2 id="troubleshooting" tabindex="-1"><a class="header-anchor" href="#troubleshooting" aria-hidden="true">#</a> Troubleshooting</h2>
+<h3 id="backend-wont-start" tabindex="-1"><a class="header-anchor" href="#backend-wont-start" aria-hidden="true">#</a> Backend won't start</h3>
+<pre><code class="language-bash">docker compose -f docker-compose.prod.yml logs backend
+</code></pre>
+<p>Common issues:</p>
+<ul>
+<li>Missing environment variables in backend/.env</li>
+<li>Database not ready (wait for postgres healthcheck)</li>
+<li>Prisma schema out of sync (run migrations)</li>
+</ul>
+<h3 id="ssl-certificate-issues" tabindex="-1"><a class="header-anchor" href="#ssl-certificate-issues" aria-hidden="true">#</a> SSL certificate issues</h3>
+<pre><code class="language-bash"># Check certificate status
+sudo certbot certificates
+
+# Force renewal
+sudo certbot renew --force-renewal
+</code></pre>
+<h3 id="database-connection-issues" tabindex="-1"><a class="header-anchor" href="#database-connection-issues" aria-hidden="true">#</a> Database connection issues</h3>
+<pre><code class="language-bash"># Check postgres is running
+docker compose -f docker-compose.prod.yml exec postgres pg_isready
+
+# Connect to database
+docker compose -f docker-compose.prod.yml exec postgres psql -U tryon_prod tryon_db
+</code></pre>
+<h3 id="out-of-memory" tabindex="-1"><a class="header-anchor" href="#out-of-memory" aria-hidden="true">#</a> Out of memory</h3>
+<p>Lightsail 512MB instances may struggle. Consider:</p>
+<ul>
+<li>Upgrading to 1GB instance</li>
+<li>Reducing Redis maxmemory</li>
+<li>Setting NODE_OPTIONS=&quot;--max-old-space-size=384&quot; in backend env</li>
+</ul>
+
+  </main>
+</div>
+<footer class="footer">
+  <p>Generated from <code>DEPLOYMENT.md</code>. Run <code>npm run build:docs</code> to regenerate.</p>
+</footer>
+</body>
+</html>
