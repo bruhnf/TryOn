@@ -467,33 +467,247 @@ docker stats
 
 ## 10. Database Backup
 
-### Manual backup
+Backups are **nightly, automated, and off-host**. A cron job on the Lightsail host streams a `pg_dump` from the postgres container directly to S3 (`s3://evofaceflow-backups/postgres/`) without writing any unencrypted dump to local disk. Backups are immutable from the backup user (write-only IAM scope) and survive any disk failure on the VM.
+
+### 10.1 What's running
+
+| Component | Location | Purpose |
+|---|---|---|
+| `/usr/local/bin/backup-postgres.sh` | Lightsail host | The backup script — sourced from `/etc/tryon-backup.env`, streams `pg_dump` \| `gzip` \| `aws s3 cp` |
+| `/etc/tryon-backup.env` | Lightsail host (root-only, `chmod 600`) | AWS credentials + Postgres connection details. NEVER committed. |
+| `/etc/logrotate.d/tryon-backup` | Lightsail host | Weekly rotation of `/var/log/tryon-backup.log`, 8-week retention, gzipped |
+| Root crontab entry | Lightsail host | `0 2 * * * /usr/local/bin/backup-postgres.sh >> /var/log/tryon-backup.log 2>&1` — runs daily at 02:00 UTC |
+| `evofaceflow-backups` S3 bucket | AWS S3 (us-east-1) | Destination. Versioning enabled. Lifecycle: Glacier IR after 30 days, expire after 365 days. |
+| IAM user `tryon-backup-uploader` | AWS IAM | Long-lived access keys used by the script. Inline policy allows `s3:PutObject` + `s3:AbortMultipartUpload` on `evofaceflow-backups/postgres/*` and `s3:ListBucketMultipartUploads` on the bucket. **No** read, no delete on completed objects. |
+
+The script uses `set -euo pipefail`, so any stage failure (container down, pg_dump error, network failure, upload reject) aborts the run with a non-zero exit code. Output goes to `/var/log/tryon-backup.log`.
+
+### 10.2 Verify it's working
+
+After-the-fact health check (run any time):
 
 ```bash
-docker compose -f docker-compose.prod.yml exec postgres pg_dump -U tryon_prod tryon_db > backup_$(date +%Y%m%d_%H%M%S).sql
+# Last 20 backup runs from the log
+sudo tail -20 /var/log/tryon-backup.log
+
+# List the last 7 days of dumps in S3 (requires read-capable AWS principal — not the backup user)
+aws s3 ls s3://evofaceflow-backups/postgres/ --human-readable | tail -7
 ```
 
-### Automated daily backup (cron)
+A healthy log line pair looks like:
+```
+[2026-05-12T02:00:01Z] backup start: postgres/20260512T020001Z.sql.gz
+[2026-05-12T02:00:03Z] backup ok: s3://evofaceflow-backups/postgres/20260512T020001Z.sql.gz
+```
+
+If a run fails, the script exits non-zero and the corresponding line will read `backup start: ...` with no matching `backup ok:`. Cron does not email on failure unless you set `MAILTO` in the crontab.
+
+### 10.3 Initial setup (one-time, if rebuilding the host)
+
+> If the Lightsail host already has `/usr/local/bin/backup-postgres.sh` installed, skip this section. Steps below are only for fresh installs or recovery after a host rebuild.
+
+**Step A — AWS resources (run once, in the AWS console):**
+
+1. Create S3 bucket `evofaceflow-backups` in the same region as `evofaceflow-uploads`. Enable **Bucket Versioning**. Add a lifecycle rule transitioning current versions to Glacier Instant Retrieval after 30 days and expiring them after 365 days.
+2. Create IAM user `tryon-backup-uploader` (no console access). Attach an inline policy:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PutBackups",
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:AbortMultipartUpload"],
+      "Resource": "arn:aws:s3:::evofaceflow-backups/postgres/*"
+    },
+    {
+      "Sid": "ListMultipartsInBucket",
+      "Effect": "Allow",
+      "Action": "s3:ListBucketMultipartUploads",
+      "Resource": "arn:aws:s3:::evofaceflow-backups"
+    }
+  ]
+}
+```
+
+3. Generate an access key for the user and save both halves somewhere safe.
+
+**Step B — host setup (on the Lightsail VM):**
 
 ```bash
-crontab -e
+sudo apt-get update && sudo apt-get install -y awscli
+
+# Credentials and config (root-only, exported so child processes inherit them)
+sudo tee /etc/tryon-backup.env > /dev/null <<'EOF'
+export AWS_ACCESS_KEY_ID=<paste-from-step-A3>
+export AWS_SECRET_ACCESS_KEY=<paste-from-step-A3>
+export AWS_DEFAULT_REGION=us-east-1
+export PG_USER=tryon_prod
+export PG_DB=tryon_db
+export S3_BUCKET=evofaceflow-backups
+export PROJECT_DIR=/opt/evofaceflow/TryOn
+export COMPOSE_FILE=docker-compose.prod.yml
+EOF
+sudo chmod 600 /etc/tryon-backup.env
+sudo chown root:root /etc/tryon-backup.env
 ```
 
-Add:
-```
-0 2 * * * cd /opt/evofaceflow/TryOn && docker compose -f docker-compose.prod.yml exec -T postgres pg_dump -U tryon_prod tryon_db | gzip > /opt/evofaceflow/backups/db_$(date +\%Y\%m\%d).sql.gz
-```
+> **`export` is required**, not optional. `source`d shell variables without `export` are not inherited by the `aws` subprocess; CLI then falls back to the Lightsail instance role and fails with `AccessDenied`.
 
-Create backup directory:
+Install the backup script:
+
 ```bash
-mkdir -p /opt/evofaceflow/backups
+sudo tee /usr/local/bin/backup-postgres.sh > /dev/null <<'SCRIPT'
+#!/usr/bin/env bash
+# Nightly Postgres -> S3 backup for TryOn.
+set -euo pipefail
+# shellcheck disable=SC1091
+source /etc/tryon-backup.env
+
+TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+S3_KEY="postgres/${TIMESTAMP}.sql.gz"
+HOSTNAME_TAG="$(hostname -s)"
+
+cd "$PROJECT_DIR"
+
+echo "[$(date -u +%FT%TZ)] backup start: $S3_KEY"
+
+docker compose -f "$COMPOSE_FILE" exec -T postgres \
+  pg_dump -U "$PG_USER" -d "$PG_DB" --no-owner --clean --if-exists \
+  | gzip -9 \
+  | aws s3 cp - "s3://${S3_BUCKET}/${S3_KEY}" \
+      --expected-size 1073741824 \
+      --metadata "host=${HOSTNAME_TAG},timestamp=${TIMESTAMP}" \
+      --no-progress
+
+echo "[$(date -u +%FT%TZ)] backup ok: s3://${S3_BUCKET}/${S3_KEY}"
+SCRIPT
+
+sudo chmod +x /usr/local/bin/backup-postgres.sh
+sudo chown root:root /usr/local/bin/backup-postgres.sh
 ```
 
-## 11. Updating the Application
+Test once by hand, then install cron + logrotate:
+
+```bash
+sudo /usr/local/bin/backup-postgres.sh
+
+# Cron: nightly at 02:00 UTC, log to its own file
+sudo crontab -e
+# Add:
+#   MAILTO=""
+#   0 2 * * * /usr/local/bin/backup-postgres.sh >> /var/log/tryon-backup.log 2>&1
+
+# Log rotation
+sudo tee /etc/logrotate.d/tryon-backup > /dev/null <<'EOF'
+/var/log/tryon-backup.log {
+    weekly
+    rotate 8
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 644 root root
+}
+EOF
+```
+
+### 10.4 Restore from a backup
+
+> **Test this procedure at least once on a staging instance** before you ever need it in production. An untested backup is a hope, not a backup.
+
+```bash
+# 1. Download the dump (use your normal admin AWS credentials, NOT tryon-backup-uploader
+#    — that user has no read permission)
+aws s3 cp s3://evofaceflow-backups/postgres/20260512T020001Z.sql.gz ./restore.sql.gz
+
+# 2. Verify the file looks reasonable (size, gzip integrity)
+ls -lh restore.sql.gz
+gunzip -t restore.sql.gz && echo "gzip OK"
+
+# 3. (PRODUCTION ONLY — irreversible) Stop the backend so no writes happen during restore
+cd /opt/evofaceflow/TryOn
+docker compose -f docker-compose.prod.yml stop backend
+
+# 4. Restore. The dump uses --clean --if-exists, so it drops and recreates objects.
+gunzip -c restore.sql.gz | \
+  docker compose -f docker-compose.prod.yml exec -T postgres \
+  psql -U tryon_prod -d tryon_db
+
+# 5. Apply any newer Prisma migrations (only relevant if the dump pre-dates a migration)
+docker compose -f docker-compose.prod.yml run --rm backend npx prisma migrate deploy
+
+# 6. Start the backend
+docker compose -f docker-compose.prod.yml start backend
+
+# 7. Smoke-test
+curl https://api.evofaceflow.com/health
+```
+
+### 10.5 Ad-hoc / pre-migration manual dump
+
+For one-off safety dumps (e.g. immediately before a risky migration), bypass S3 and just write to local disk:
+
+```bash
+docker compose -f docker-compose.prod.yml exec postgres \
+  pg_dump -U tryon_prod tryon_db > backup_$(date +%Y%m%d_%H%M%S).sql
+```
+
+Keep these local files for the duration of the migration only — they contain unencrypted user data and should be deleted (or moved to S3) afterwards.
+
+## 11. Backups, Snapshots & Disaster Recovery
+
+The production stack is protected at three independent layers. Each survives different failure modes; together they cover everything from a fat-fingered `DELETE` to a total VM loss.
+
+| Layer | Granularity | Cadence | Restore time | What it survives |
+|---|---|---|---|---|
+| Lightsail automatic snapshots | Whole-VM (disk + state) | Daily (configured in Lightsail console) | ~10 min to spin a new instance from snapshot | VM corruption, accidental host-level rm, disk failure |
+| S3 versioning + lifecycle on `evofaceflow-uploads` | Object-level (per-photo) | Per-write (automatic) | Seconds — restore the prior version in the S3 console | Accidental overwrite or delete of user photos. 30-day undo window via lifecycle rule expiring noncurrent versions. |
+| Off-host Postgres dumps to `evofaceflow-backups` | Database snapshot | Daily (02:00 UTC) | Minutes — see §10.4 | Total VM loss, DB corruption, dropped tables. 365-day retention. |
+
+### 11.1 Lightsail automatic snapshots
+
+Enabled in the AWS Lightsail console (Instances → instance → **Snapshots** tab → **Enable automatic snapshots**). Lightsail keeps the seven most recent automatic snapshots by default; older ones roll off. Manual snapshots can be taken before a risky migration and are retained until explicitly deleted.
+
+To restore from a snapshot: Lightsail console → Snapshots → **Create new instance from snapshot**. The new instance gets a new public IP, so DNS for `evofaceflow.com` and `api.evofaceflow.com` must be repointed (or the static IP detached from the old instance and reattached to the new one).
+
+### 11.2 S3 versioning on `evofaceflow-uploads`
+
+Enabled in the S3 console with a lifecycle rule that permanently deletes noncurrent object versions after 30 days. Recovering an overwritten or deleted photo:
+
+1. AWS Console → S3 → `evofaceflow-uploads` → toggle **Show versions** (top-right).
+2. Locate the object's prior version; either copy it to a new key or delete the current (delete-marker) version to expose the old one.
+3. If the object was deleted entirely, look for a delete marker on the key — removing the delete marker restores the most recent non-deleted version.
+
+### 11.3 Postgres dumps to S3
+
+Covered in detail in §10. The script is idempotent (writes a uniquely timestamped object per run) and immutable from the backup user (no overwrite, no delete).
+
+## 12. External Monitoring
+
+### 12.1 UptimeRobot
+
+A free UptimeRobot account monitors `https://api.evofaceflow.com/health` every 5 minutes with a 30-second timeout. Alerts go to the configured email contact when the monitor records ≥2 consecutive failures (~10 minutes total downtime before paging).
+
+This is intentionally **external** — it probes from outside AWS so it catches outages that the application itself can't report (network partitions, Lightsail VM down, nginx misconfig, DNS failure, expired SSL handshake).
+
+> The `/health` endpoint today returns 200 as long as the Express process is running — it does not yet probe Postgres or Redis. A deep health check that probes dependencies is planned (see internal post-launch readiness plan). Once shipped, the same UptimeRobot monitor automatically begins reporting on dep health with no reconfiguration.
+
+### 12.2 SSL certificate expiry (deferred)
+
+UptimeRobot's SSL expiry monitoring is a paid feature on their newer plans. For now, expiry alerting falls back to:
+
+1. **Let's Encrypt's own renewal-failure emails** to the address registered with certbot (fires only if auto-renewal breaks).
+2. **UptimeRobot's HTTPS check** itself — when a cert expires, the monitor goes red immediately because the TLS handshake fails. Not preemptive, but it does fire.
+
+A preemptive SSL expiry check is planned via the existing vulnerability scanner — `VulnerabilityReport.scanType` already reserves a `SSL_CERTIFICATE` enum value (see `backend/prisma/schema.prisma`). Implementing the worker handler will surface days-remaining in the admin dashboard with no third-party service.
+
+## 13. Updating the Application
 
 ### Backend (server-side)
 
-Push to `main` triggers GitHub Actions which SSHes into Lightsail and rebuilds. To deploy manually instead:
+Deploys are **manual**. A `.github/workflows/deploy.yml` is occasionally referenced in older notes but **is not present in the repo** and no auto-deploy is configured. To deploy:
 
 ```bash
 cd /opt/evofaceflow/TryOn
@@ -532,7 +746,7 @@ eas submit --platform ios --profile production --latest  # upload to App Store C
 
 Always set `USE_LOCAL = false` in `frontend/src/config/api.ts` before any `eas build`. Production builds use `https://api.evofaceflow.com/api`.
 
-## 12. Rollback Procedure
+## 14. Rollback Procedure
 
 If deployment fails:
 
@@ -547,7 +761,7 @@ git checkout <previous-commit-hash>
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-## 13. Local vs Live Development
+## 15. Local vs Live Development
 
 The frontend can connect to either a local backend or the live Lightsail server.
 
@@ -580,14 +794,15 @@ const LIVE_URL = 'https://api.evofaceflow.com/api';
 ### Testing Against Live Server
 
 1. Set `USE_LOCAL = false` in `frontend/src/config/api.ts`
-2. Start frontend with tunnel (required for Expo Go on physical devices):
+2. Start the metro bundler with tunnel (so a physical device can reach it):
    ```bash
    cd frontend
    npx expo start --tunnel
    ```
-3. The backend is already running on Lightsail
+3. Open the **dev client** app on your device (NOT Expo Go) and scan the QR code or pick the project from "Recently opened".
+4. The backend is already running on Lightsail — no local backend needed.
 
-> **⚠️ Expo Go limitation:** Features that depend on native modules (`expo-iap`, custom config plugins) **do not work in Expo Go**. To test in-app purchases, sandbox StoreKit, or App Store Server Notifications you must run inside a Dev Client build (`eas build --profile development`) or a `preview`/`production` build installed on the device. Expo Go is fine for everything else (auth, feed, try-on, profile, settings, blocking, reporting, etc.).
+> **🚨 Expo Go does NOT work for this app.** The app depends on native modules outside Expo Go's fixed module set (`expo-iap`, `expo-secure-store`, etc.). Launching in Expo Go fails at startup with `Cannot find native module 'ExpoIap'`. **Every device-testing flow requires a dev client build** — either a simulator/emulator build via `npx expo run:ios` / `npx expo run:android`, or an installed dev-client app via `eas build --profile development`. Once the dev client is installed, JS still hot-reloads from `npx expo start` like normal; only native dependency changes require a rebuild.
 
 ### Pre-Commit Checklist
 
