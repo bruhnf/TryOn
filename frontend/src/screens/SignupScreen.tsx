@@ -209,6 +209,16 @@ export default function SignupScreen({ navigation }: Props) {
               <Text style={styles.linkText}>Log In</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Pre-signup info screen — same link as LoginScreen. Shown here too
+              so a reviewer (or user) starting on Signup can see the value
+              proposition and pricing without completing the form. */}
+          <TouchableOpacity
+            style={styles.aboutLink}
+            onPress={() => navigation.navigate('About')}
+          >
+            <Text style={styles.linkText}>How TryOn works & pricing</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -279,6 +289,7 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSizeMD,
   },
   loginRow: { flexDirection: 'row', justifyContent: 'center', marginTop: Spacing.md },
+  aboutLink: { alignItems: 'center', marginTop: Spacing.md, paddingVertical: Spacing.xs },
   mutedText: { color: Colors.gray600, fontSize: Typography.fontSizeMD },
   linkText: { color: Colors.black, fontWeight: Typography.fontWeightSemiBold },
 });

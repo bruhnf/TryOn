@@ -11,6 +11,7 @@ import { Colors } from '../constants/theme';
 import LoginScreen from '../screens/LoginScreen';
 import SignupScreen from '../screens/SignupScreen';
 import OnboardingPhotoScreen from '../screens/OnboardingPhotoScreen';
+import AboutScreen from '../screens/AboutScreen';
 import HomeScreen from '../screens/HomeScreen';
 import TryOnScreen from '../screens/TryOnScreen';
 import ProfileScreen from '../screens/ProfileScreen';
@@ -29,6 +30,10 @@ export type AuthStackParams = {
   Login: undefined;
   Signup: undefined;
   OnboardingPhoto: undefined;
+  // About is reachable pre-signup so prospective users can see the value
+  // proposition, tier features, and live StoreKit pricing before being asked
+  // to register. Required for App Store Guideline 5.1.1(v) compliance.
+  About: undefined;
 };
 
 export type MainTabParams = {
@@ -66,6 +71,7 @@ function AuthNavigator() {
       <AuthStack.Screen name="Login" component={LoginScreen} />
       <AuthStack.Screen name="Signup" component={SignupScreen} />
       <AuthStack.Screen name="OnboardingPhoto" component={OnboardingPhotoScreen} />
+      <AuthStack.Screen name="About" component={AboutScreen} />
     </AuthStack.Navigator>
   );
 }

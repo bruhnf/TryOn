@@ -191,6 +191,17 @@ export default function LoginScreen({ navigation }: Props) {
               <Text style={styles.linkText}>Sign Up</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Pre-signup info screen — required for App Store Guideline 5.1.1(v)
+              compliance. Lets prospective users see tier features, live StoreKit
+              pricing, and why an account is required before being asked to
+              register. */}
+          <TouchableOpacity
+            style={styles.aboutLink}
+            onPress={() => navigation.navigate('About')}
+          >
+            <Text style={styles.linkText}>How TryOn works & pricing</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -238,6 +249,7 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSizeMD,
   },
   signupRow: { flexDirection: 'row', justifyContent: 'center', marginTop: Spacing.md },
+  aboutLink: { alignItems: 'center', marginTop: Spacing.md, paddingVertical: Spacing.xs },
   mutedText: { color: Colors.gray600, fontSize: Typography.fontSizeMD },
   linkText: {
     color: Colors.black,
