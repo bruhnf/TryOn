@@ -24,6 +24,7 @@ import { Colors, Typography, Spacing, Radius } from '../constants/theme';
 import { RootStackParams } from '../navigation';
 import TryOnDetailModal from '../components/TryOnDetailModal';
 import { processImageForUpload } from '../utils/imageUtils';
+import { ensurePhotoLibraryReadPermission } from '../utils/permissions';
 
 type Nav = NativeStackNavigationProp<RootStackParams>;
 
@@ -129,11 +130,8 @@ export default function ProfileScreen() {
     endpoint: string,
     aspect: [number, number],
   ) {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission Required', 'Please allow access to your photo library.');
-      return;
-    }
+    const granted = await ensurePhotoLibraryReadPermission('to upload photos to your profile');
+    if (!granted) return;
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: field === 'avatar',

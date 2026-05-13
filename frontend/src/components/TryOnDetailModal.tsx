@@ -21,6 +21,7 @@ import { Colors, Typography, Spacing, Radius } from '../constants/theme';
 import { TryOnJob } from '../types';
 import api from '../config/api';
 import { downloadImageToGallery, downloadMultipleImages, shareImage } from '../utils/imageUtils';
+import { ensurePhotoLibrarySavePermission } from '../utils/permissions';
 import AiGeneratedBadge from './AiGeneratedBadge';
 import ImageOverlayBadge from './ImageOverlayBadge';
 import { buildTryOnCarousel } from '../utils/tryonCarousel';
@@ -95,6 +96,10 @@ export default function TryOnDetailModal({
 
   async function handleDownloadCurrent() {
     if (downloading) return;
+    const granted = await ensurePhotoLibrarySavePermission(
+      'to save try-on results to your gallery',
+    );
+    if (!granted) return;
     setDownloading(true);
     const currentImage = slides[currentIndex];
     const result = await downloadImageToGallery(
@@ -111,6 +116,10 @@ export default function TryOnDetailModal({
   // only one AI result to save.
   async function handleDownloadAll() {
     if (downloading || aiSlides.length < 2) return;
+    const granted = await ensurePhotoLibrarySavePermission(
+      'to save try-on results to your gallery',
+    );
+    if (!granted) return;
     setDownloading(true);
     const result = await downloadMultipleImages(aiSlides);
     setDownloading(false);
