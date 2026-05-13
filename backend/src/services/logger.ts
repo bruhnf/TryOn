@@ -26,6 +26,8 @@
 
 import winston from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
+import WinstonCloudWatch from 'winston-cloudwatch';
+import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
 import { env } from '../config/env';
@@ -116,6 +118,56 @@ if (!env.isDev || process.env.LOG_TO_FILE === 'true') {
       zippedArchive: true,
     })
   );
+}
+
+// AWS CloudWatch Logs transport — additive. Only enabled when CLOUDWATCH_LOG_GROUP
+// is set in the env, so dev environments and untriaged deployments don't ship logs.
+//
+// The transport uses the `tryon-log-shipper` IAM user's credentials, which are
+// scoped to `logs:PutLogEvents` on `/tryon/*` log groups only. Credentials are
+// passed explicitly so they remain separate from the backend's S3 credentials —
+// least privilege per service.
+//
+// Stream name uses the host short hostname so multi-instance deployments each get
+// their own stream. winston-cloudwatch will create the stream if it doesn't exist.
+//
+// If shipping fails (network, throttling, transient AWS error), the transport
+// retries internally. We swallow `error` events so a CloudWatch outage cannot
+// crash the backend or block writes to the console/file transports.
+const cwLogGroup = process.env.CLOUDWATCH_LOG_GROUP;
+if (cwLogGroup) {
+  const cwAccessKeyId = process.env.CLOUDWATCH_AWS_ACCESS_KEY_ID;
+  const cwSecretAccessKey = process.env.CLOUDWATCH_AWS_SECRET_ACCESS_KEY;
+  const cwRegion = process.env.CLOUDWATCH_AWS_REGION || 'us-east-1';
+
+  if (!cwAccessKeyId || !cwSecretAccessKey) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[logger] CLOUDWATCH_LOG_GROUP is set but credentials are missing. CloudWatch shipping disabled.',
+    );
+  } else {
+    const cwTransport = new WinstonCloudWatch({
+      logGroupName: cwLogGroup,
+      logStreamName: `${os.hostname().slice(0, 16)}-${env.nodeEnv}`,
+      awsAccessKeyId: cwAccessKeyId,
+      awsSecretKey: cwSecretAccessKey,
+      awsRegion: cwRegion,
+      jsonMessage: true,
+      // Batch up to 20 messages or 5 seconds before flushing. Reduces PutLogEvents
+      // calls (and therefore AWS cost + throttling risk) while keeping logs near
+      // real-time for debugging.
+      messageFormatter: ({ level, message, ...meta }) =>
+        JSON.stringify({ level, message, ...meta }),
+    });
+
+    // Don't crash on CloudWatch failures.
+    cwTransport.on('error', (err: Error) => {
+      // eslint-disable-next-line no-console
+      console.error('[logger] CloudWatch transport error:', err.message);
+    });
+
+    transports.push(cwTransport);
+  }
 }
 
 // Create the main logger instance
