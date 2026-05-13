@@ -24,7 +24,6 @@ import { Colors, Typography, Spacing, Radius } from '../constants/theme';
 import { RootStackParams } from '../navigation';
 import TryOnDetailModal from '../components/TryOnDetailModal';
 import { processImageForUpload } from '../utils/imageUtils';
-import { ensurePhotoLibraryReadPermission } from '../utils/permissions';
 
 type Nav = NativeStackNavigationProp<RootStackParams>;
 
@@ -130,8 +129,11 @@ export default function ProfileScreen() {
     endpoint: string,
     aspect: [number, number],
   ) {
-    const granted = await ensurePhotoLibraryReadPermission('to upload photos to your profile');
-    if (!granted) return;
+    // No permission request here — launchImageLibraryAsync uses
+    // PHPickerViewController on iOS 14+, which runs out-of-process and only
+    // returns photos the user explicitly selects. No library-wide access is
+    // granted to the app, so no Photos permission is needed. Asking for one
+    // would be unnecessary friction (and over-collection per Apple's HIG).
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: field === 'avatar',

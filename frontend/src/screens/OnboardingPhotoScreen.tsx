@@ -15,7 +15,6 @@ import api from '../config/api';
 import { useUserStore } from '../store/useUserStore';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
 import { AuthStackParams } from '../navigation';
-import { ensurePhotoLibraryReadPermission } from '../utils/permissions';
 
 type Props = { navigation: NativeStackNavigationProp<AuthStackParams, 'OnboardingPhoto'> };
 
@@ -63,9 +62,8 @@ export default function OnboardingPhotoScreen({ navigation }: Props) {
   const updateUser = useUserStore((s) => s.updateUser);
 
   async function pickAndUpload(slot: SlotInfo) {
-    const granted = await ensurePhotoLibraryReadPermission('to upload your body photos');
-    if (!granted) return;
-
+    // No permission request — launchImageLibraryAsync uses PHPickerViewController
+    // on iOS 14+, which is permission-less. See ProfileScreen for context.
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: slot.key === 'avatar',

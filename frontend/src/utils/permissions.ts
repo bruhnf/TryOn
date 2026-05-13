@@ -1,5 +1,5 @@
 /**
- * Photo library permission helpers.
+ * Photo library SAVE permission helper.
  *
  * App Store Review Guideline 5.1.1(iv): once the user denies a permission
  * in the iOS system dialog, the app MUST NOT ask them to reconsider with
@@ -10,39 +10,29 @@
  *      The user changes their mind there — not in our app.
  *   3. Never re-prompt or persuade.
  *
- * These helpers encapsulate that pattern so every photo-library entry point
- * behaves the same way and stays Apple-compliant.
+ * Scope of this file:
+ * - Only the SAVE flow is here, because writing to the user's photo gallery
+ *   via `MediaLibrary.createAssetAsync` genuinely requires a permission.
+ * - The READ flow (picking a photo to upload) does NOT need a permission
+ *   gate, because `expo-image-picker`'s `launchImageLibraryAsync` uses
+ *   PHPickerViewController on iOS 14+. PHPicker runs out-of-process and
+ *   only hands the app the specific photos the user picks — no library
+ *   permission required. Requesting one would be unnecessary friction
+ *   and over-collection per Apple's HIG.
  */
 import { Alert, Linking } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
-
-type EnsureResult = boolean;
-
-/**
- * Ensure the app can READ from the photo library (e.g. to pick a photo via
- * ImagePicker.launchImageLibraryAsync). Resolves true if granted, false if
- * denied. When denied, shows a single Apple-compliant Settings prompt.
- *
- * @param rationale A short clause completing "TryOn uses your photo library to ___."
- *                  Example: "to upload your body photos".
- */
-export async function ensurePhotoLibraryReadPermission(rationale: string): Promise<EnsureResult> {
-  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (status === 'granted') return true;
-  presentSettingsNotice(rationale);
-  return false;
-}
 
 /**
  * Ensure the app can SAVE to the photo library (e.g. to write a downloaded
  * try-on result into the user's gallery via MediaLibrary.createAssetAsync).
- * Same compliance pattern as the read helper.
+ * Returns true if granted, false if denied. When denied, shows a single
+ * Apple-compliant Settings prompt and returns false so the caller can bail.
  *
  * @param rationale Short clause completing "TryOn uses your photo library to ___."
  *                  Example: "to save try-on results to your gallery".
  */
-export async function ensurePhotoLibrarySavePermission(rationale: string): Promise<EnsureResult> {
+export async function ensurePhotoLibrarySavePermission(rationale: string): Promise<boolean> {
   const { status } = await MediaLibrary.requestPermissionsAsync();
   if (status === 'granted') return true;
   presentSettingsNotice(rationale);
