@@ -36,7 +36,7 @@
 
   <main class="legal-page">
     <h1>Privacy Policy</h1>
-    <p class="updated">Last updated: May 8, 2026</p>
+    <p class="updated">Last updated: May 13, 2026</p>
 
     <p>This Privacy Policy describes how evoFaceFlow ("we", "us", "our") collects, uses, and shares information when you use the TryOn mobile application and the evofaceflow.com website (collectively, the "Service"). By using the Service you agree to the practices described here.</p>
 
@@ -83,7 +83,44 @@
       <li>xAI's processing of these images is governed by xAI's own privacy policy, available at <a href="https://x.ai/legal/privacy-policy">x.ai/legal/privacy-policy</a>.</li>
     </ul>
 
-    <h2>4. How We Share Information</h2>
+    <h2>4. Face Data</h2>
+    <p>Because the photos you upload (close-up profile, full-body, and waist-up) and the AI-generated try-on results all visually depict your face, this section describes how we treat that face data specifically.</p>
+
+    <h3>What face data we collect</h3>
+    <p>The only "face data" the Service collects is the photographic images themselves: the photos you choose to upload and the AI-generated try-on results derived from them. <strong>We do not perform face recognition, face detection, facial geometry mapping, biometric identification, or any other automated analysis of facial features.</strong> We do not extract or store face templates, embeddings, landmarks, or any biometric descriptors derived from your photos. We do not use ARKit Face APIs, the iOS Vision framework's face APIs, TrueDepth APIs, FaceID, or any other facial-analysis API.</p>
+
+    <h3>How we use face data</h3>
+    <p>The photos you upload are used for exactly three purposes, and nothing else:</p>
+    <ul>
+      <li><strong>Profile display.</strong> The close-up photo is shown as your profile picture inside the app. The full-body and waist-up photos are visible to you on your Profile screen so you can manage them.</li>
+      <li><strong>AI try-on generation.</strong> The full-body and waist-up photos are sent to xAI's Grok Imagine API together with a clothing photo you provide. The AI generates a new image of you wearing that clothing. The close-up photo is <strong>never</strong> sent to the AI service.</li>
+      <li><strong>Try-on history.</strong> AI-generated try-on results are saved to your account so you can view past try-ons, and—if you choose to make them public—display them on the in-app community feed under your username. Each result is also clearly labeled as AI-generated.</li>
+    </ul>
+    <p>We do <strong>not</strong> use face data for marketing, advertising, behavioral profiling, training our own machine-learning models, targeting recommendations, or analytics. We do not sell face data.</p>
+
+    <h3>Third parties that receive face data</h3>
+    <p>Face data is shared only with the service providers strictly required to operate the Service:</p>
+    <ul>
+      <li><strong>xAI, Inc. (Grok Imagine API).</strong> Receives your full-body and/or waist-up photo together with a clothing photo each time you initiate a try-on. xAI uses these images solely to generate the requested try-on result; their handling is governed by xAI's own privacy policy at <a href="https://x.ai/legal/privacy-policy">x.ai/legal/privacy-policy</a>. The close-up profile photo is never sent to xAI.</li>
+      <li><strong>Amazon Web Services (S3).</strong> Stores all uploaded photos and AI-generated results in a private S3 bucket with Block Public Access enabled. The Service does not make these objects publicly readable; the app retrieves them through short-lived presigned URLs.</li>
+    </ul>
+    <p>No other third party receives face data. We do not share face data with advertising networks, analytics providers, social networks, or data brokers.</p>
+
+    <h3>Where face data is stored</h3>
+    <p>All face data is stored in our private Amazon Web Services S3 bucket in the United States. Access is gated by short-lived signed URLs generated server-side; there is no public bucket policy permitting unauthenticated reads.</p>
+
+    <h3>How long face data is retained</h3>
+    <ul>
+      <li>Uploaded photos (close-up, full-body, waist-up) are retained until you delete them in Settings, replace them, or delete your account.</li>
+      <li>AI-generated try-on results are retained until you delete the individual result in the app or delete your account.</li>
+      <li>When you delete your account, your face data (all uploaded photos and all AI-generated results) is removed from our database and from our S3 storage within 30 days of the account-deletion request. Aggregated, non-identifying analytics may be retained.</li>
+      <li>There is no automatic expiration; nothing happens to your photos until you take an explicit action.</li>
+    </ul>
+
+    <h3>Your control over face data</h3>
+    <p>From the in-app Settings &gt; Privacy &amp; Data screen, you can at any time: delete all body photos, export all your data including face data, or permanently delete your account (which deletes all face data).</p>
+
+    <h2>5. How We Share Information</h2>
     <p>We share information only with the service providers required to operate the Service:</p>
     <table>
       <thead><tr><th>Provider</th><th>Purpose</th><th>Data shared</th></tr></thead>
@@ -96,7 +133,7 @@
     </table>
     <p>We do not sell your personal information to third parties for advertising or other commercial purposes.</p>
 
-    <h2>5. Data Retention</h2>
+    <h2>6. Data Retention</h2>
     <ul>
       <li><strong>Account data</strong> is retained for as long as your account is active.</li>
       <li><strong>Body photos and AI-generated try-on results</strong> are retained until you delete them in Settings or delete your account.</li>
@@ -105,7 +142,7 @@
       <li><strong>After account deletion,</strong> we delete your account record, body photos, AI results, and personal data within 30 days. Aggregated, non-identifying analytics may be retained.</li>
     </ul>
 
-    <h2>6. Your Rights</h2>
+    <h2>7. Your Rights</h2>
     <p>You can:</p>
     <ul>
       <li><strong>Access</strong> the personal data we hold about you by exporting it from Settings.</li>
@@ -115,19 +152,19 @@
     </ul>
     <p>If you are a California resident under CCPA / CPRA, or an EU/UK resident under GDPR, you have additional rights including the right to request a copy of your data and the right to lodge a complaint with a supervisory authority. Contact us using the details below to exercise any of these rights.</p>
 
-    <h2>7. Security</h2>
+    <h2>8. Security</h2>
     <p>Passwords are hashed with bcrypt. Session tokens are short-lived and stored in secure device storage. Image files are stored in private S3 buckets with short-lived signed URLs. Our backend uses HTTPS exclusively. Despite our efforts, no system is fully secure; if a breach affects your data we will notify you in accordance with applicable law.</p>
 
-    <h2>8. Children</h2>
+    <h2>9. Children</h2>
     <p>The Service is not intended for users under the age of 13 (or under 16 in the European Economic Area / United Kingdom). We do not knowingly collect personal information from children under these ages. If you believe a child has provided us with personal information, contact us and we will delete it.</p>
 
-    <h2>9. International Transfers</h2>
+    <h2>10. International Transfers</h2>
     <p>Our infrastructure is operated in the United States. By using the Service from outside the United States, you consent to the transfer and processing of your information in the United States, which may have data-protection laws that differ from those in your country.</p>
 
-    <h2>10. Changes to This Policy</h2>
+    <h2>11. Changes to This Policy</h2>
     <p>We may update this Privacy Policy from time to time. The "Last updated" date at the top of this page reflects the most recent change. Material changes will be communicated by in-app notice or email.</p>
 
-    <h2>11. Contact</h2>
+    <h2>12. Contact</h2>
     <p>For privacy questions, requests to exercise your rights, or to report a concern: <a href="mailto:privacy@evofaceflow.com">privacy@evofaceflow.com</a>.</p>
 
     <p style="margin-top: 3rem;"><a href="/">&larr; Back to home</a></p>

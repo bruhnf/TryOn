@@ -82,6 +82,48 @@ disclosed in Privacy Policy §3 and consented to at Sign-Up. Photos and
 results are stored in a private S3 bucket and served via short-lived
 presigned URLs — no public bucket access.
 
+FACE DATA
+The app does NOT perform face recognition, face detection, facial
+geometry mapping, biometric identification, or any automated facial
+analysis. No ARKit Face APIs, Vision framework face APIs, TrueDepth,
+FaceID, or other facial-analysis API is used. The only "face data"
+we handle is the photographic images themselves — the photos the user
+uploads (close-up, full-body, waist-up) and the AI-generated try-on
+results derived from them.
+
+Face data usage:
+- Close-up photo: profile picture only. NEVER sent to any AI service.
+- Full-body / waist-up photos: sent to xAI Grok Imagine for AI try-on
+  generation, together with the user-supplied clothing photo. Used
+  for nothing else.
+- AI try-on results: stored against the user's account; visible to
+  the user in their Profile; visible on the public feed only if the
+  user does not mark the result as private. Each result carries a
+  visible "AI-generated" badge.
+
+Face data is NOT used for marketing, advertising, behavioral
+profiling, model training, recommendations, or analytics. We do not
+sell face data.
+
+Third parties that receive face data:
+- xAI Grok Imagine API (full-body / waist-up photos only)
+- AWS S3 (storage, in a private bucket with Block Public Access)
+That is the complete list.
+
+Storage: private AWS S3 bucket in the United States. Access only via
+short-lived presigned URLs minted server-side per request.
+
+Retention: photos and AI results persist until the user deletes them
+in Settings or deletes their account. On account deletion, all face
+data is removed from the database and S3 within 30 days. No automatic
+expiration. Documented in Privacy Policy §4 (Face Data) and §6 (Data
+Retention).
+
+Privacy Policy: face data treatment is documented explicitly in §4
+("Face Data") of https://evofaceflow.com/privacy.html, with supporting
+detail in §3 (AI Processing of Body Photos), §5 (How We Share
+Information), §6 (Data Retention), and §7 (Your Rights).
+
 USER-GENERATED CONTENT (Guideline 1.2)
 The Discover feed shows public try-on results.
 - Three-dot menu on every feed card: Report Post / Report User / Block.
