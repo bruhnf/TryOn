@@ -182,6 +182,7 @@ export async function getMyProfile(req: Request, res: Response): Promise<void> {
       likesCount: true,
       city: true,
       state: true,
+      aiProcessingConsentAt: true,
       createdAt: true,
     },
   });
@@ -189,6 +190,31 @@ export async function getMyProfile(req: Request, res: Response): Promise<void> {
   if (!user) { res.status(404).json({ error: 'User not found' }); return; }
   const presigned = await presignUserPhotos(user);
   res.json({ ...presigned, isAdmin: isAdminEmail(user.email) });
+}
+
+// App Store Review Guidelines 5.1.1(i) / 5.1.2(i) require explicit user
+// consent before transmitting personal data to a third-party AI service.
+// These endpoints record / revoke that consent. The /api/tryon submit path
+// rejects with AI_CONSENT_REQUIRED when aiProcessingConsentAt is null.
+export async function recordAiConsent(req: Request, res: Response): Promise<void> {
+  if (!req.user) { res.status(401).json({ error: 'Unauthorized' }); return; }
+  const updated = await prisma.user.update({
+    where: { id: req.user.userId },
+    data: { aiProcessingConsentAt: new Date() },
+    select: { aiProcessingConsentAt: true },
+  });
+  log.info('AI processing consent recorded', { userId: req.user.userId });
+  res.json({ aiProcessingConsentAt: updated.aiProcessingConsentAt });
+}
+
+export async function revokeAiConsent(req: Request, res: Response): Promise<void> {
+  if (!req.user) { res.status(401).json({ error: 'Unauthorized' }); return; }
+  await prisma.user.update({
+    where: { id: req.user.userId },
+    data: { aiProcessingConsentAt: null },
+  });
+  log.info('AI processing consent revoked', { userId: req.user.userId });
+  res.json({ aiProcessingConsentAt: null });
 }
 
 // App Store Review Guideline 5.1.1(v): account deletion must remove the data

@@ -24,6 +24,11 @@ export interface User {
   createdAt: string;
   // Server-derived: true if this user's email is in the backend ADMIN_EMAILS allowlist.
   isAdmin?: boolean;
+  // ISO timestamp of the user's most recent explicit consent to send body +
+  // clothing photos to xAI's Grok Imagine API. Null = no consent on file or
+  // revoked; the try-on submit endpoint returns AI_CONSENT_REQUIRED and the
+  // client surfaces the AiConsentModal before re-submitting.
+  aiProcessingConsentAt?: string | null;
 }
 
 export interface TryOnJob {

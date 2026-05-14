@@ -126,6 +126,29 @@ export default function SettingsScreen() {
     );
   }
 
+  function handleRevokeAiConsent() {
+    Alert.alert(
+      'Revoke AI Processing Consent',
+      "Future try-ons will be blocked until you re-confirm consent. Existing try-on results are kept and aren't affected. You can re-grant consent the next time you tap Generate Try-On.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Revoke',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.delete('/profile/me/ai-consent');
+              await refreshUser();
+              Alert.alert('Done', 'AI processing consent has been revoked.');
+            } catch {
+              Alert.alert('Error', 'Could not revoke consent. Please try again.');
+            }
+          },
+        },
+      ],
+    );
+  }
+
   function handleDeletePhotos() {
     Alert.alert(
       'Delete All Body Photos',
@@ -173,6 +196,13 @@ export default function SettingsScreen() {
 
       <SectionHeader label="Privacy & Data" />
       <SettingButton label="Blocked Users" onPress={() => navigation.navigate('BlockedUsers')} />
+      <SettingRow
+        label="AI Processing Consent"
+        value={user?.aiProcessingConsentAt ? 'Granted' : 'Not granted'}
+      />
+      {user?.aiProcessingConsentAt ? (
+        <SettingButton label="Revoke AI Processing Consent" onPress={handleRevokeAiConsent} />
+      ) : null}
       <SettingButton label="Delete All Body Photos" onPress={handleDeletePhotos} />
       <SettingButton
         label={exporting ? 'Exporting…' : 'Export My Data (GDPR/CCPA)'}

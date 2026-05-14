@@ -21,6 +21,7 @@ import { Colors, Typography, Spacing, Radius } from '../constants/theme';
 import FullScreenImageModal from '../components/FullScreenImageModal';
 import CreditDisplay from '../components/CreditDisplay';
 import AiGeneratedBadge from '../components/AiGeneratedBadge';
+import AiConsentModal from '../components/AiConsentModal';
 import { RootStackParams } from '../navigation';
 import { processImageForUpload } from '../utils/imageUtils';
 
@@ -36,6 +37,7 @@ export default function TryOnScreen() {
   const [isPrivate, setIsPrivate] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [activeJob, setActiveJob] = useState<TryOnJob | null>(null);
+  const [aiConsentVisible, setAiConsentVisible] = useState(false);
   
   // Use refs for polling to avoid closure issues and ensure cleanup
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -129,6 +131,19 @@ export default function TryOnScreen() {
       return;
     }
 
+    // App Store Review Guidelines 5.1.1(i) / 5.1.2(i): require explicit
+    // in-app consent before any body / clothing photo is transmitted to xAI.
+    // The backend also enforces this (returns AI_CONSENT_REQUIRED) so a
+    // tampered client can't bypass it.
+    if (!user?.aiProcessingConsentAt) {
+      setAiConsentVisible(true);
+      return;
+    }
+
+    await performTryOnSubmit();
+  }
+
+  async function performTryOnSubmit() {
     setSubmitting(true);
     try {
       const formData = new FormData();
@@ -175,6 +190,10 @@ export default function TryOnScreen() {
         (err as { response?: { data?: { error?: string; message?: string } } })?.response?.data;
       if (error?.error === 'NO_BODY_PHOTOS') {
         Alert.alert('Upload Body Photos', error.message ?? 'Please upload your body photos.');
+      } else if (error?.error === 'AI_CONSENT_REQUIRED') {
+        // The local store thought consent was on file but the server disagreed.
+        // Surface the consent dialog so the user can re-confirm.
+        setAiConsentVisible(true);
       } else if (error?.error === 'SUBSCRIPTION_REQUIRED') {
         // Navigate to purchase screen instead of showing error
         Alert.alert(
@@ -356,6 +375,15 @@ export default function TryOnScreen() {
       {activeJob && (
         <ResultView job={activeJob} onReset={resetTryOn} />
       )}
+
+      <AiConsentModal
+        visible={aiConsentVisible}
+        onAgree={() => {
+          setAiConsentVisible(false);
+          void performTryOnSubmit();
+        }}
+        onCancel={() => setAiConsentVisible(false)}
+      />
     </ScrollView>
   );
 }

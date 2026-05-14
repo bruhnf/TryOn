@@ -340,6 +340,7 @@ tier                     UserTier  @default(FREE)   // FREE | BASIC | PREMIUM
 credits                  Int       @default(0)
 tryOnCount               Int       @default(0)      // lifetime successful try-ons
 lastFreeCreditGrantAt    DateTime?                  // set once at email verification; retained for audit only
+aiProcessingConsentAt    DateTime?                  // most recent explicit consent to send body+clothing photos to xAI/Grok; null = consent required (App Store 5.1.1(i)/5.1.2(i))
 firstName                String?
 lastName                 String?
 bio                      String?
@@ -533,6 +534,15 @@ createdAt DateTime @default(now())
   will be processed by third-party AI services (xAI/Grok) and stored on secure cloud infrastructure.
   Users may delete their photos and all AI-processed derivatives at any time from Settings.
 - Body photo upload is also accessible at any time from Profile > Manage Body Photos.
+
+### AI Processing Consent (App Store Guidelines 5.1.1(i) / 5.1.2(i))
+Apple requires explicit per-user opt-in before any personal data is transmitted to a third-party AI service. This is **independent** of the Privacy Policy disclosure — Apple's rejection text says "only including this information in the app's Terms of Service or Privacy Policy is not sufficient."
+
+- `User.aiProcessingConsentAt: DateTime?` records the timestamp of the user's most recent explicit consent. Null = no consent on file or revoked.
+- The mobile app's `AiConsentModal` ([frontend/src/components/AiConsentModal.tsx](frontend/src/components/AiConsentModal.tsx)) is surfaced from `TryOnScreen.handleSubmit` whenever `user.aiProcessingConsentAt` is null. It names xAI by full legal name ("xAI, Inc."), lists exactly what is sent (full-body and/or waist-up photo + clothing photo), states what is NOT sent (close-up profile photo), links to both our Privacy Policy and xAI's Privacy Policy, and requires an affirmative `I Agree and Continue` tap.
+- On agree, the client POSTs `/api/profile/me/ai-consent`, updates the user store, then retries the try-on submit.
+- Revocation: `DELETE /api/profile/me/ai-consent`. Surfaced as "Revoke AI Processing Consent" in Settings → Privacy & Data (only shown when consent is currently granted).
+- Server-side enforcement: `tryonController.submitTryOn` refuses with `403 { error: 'AI_CONSENT_REQUIRED' }` when `aiProcessingConsentAt` is null. The check runs before any S3 upload or credit deduction. The frontend re-opens the consent modal on this error code so a stale client cache can recover.
 
 ### Subscription & Credits
 - **Tiered subscription model**: Each user has a `tier` of `FREE`, `BASIC`, or `PREMIUM` (see `UserTier` enum). There is **no** `isSubscribed` flag — check `tier !== 'FREE'` to gate subscriber-only features.

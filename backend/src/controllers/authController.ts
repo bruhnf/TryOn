@@ -212,6 +212,7 @@ export async function login(req: Request, res: Response): Promise<void> {
       followingCount: user.followingCount,
       followersCount: user.followersCount,
       likesCount: user.likesCount,
+      aiProcessingConsentAt: user.aiProcessingConsentAt,
       isAdmin: isAdminEmail(user.email),
     },
   });

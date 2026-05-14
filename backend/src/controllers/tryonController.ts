@@ -43,9 +43,29 @@ export async function submitTryOn(req: Request, res: Response): Promise<void> {
   // Fetch fresh tier, credit, and body photo state from DB — never trust JWT claims for these
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { tier: true, credits: true, fullBodyUrl: true, mediumBodyUrl: true },
+    select: {
+      tier: true,
+      credits: true,
+      fullBodyUrl: true,
+      mediumBodyUrl: true,
+      aiProcessingConsentAt: true,
+    },
   });
   if (!user) { res.status(404).json({ error: 'User not found' }); return; }
+
+  // App Store Review Guidelines 5.1.1(i) / 5.1.2(i): explicit user consent is
+  // required before transmitting personal data to a third-party AI service.
+  // The mobile app surfaces an opt-in dialog naming xAI / Grok Imagine before
+  // the first submit, then POSTs /api/profile/me/ai-consent to set this
+  // timestamp. Without it, refuse before any S3 upload or credit deduction.
+  if (!user.aiProcessingConsentAt) {
+    res.status(403).json({
+      error: 'AI_CONSENT_REQUIRED',
+      message:
+        'Before generating a try-on, please review and accept the disclosure that your body and clothing photos will be sent to xAI (Grok Imagine API) for processing.',
+    });
+    return;
+  }
 
   // Storage cap: count non-failed jobs (failed jobs have no stored results
   // so they don't contribute). If at or above the cap, refuse the new job
