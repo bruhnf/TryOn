@@ -146,12 +146,22 @@ if (cwLogGroup) {
       '[logger] CLOUDWATCH_LOG_GROUP is set but credentials are missing. CloudWatch shipping disabled.',
     );
   } else {
+    // winston-cloudwatch 6.x runs on AWS SDK v3, which requires credentials to
+    // be nested under `credentials: { ... }` — passing top-level awsAccessKeyId
+    // / awsSecretKey to the library is silently ignored by v3 and the SDK
+    // falls back to the default credentials chain (process env, ~/.aws, IMDS),
+    // which would pick up the unrelated S3 keys already in backend/.env.
+    // Use the awsOptions escape hatch so the v3 shape is honored.
     const cwTransport = new WinstonCloudWatch({
       logGroupName: cwLogGroup,
       logStreamName: `${os.hostname().slice(0, 16)}-${env.nodeEnv}`,
-      awsAccessKeyId: cwAccessKeyId,
-      awsSecretKey: cwSecretAccessKey,
-      awsRegion: cwRegion,
+      awsOptions: {
+        credentials: {
+          accessKeyId: cwAccessKeyId,
+          secretAccessKey: cwSecretAccessKey,
+        },
+        region: cwRegion,
+      },
       jsonMessage: true,
       // Batch up to 20 messages or 5 seconds before flushing. Reduces PutLogEvents
       // calls (and therefore AWS cost + throttling risk) while keeping logs near
