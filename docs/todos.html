@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TODOS — TryOn Docs</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <a href="index.html" class="brand">TryOn Docs</a>
+  <nav class="docnav"><a href="index.html">Index</a><a href="claude.html">CLAUDE</a><a href="deployment.html">DEPLOYMENT</a><a href="contributing.html">CONTRIBUTING</a><a href="todos.html" class="active">TODOS</a></nav>
+</header>
+<div class="layout">
+  <aside class="sidebar">
+    <h2 class="toc-title">On this page</h2>
+    <ul class="toc"><li><a href="#1-active-in-current-session-finish-before-closing-out">1. Active in current session — finish before closing out</a><ul><li><a href="#cloudwatch-logs-set-up-alarms">🟠 CloudWatch Logs: set up alarms</a></li><li><a href="#cloudwatch-logs-document-setup-in-deploymentmd">🟠 CloudWatch Logs: document setup in DEPLOYMENT.md</a></li><li><a href="#switch-nginx-to-stdout-logging-option-a-from-nginx-logs-discussion">🟡 Switch nginx to stdout logging (Option A from nginx-logs discussion)</a></li><li><a href="#cloudwatch-logs-per-service-log-group-routing">🟡 CloudWatch Logs: per-service log group routing</a></li></ul></li><li><a href="#2-apple-app-store-cycle-next-release-or-after-current-review-settles">2. Apple App Store cycle — next release or after current review settles</a><ul><li><a href="#resubmit-1010-with-eas-build-after-apple-replies-to-face-data-info-request">🔴 Resubmit 1.0.10 with EAS build after Apple replies to Face Data info request</a></li><li><a href="#sentry-backend-sdk-integration-deferred">🟡 Sentry — backend SDK integration (deferred)</a></li><li><a href="#sentry-react-native-app-integration-deferred">🟡 Sentry — React Native app integration (deferred)</a></li><li><a href="#privacy-manifest-privacyinfoxcprivacy-for-the-app-bundle">🟡 Privacy Manifest (PrivacyInfo.xcprivacy) for the app bundle</a></li><li><a href="#in-app-support-contact-link">🟢 In-app support / contact link</a></li></ul></li><li><a href="#3-operational-hardening-short-term-track-2-from-post-launch-readiness-plan">3. Operational hardening — short-term (Track 2 from post-launch readiness plan)</a><ul><li><a href="#deep-health-endpoint-that-probes-postgres-redis">🟠 Deep /health endpoint that probes Postgres + Redis</a></li><li><a href="#nginx-ip-allowlist-on-apiadmin">🟠 nginx IP allowlist on /api/admin</a></li><li><a href="#implement-ssl_certificate-scan-type-in-vulnerability-scanner">🟠 Implement SSL_CERTIFICATE scan type in vulnerability scanner</a></li><li><a href="#bump-backend-container-memory-ceiling-set-node_options">🟠 Bump backend container memory ceiling + set NODE_OPTIONS</a></li><li><a href="#runbookmd">🟡 RUNBOOK.md</a></li><li><a href="#lightsail-instance-role-for-backups-replace-iam-access-keys">🟡 Lightsail instance-role for backups (replace IAM access keys)</a></li><li><a href="#move-secrets-out-of-env-into-aws-secrets-manager-ssm-parameter-store">🟡 Move secrets out of .env into AWS Secrets Manager / SSM Parameter Store</a></li></ul></li><li><a href="#4-operational-hardening-medium-term-p1-list">4. Operational hardening — medium-term (P1 list)</a><ul><li><a href="#application-metrics-prometheus-opentelemetry">🟡 Application metrics (Prometheus / OpenTelemetry)</a></li><li><a href="#bullmq-failure-alerts">🟡 BullMQ failure alerts</a></li><li><a href="#mobile-crash-analytics-in-app">🟡 Mobile crash + analytics in app</a></li><li><a href="#cloudwatch-agent-for-host-metrics-cpu-memory-disk-network">🟡 CloudWatch agent for host metrics (CPU, memory, disk, network)</a></li><li><a href="#att-app-tracking-transparency-no-op">🟢 ATT (App Tracking Transparency) no-op</a></li></ul></li><li><a href="#5-operational-hardening-long-term-p2-list-scale-dependent">5. Operational hardening — long-term (P2 list, scale-dependent)</a><ul><li><a href="#migrate-to-managed-postgres-lightsail-managed-database-or-rds">🟡 Migrate to managed Postgres (Lightsail Managed Database or RDS)</a></li><li><a href="#postgres-read-replica-for-heavy-analytics-queries">🟡 Postgres read replica for heavy analytics queries</a></li><li><a href="#waf-in-front-of-the-api-aws-waf-or-cloudflare">🟡 WAF in front of the API (AWS WAF or Cloudflare)</a></li><li><a href="#bluegreen-deploys">🟡 Blue/green deploys</a></li><li><a href="#slo-definition-grafana-dashboards">🟡 SLO definition + Grafana dashboards</a></li><li><a href="#independent-security-review-pentest">🟡 Independent security review / pentest</a></li><li><a href="#centralized-admin-audit-log">🟡 Centralized admin audit log</a></li><li><a href="#secret-rotation-runbook-quarterly-cadence">🟡 Secret rotation runbook (quarterly cadence)</a></li></ul></li><li><a href="#6-known-bugs-minor-issues">6. Known bugs / minor issues</a><ul><li><a href="#redis-eviction-policy-change-allkeys-lru-to-noeviction">🟠 Redis eviction policy: change allkeys-lru to noeviction</a></li><li><a href="#node-22-upgrade-aws-sdk-v3-deprecation">🟢 Node 22 upgrade (AWS SDK v3 deprecation)</a></li></ul></li><li><a href="#7-documentation-verification-tasks">7. Documentation / verification tasks</a><ul><li><a href="#test-the-postgres-restore-procedure-on-a-staging-instance">🟠 Test the Postgres restore procedure on a staging instance</a></li><li><a href="#reset-location-history-admin-endpoint">🟢 Reset Location History admin endpoint</a></li><li><a href="#stale-doc-fix-bring-claudemd-fully-into-sync-with-current-state">🟢 Stale-doc fix: bring CLAUDE.md fully into sync with current state</a></li></ul></li><li><a href="#8-optional-defensive-suggested-but-not-committed-to">8. Optional / defensive (suggested but not committed to)</a><ul><li><a href="#aws-rekognition-image-moderation-for-ai-outputs">🟢 AWS Rekognition image moderation for AI outputs</a></li><li><a href="#github-pages-for-hosted-docs">🟢 GitHub Pages for hosted docs</a></li><li><a href="#dark-mode-for-docs-html">🟢 Dark mode for docs/ HTML</a></li><li><a href="#custom-favicon-logo-on-docs-html">🟢 Custom favicon / logo on docs/ HTML</a></li><li><a href="#search-index-for-docs-html">🟢 Search index for docs/ HTML</a></li></ul></li><li><a href="#maintenance-of-this-file">Maintenance of this file</a></li></ul>
+  </aside>
+  <main class="content">
+<h1 id="todosmd" tabindex="-1"><a class="header-anchor" href="#todosmd" aria-hidden="true">#</a> TODOS.md</h1>
+<p>Consolidated list of every item we deferred, marked &quot;for later,&quot; or otherwise punted during our work sessions. Compiled by scanning the full conversation history for phrases like <em>&quot;we'll do that later,&quot; &quot;Track 2,&quot; &quot;deferred,&quot; &quot;post-launch,&quot; &quot;next release,&quot; &quot;future,&quot;</em> etc. Items in-flight in the current session are also included so nothing falls through the cracks.</p>
+<p><strong>Criticality tags:</strong></p>
+<ul>
+<li>🔴 <strong>Critical</strong> — actively required or breaks something today</li>
+<li>🟠 <strong>High</strong> — operational risk if skipped much longer</li>
+<li>🟡 <strong>Medium</strong> — meaningful improvement, can wait</li>
+<li>🟢 <strong>Low</strong> — defensive, optional, or polish</li>
+</ul>
+<p><strong>Last reviewed:</strong> 2026-05-13. Update this file as items are completed or new items are deferred.</p>
+<hr>
+<h2 id="1-active-in-current-session-finish-before-closing-out" tabindex="-1"><a class="header-anchor" href="#1-active-in-current-session-finish-before-closing-out" aria-hidden="true">#</a> 1. Active in current session — finish before closing out</h2>
+<h3 id="cloudwatch-logs-set-up-alarms" tabindex="-1"><a class="header-anchor" href="#cloudwatch-logs-set-up-alarms" aria-hidden="true">#</a> 🟠 CloudWatch Logs: set up alarms</h3>
+<p><strong>Improves:</strong> Proactive paging when error rates spike or postgres logs FATAL — currently you'd only find out from user complaints or by checking logs by hand.
+<strong>Background:</strong> Mentioned in current CloudWatch session: <em>&quot;I'll set up the alarms (step ⑥) and docs (step ⑦) after you confirm both ③ and ④ are working.&quot;</em>
+<strong>Scope:</strong> Two alarms via AWS Console — (a) backend error-rate &gt; N/min for 5 min → email, (b) any postgres FATAL log entry → email.</p>
+<h3 id="cloudwatch-logs-document-setup-in-deploymentmd" tabindex="-1"><a class="header-anchor" href="#cloudwatch-logs-document-setup-in-deploymentmd" aria-hidden="true">#</a> 🟠 CloudWatch Logs: document setup in DEPLOYMENT.md</h3>
+<p><strong>Improves:</strong> Future-you (or anyone else) can rebuild the host from scratch and find the cloud-logs setup steps. Currently the install commands only exist in this chat.
+<strong>Background:</strong> Same CloudWatch session — <em>&quot;I'll set up the alarms (step ⑥) and docs (step ⑦)…&quot;</em>
+<strong>Scope:</strong> New section in DEPLOYMENT.md covering log groups, IAM user, agent install, env vars, alarms.</p>
+<h3 id="switch-nginx-to-stdout-logging-option-a-from-nginx-logs-discussion" tabindex="-1"><a class="header-anchor" href="#switch-nginx-to-stdout-logging-option-a-from-nginx-logs-discussion" aria-hidden="true">#</a> 🟡 Switch nginx to stdout logging (Option A from nginx-logs discussion)</h3>
+<p><strong>Improves:</strong> Brings nginx access + error logs into CloudWatch via the existing agent. Without this, only backend Winston logs reach CloudWatch — nginx access logs sit in the <code>nginx_logs</code> Docker volume on the host, invisible from the CloudWatch UI.
+<strong>Background:</strong> <em>&quot;My recommendation: Option A, but not now — bundle it with the next non-review-window deploy when you can take the nginx restart.&quot;</em> Explicitly deferred so Apple's reviewer doesn't see a brief 502 during a restart.
+<strong>Scope:</strong> Replace <code>access_log /var/log/nginx/access.log main;</code> with <code>access_log /dev/stdout main;</code> (and similar for error_log) in nginx/nginx.conf. Restart nginx container.</p>
+<h3 id="cloudwatch-logs-per-service-log-group-routing" tabindex="-1"><a class="header-anchor" href="#cloudwatch-logs-per-service-log-group-routing" aria-hidden="true">#</a> 🟡 CloudWatch Logs: per-service log group routing</h3>
+<p><strong>Improves:</strong> Cleaner CloudWatch navigation; can set different retention or alarms per service.
+<strong>Background:</strong> <em>&quot;We'll switch to per-service groups later as a follow-up if you want. For now: one group, all container logs, simple.&quot;</em>
+<strong>Scope:</strong> Switch from <code>awslogs</code> host-mount pattern to Docker's <code>awslogs</code> log driver per-service in docker-compose.prod.yml, OR add separate <code>collect_list</code> entries in the agent config for each container's log path.</p>
+<hr>
+<h2 id="2-apple-app-store-cycle-next-release-or-after-current-review-settles" tabindex="-1"><a class="header-anchor" href="#2-apple-app-store-cycle-next-release-or-after-current-review-settles" aria-hidden="true">#</a> 2. Apple App Store cycle — next release or after current review settles</h2>
+<h3 id="resubmit-1010-with-eas-build-after-apple-replies-to-face-data-info-request" tabindex="-1"><a class="header-anchor" href="#resubmit-1010-with-eas-build-after-apple-replies-to-face-data-info-request" aria-hidden="true">#</a> 🔴 Resubmit 1.0.10 with EAS build after Apple replies to Face Data info request</h3>
+<p><strong>Improves:</strong> Gets the app approved.
+<strong>Background:</strong> Current review is paused on &quot;Information Needed&quot; (Guideline 2.1 face data question). Once we replied with face data details + updated privacy policy, Apple's review continues. If they accept, app is approved. If they ask follow-ups, we iterate. Either way, the existing 1.0.10 binary stands unless a code change becomes necessary.</p>
+<h3 id="sentry-backend-sdk-integration-deferred" tabindex="-1"><a class="header-anchor" href="#sentry-backend-sdk-integration-deferred" aria-hidden="true">#</a> 🟡 Sentry — backend SDK integration (deferred)</h3>
+<p><strong>Improves:</strong> Server-side exception tracking with stack traces + breadcrumbs. Currently if the Express app throws unexpected errors, you find out from log scraping after the fact.
+<strong>Background:</strong> <em>&quot;Postpone Sentry for now&quot;</em> (user response when planning Track 1 work). Originally a P0 item from the post-launch readiness review.
+<strong>Scope:</strong> Add <code>@sentry/node</code> to backend, gate on <code>SENTRY_DSN</code> env var, wire into Express error middleware. Create a Sentry project at sentry.io.</p>
+<h3 id="sentry-react-native-app-integration-deferred" tabindex="-1"><a class="header-anchor" href="#sentry-react-native-app-integration-deferred" aria-hidden="true">#</a> 🟡 Sentry — React Native app integration (deferred)</h3>
+<p><strong>Improves:</strong> Mobile crash tracking with full stack traces, breadcrumbs, release tagging. Currently you'd learn about crashes from 1-star App Store reviews.
+<strong>Background:</strong> Same Sentry deferral. Plus: <em>&quot;The Sentry React Native app integration ships in 1.0.11 (next release) — needs a new EAS build.&quot;</em>
+<strong>Scope:</strong> Add <code>@sentry/react-native</code> to frontend, configure Sentry in <code>App.tsx</code>, set up source-map upload in EAS post-install hooks.</p>
+<h3 id="privacy-manifest-privacyinfoxcprivacy-for-the-app-bundle" tabindex="-1"><a class="header-anchor" href="#privacy-manifest-privacyinfoxcprivacy-for-the-app-bundle" aria-hidden="true">#</a> 🟡 Privacy Manifest (PrivacyInfo.xcprivacy) for the app bundle</h3>
+<p><strong>Improves:</strong> Avoids an automated email warning from Apple at next binary upload. As of May 2024 Apple requires a privacy manifest declaring data types collected and required-reason APIs used. Submissions still go through, but Apple is increasing enforcement.
+<strong>Background:</strong> From the App Store compliance audit: <em>&quot;My recommendation: Go with (B) for the resubmission to avoid scope creep, but add a TODO for the next release.&quot;</em> Item flagged 🟡 in the audit.
+<strong>Scope:</strong> Generate a basic PrivacyInfo.xcprivacy after <code>npx expo prebuild</code> and place it in the iOS bundle. Declare data types (email, photos, etc.) and required-reason APIs (UserDefaults, FileTimestamp).</p>
+<h3 id="in-app-support-contact-link" tabindex="-1"><a class="header-anchor" href="#in-app-support-contact-link" aria-hidden="true">#</a> 🟢 In-app support / contact link</h3>
+<p><strong>Improves:</strong> Users (and App Store reviewers) can email support without leaving the app or visiting the privacy policy. Currently the only support email is in the privacy policy footer and AppReviewerSummary.md.
+<strong>Background:</strong> From the App Store compliance audit &quot;🟢 Optional improvements&quot;: <em>&quot;Apple sometimes flags lack of in-app support contact.&quot;</em>
+<strong>Scope:</strong> Add a Settings → Help / Contact Support row that opens <code>mailto:support@evofaceflow.com</code> via <code>Linking.openURL</code>.</p>
+<hr>
+<h2 id="3-operational-hardening-short-term-track-2-from-post-launch-readiness-plan" tabindex="-1"><a class="header-anchor" href="#3-operational-hardening-short-term-track-2-from-post-launch-readiness-plan" aria-hidden="true">#</a> 3. Operational hardening — short-term (Track 2 from post-launch readiness plan)</h2>
+<h3 id="deep-health-endpoint-that-probes-postgres-redis" tabindex="-1"><a class="header-anchor" href="#deep-health-endpoint-that-probes-postgres-redis" aria-hidden="true">#</a> 🟠 Deep <code>/health</code> endpoint that probes Postgres + Redis</h3>
+<p><strong>Improves:</strong> UptimeRobot currently shows &quot;up&quot; as long as the Express process is running, even when Postgres or Redis is unreachable. A deep healthcheck fails when dependencies are degraded, so external monitoring catches dep outages.
+<strong>Background:</strong> <em>&quot;P0 item — Deep health check. <code>GET /health</code> should <code>SELECT 1</code> against Postgres and <code>PING</code> Redis, fail in &lt;2s, return per-dependency status.&quot;</em> On the Track 2 list, deferred to &quot;after App Store decision lands.&quot; Drafted code was rejected before it could be saved when user wanted to do branch hygiene first.
+<strong>Scope:</strong> New <code>/health</code> route that does parallel checks with 2s timeouts; return 503 if any dep down. Keep current shallow endpoint as <code>/health/live</code> for Docker healthcheck. UptimeRobot monitor automatically benefits.</p>
+<h3 id="nginx-ip-allowlist-on-apiadmin" tabindex="-1"><a class="header-anchor" href="#nginx-ip-allowlist-on-apiadmin" aria-hidden="true">#</a> 🟠 nginx IP allowlist on <code>/api/admin</code></h3>
+<p><strong>Improves:</strong> Defense-in-depth on the admin surface. Today <code>X-Admin-Key</code> is the only gate — if the key leaks, an attacker can hit <code>/api/admin/*</code> from anywhere. With an IP allowlist, they'd also need to be on the admin network.
+<strong>Background:</strong> Track 2 from post-launch readiness — <em>&quot;P0 item #7 — Lock down <code>/api/admin</code>.&quot;</em> User confirmed <em>&quot;Static IP allowlist at nginx (Recommended)&quot;</em> but deferred deployment until after App Store decision.
+<strong>Scope:</strong> Uncomment and configure the <code>allow &lt;ip&gt;; deny all;</code> block in nginx/nginx.conf §<code>location /api/admin</code>. Reload nginx.</p>
+<h3 id="implement-ssl_certificate-scan-type-in-vulnerability-scanner" tabindex="-1"><a class="header-anchor" href="#implement-ssl_certificate-scan-type-in-vulnerability-scanner" aria-hidden="true">#</a> 🟠 Implement <code>SSL_CERTIFICATE</code> scan type in vulnerability scanner</h3>
+<p><strong>Improves:</strong> Preemptive alerting when the Let's Encrypt cert is approaching expiry. Currently expiry alerting is passive — UptimeRobot's free tier dropped SSL monitoring, so you'd only learn from certbot's renewal-failure email or after the cert dies.
+<strong>Background:</strong> From the audit: <em>&quot;A preemptive SSL expiry check is planned via the existing vulnerability scanner — <code>VulnerabilityReport.scanType</code> already reserves a <code>SSL_CERTIFICATE</code> enum value.&quot;</em> Multiple mentions across docs.
+<strong>Scope:</strong> Add a worker handler in <code>backend/src/queue/vulnerabilityWorker.ts</code> that runs <code>openssl s_client</code> against <code>api.evofaceflow.com:443</code>, parses notAfter, writes a <code>VulnerabilityReport</code> row with days-remaining. Alarm via existing daily scan schedule.</p>
+<h3 id="bump-backend-container-memory-ceiling-set-node_options" tabindex="-1"><a class="header-anchor" href="#bump-backend-container-memory-ceiling-set-node_options" aria-hidden="true">#</a> 🟠 Bump backend container memory ceiling + set NODE_OPTIONS</h3>
+<p><strong>Improves:</strong> Prevents OOM-kill of the Express backend under burst load. Sharp (image processing) can balloon to several hundred MB temporarily; the current 512MB limit + no Node heap limit makes the container fragile.
+<strong>Background:</strong> P1 item #14 from the post-launch readiness review.
+<strong>Scope:</strong> In docker-compose.prod.yml, bump <code>deploy.resources.limits.memory: 512M</code> → <code>1G</code> for backend service. Add <code>NODE_OPTIONS=--max-old-space-size=896</code> to backend env. Restart.</p>
+<h3 id="runbookmd" tabindex="-1"><a class="header-anchor" href="#runbookmd" aria-hidden="true">#</a> 🟡 RUNBOOK.md</h3>
+<p><strong>Improves:</strong> When something pages at 2am, you (or anyone covering for you) have a step-by-step. Without one, every incident is a fresh research project.
+<strong>Background:</strong> P1 item #16 — <em>&quot;Runbook for the 8–10 things most likely to break: DB connection lost, Redis full, S3 403s, Grok rate-limited, Apple webhook signature mismatch, disk full, cert expiry, OOM, backup failed.&quot;</em>
+<strong>Scope:</strong> New RUNBOOK.md at repo root. Each scenario: how to detect, how to confirm, how to fix, how to verify.</p>
+<h3 id="lightsail-instance-role-for-backups-replace-iam-access-keys" tabindex="-1"><a class="header-anchor" href="#lightsail-instance-role-for-backups-replace-iam-access-keys" aria-hidden="true">#</a> 🟡 Lightsail instance-role for backups (replace IAM access keys)</h3>
+<p><strong>Improves:</strong> No AWS secrets on disk for the backup script. Auto-rotation handled by AWS. Reduces blast radius of host compromise.
+<strong>Background:</strong> From backup setup discussion: <em>&quot;Since your Lightsail instance already has an IAM role (<code>AmazonLightsailInstanceRole</code>), there's a cleaner v2 we can move to later: attach an S3 PutObject policy to the instance role itself, delete the access keys from /etc/tryon-backup.env.&quot;</em>
+<strong>Scope:</strong> Attach an inline policy to the Lightsail instance role with <code>s3:PutObject</code> on <code>evofaceflow-backups/postgres/*</code>. Remove <code>AWS_ACCESS_KEY_ID</code> / <code>AWS_SECRET_ACCESS_KEY</code> lines from <code>/etc/tryon-backup.env</code>. Test backup still works.</p>
+<h3 id="move-secrets-out-of-env-into-aws-secrets-manager-ssm-parameter-store" tabindex="-1"><a class="header-anchor" href="#move-secrets-out-of-env-into-aws-secrets-manager-ssm-parameter-store" aria-hidden="true">#</a> 🟡 Move secrets out of <code>.env</code> into AWS Secrets Manager / SSM Parameter Store</h3>
+<p><strong>Improves:</strong> Secrets stop being baked into Lightsail snapshots. Centralized rotation. Audit trail of secret access.
+<strong>Background:</strong> Track 1 setup AskUserQuestion: <em>&quot;Defer to P1 (Recommended). Keep <code>.env</code> for launch.&quot;</em> Now on P1 list.
+<strong>Scope:</strong> Refactor <code>backend/src/config/env.ts</code> to read from SSM Parameter Store at boot with <code>.env</code> fallback for local-dev. Migrate the live secrets to SSM. Update IAM so backend can read its parameters.</p>
+<hr>
+<h2 id="4-operational-hardening-medium-term-p1-list" tabindex="-1"><a class="header-anchor" href="#4-operational-hardening-medium-term-p1-list" aria-hidden="true">#</a> 4. Operational hardening — medium-term (P1 list)</h2>
+<h3 id="application-metrics-prometheus-opentelemetry" tabindex="-1"><a class="header-anchor" href="#application-metrics-prometheus-opentelemetry" aria-hidden="true">#</a> 🟡 Application metrics (Prometheus / OpenTelemetry)</h3>
+<p><strong>Improves:</strong> Quantitative observability — latency percentiles, request rate, error rate, queue depth — not just text logs. Required to define and track SLOs.
+<strong>Background:</strong> P1 item #10. <em>&quot;Without them you can't diagnose a slow app.&quot;</em>
+<strong>Scope:</strong> Add <code>prom-client</code> to backend, expose <code>/metrics</code> on internal network. Run a Prometheus scrape (Grafana Cloud free tier is the easy path) or use CloudWatch Embedded Metric Format. Track p50/p95/p99 latency, error rate, Grok call latency + cost, BullMQ queue depth.</p>
+<h3 id="bullmq-failure-alerts" tabindex="-1"><a class="header-anchor" href="#bullmq-failure-alerts" aria-hidden="true">#</a> 🟡 BullMQ failure alerts</h3>
+<p><strong>Improves:</strong> Silent job failures = silent revenue loss. If Grok integration breaks, today the system refunds credits and logs — but nobody is paged.
+<strong>Background:</strong> P1 item #11.
+<strong>Scope:</strong> Either expose BullMQ metrics via prom-client and alert on <code>failed:tryon</code> counter, or write a small periodic worker that checks queue depth + failed count and emails on threshold breach. Surface in admin dashboard.</p>
+<h3 id="mobile-crash-analytics-in-app" tabindex="-1"><a class="header-anchor" href="#mobile-crash-analytics-in-app" aria-hidden="true">#</a> 🟡 Mobile crash + analytics in app</h3>
+<p><strong>Improves:</strong> Funnel visibility (signup → verify → first try-on → first purchase). Today you only have backend-side counts; no insight into where mobile users drop off.
+<strong>Background:</strong> P1 item #12. Paired with Sentry RN.
+<strong>Scope:</strong> PostHog free tier is mobile-friendly. Add <code>posthog-react-native</code> to frontend, track key events (signup, verify, first try-on, first purchase). Defer until Sentry RN is in.</p>
+<h3 id="cloudwatch-agent-for-host-metrics-cpu-memory-disk-network" tabindex="-1"><a class="header-anchor" href="#cloudwatch-agent-for-host-metrics-cpu-memory-disk-network" aria-hidden="true">#</a> 🟡 CloudWatch agent for host metrics (CPU, memory, disk, network)</h3>
+<p><strong>Improves:</strong> Coarse Lightsail console metrics today; CloudWatch agent gives detailed host metrics with alarms (disk &gt;80%, memory &gt;85%, CPU &gt;90% for 5 min).
+<strong>Background:</strong> P1 item #15. The CloudWatch agent we installed for logs CAN also ship metrics with a config addition — but we didn't enable that yet.
+<strong>Scope:</strong> Extend the existing agent config at <code>/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json</code> with a <code>metrics</code> section. Update IAM policy to add <code>cloudwatch:PutMetricData</code>. Add CloudWatch alarms for the three host thresholds.</p>
+<h3 id="att-app-tracking-transparency-no-op" tabindex="-1"><a class="header-anchor" href="#att-app-tracking-transparency-no-op" aria-hidden="true">#</a> 🟢 ATT (App Tracking Transparency) no-op</h3>
+<p><strong>Improves:</strong> Defensive — some App Store Connect configurations expect ATT even when not used. A <code>NSUserTrackingUsageDescription</code> no-op string saying &quot;TryOn does not track for advertising&quot; pre-empts a confused reviewer.
+<strong>Background:</strong> From the audit &quot;🟢 Optional improvements&quot; — <em>&quot;Skip unless Apple asks.&quot;</em>
+<strong>Scope:</strong> Add <code>expo-tracking-transparency</code> plugin to app.json with a no-op purpose string. No code calls needed.</p>
+<hr>
+<h2 id="5-operational-hardening-long-term-p2-list-scale-dependent" tabindex="-1"><a class="header-anchor" href="#5-operational-hardening-long-term-p2-list-scale-dependent" aria-hidden="true">#</a> 5. Operational hardening — long-term (P2 list, scale-dependent)</h2>
+<h3 id="migrate-to-managed-postgres-lightsail-managed-database-or-rds" tabindex="-1"><a class="header-anchor" href="#migrate-to-managed-postgres-lightsail-managed-database-or-rds" aria-hidden="true">#</a> 🟡 Migrate to managed Postgres (Lightsail Managed Database or RDS)</h3>
+<p><strong>Improves:</strong> Point-in-time recovery, automated failover, automatic patching. Today a single Postgres container with daily dumps.
+<strong>Background:</strong> P2 item — <em>&quot;Migrate when single-instance latency starts mattering.&quot;</em>
+<strong>Scope:</strong> Provision an RDS or Lightsail Managed Database. Migrate the schema + data. Repoint <code>DATABASE_URL</code>. Decommission the container.</p>
+<h3 id="postgres-read-replica-for-heavy-analytics-queries" tabindex="-1"><a class="header-anchor" href="#postgres-read-replica-for-heavy-analytics-queries" aria-hidden="true">#</a> 🟡 Postgres read replica for heavy analytics queries</h3>
+<p><strong>Improves:</strong> Admin dashboard aggregation queries (user counts, job stats, etc.) won't compete with user-facing transactions.
+<strong>Background:</strong> P2 item — <em>&quot;The admin dashboard does some heavy aggregations.&quot;</em>
+<strong>Scope:</strong> Set up read replica after managed Postgres migration. Add a separate <code>DATABASE_READ_URL</code> env. Route admin/analytics queries to the replica.</p>
+<h3 id="waf-in-front-of-the-api-aws-waf-or-cloudflare" tabindex="-1"><a class="header-anchor" href="#waf-in-front-of-the-api-aws-waf-or-cloudflare" aria-hidden="true">#</a> 🟡 WAF in front of the API (AWS WAF or Cloudflare)</h3>
+<p><strong>Improves:</strong> OWASP top 10 protection, bot mitigation, DDoS absorption you don't have today.
+<strong>Background:</strong> P2 item.
+<strong>Scope:</strong> Cloudflare free tier is the cheap path — point DNS at Cloudflare, configure SSL passthrough or full-strict, enable the managed ruleset. Lightsail TLS still terminates at nginx.</p>
+<h3 id="bluegreen-deploys" tabindex="-1"><a class="header-anchor" href="#bluegreen-deploys" aria-hidden="true">#</a> 🟡 Blue/green deploys</h3>
+<p><strong>Improves:</strong> Eliminate the ~30 second 502 window when <code>docker compose up -d --build</code> recreates the backend container.
+<strong>Background:</strong> P2 item — <em>&quot;At low usage this is invisible; at 100 RPS it's user-visible 502s.&quot;</em>
+<strong>Scope:</strong> Two backend container instances behind nginx, swap one at a time. Requires nginx upstream config change and per-instance healthcheck.</p>
+<h3 id="slo-definition-grafana-dashboards" tabindex="-1"><a class="header-anchor" href="#slo-definition-grafana-dashboards" aria-hidden="true">#</a> 🟡 SLO definition + Grafana dashboards</h3>
+<p><strong>Improves:</strong> Quantitative target (&quot;99.5% monthly availability + p95 latency &lt;800ms&quot;) gives you an error budget to decide whether to ship risky changes.
+<strong>Background:</strong> P2 item.
+<strong>Scope:</strong> Pick SLOs, track them in Grafana on top of the Prometheus metrics, set burn-rate alerts.</p>
+<h3 id="independent-security-review-pentest" tabindex="-1"><a class="header-anchor" href="#independent-security-review-pentest" aria-hidden="true">#</a> 🟡 Independent security review / pentest</h3>
+<p><strong>Improves:</strong> Third-party validation that the architecture and code don't have exploitable holes. Especially relevant once real PII is at scale.
+<strong>Background:</strong> P2 item — <em>&quot;Once you have real PII at scale.&quot;</em>
+<strong>Scope:</strong> Engage a security firm. Typical small-app pentest is $5–15k for a one-week engagement.</p>
+<h3 id="centralized-admin-audit-log" tabindex="-1"><a class="header-anchor" href="#centralized-admin-audit-log" aria-hidden="true">#</a> 🟡 Centralized admin audit log</h3>
+<p><strong>Improves:</strong> Forensic trail of who toggled which subscription, who deleted which user, who resolved which report. Today there's no record.
+<strong>Background:</strong> P2 item.
+<strong>Scope:</strong> Add an <code>AdminAction</code> model that records every admin API call (who, what, when, target, before/after). Write to an append-only S3 bucket with Object Lock for compliance.</p>
+<h3 id="secret-rotation-runbook-quarterly-cadence" tabindex="-1"><a class="header-anchor" href="#secret-rotation-runbook-quarterly-cadence" aria-hidden="true">#</a> 🟡 Secret rotation runbook (quarterly cadence)</h3>
+<p><strong>Improves:</strong> Forces periodic rotation of JWT secrets, admin key, AWS keys, etc. Today they've never rotated.
+<strong>Background:</strong> P2 item.
+<strong>Scope:</strong> Document the rotation procedure for each secret in RUNBOOK.md. Calendar reminder quarterly.</p>
+<hr>
+<h2 id="6-known-bugs-minor-issues" tabindex="-1"><a class="header-anchor" href="#6-known-bugs-minor-issues" aria-hidden="true">#</a> 6. Known bugs / minor issues</h2>
+<h3 id="redis-eviction-policy-change-allkeys-lru-to-noeviction" tabindex="-1"><a class="header-anchor" href="#redis-eviction-policy-change-allkeys-lru-to-noeviction" aria-hidden="true">#</a> 🟠 Redis eviction policy: change <code>allkeys-lru</code> to <code>noeviction</code></h3>
+<p><strong>Improves:</strong> Prevents BullMQ queue corruption under memory pressure. Current <code>allkeys-lru</code> will evict job keys silently if Redis hits maxmemory — that orphans in-flight try-on jobs.
+<strong>Background:</strong> Noted while reviewing backend logs during CloudWatch setup — <em>&quot;Redis allkeys-lru warnings (10 of them) — these are from BullMQ... real operational concern but separate from our current task; flag it for a follow-up.&quot;</em>
+<strong>Scope:</strong> In docker-compose.prod.yml, change <code>--maxmemory-policy allkeys-lru</code> to <code>--maxmemory-policy noeviction</code> on the redis service. Restart redis.</p>
+<h3 id="node-22-upgrade-aws-sdk-v3-deprecation" tabindex="-1"><a class="header-anchor" href="#node-22-upgrade-aws-sdk-v3-deprecation" aria-hidden="true">#</a> 🟢 Node 22 upgrade (AWS SDK v3 deprecation)</h3>
+<p><strong>Improves:</strong> Future-proofs against the early-2027 AWS SDK requirement of Node 22+.
+<strong>Background:</strong> Deprecation warning observed in backend logs during CloudWatch setup — <em>&quot;AWS SDK for JavaScript (v3) versions published after the first week of January 2027 will require node &gt;=22. You are running node v20.20.2.&quot;</em>
+<strong>Scope:</strong> Update backend Dockerfile base image from <code>node:20-slim</code> to <code>node:22-slim</code>. Test Prisma + all native modules still build.</p>
+<hr>
+<h2 id="7-documentation-verification-tasks" tabindex="-1"><a class="header-anchor" href="#7-documentation-verification-tasks" aria-hidden="true">#</a> 7. Documentation / verification tasks</h2>
+<h3 id="test-the-postgres-restore-procedure-on-a-staging-instance" tabindex="-1"><a class="header-anchor" href="#test-the-postgres-restore-procedure-on-a-staging-instance" aria-hidden="true">#</a> 🟠 Test the Postgres restore procedure on a staging instance</h3>
+<p><strong>Improves:</strong> Confirms the backup is actually usable. Untested backups are hopes, not backups.
+<strong>Background:</strong> From DEPLOYMENT.md §10.4 (which I wrote): <em>&quot;Test this procedure at least once on a staging instance before you ever need it in production. An untested backup is a hope, not a backup.&quot;</em>
+<strong>Scope:</strong> Spin up a throwaway VM or local Postgres. Run the documented restore steps using a recent dump. Verify the data looks correct.</p>
+<h3 id="reset-location-history-admin-endpoint" tabindex="-1"><a class="header-anchor" href="#reset-location-history-admin-endpoint" aria-hidden="true">#</a> 🟢 Reset Location History admin endpoint</h3>
+<p><strong>Improves:</strong> Currently clearing testuser location history (after Apple review caused suspicious-location flags) requires SSH + psql DELETE. A POST <code>/api/admin/user/:id/clear-locations</code> endpoint would be a 15-minute fix.
+<strong>Background:</strong> From testuser1 suspicious-location discussion — <em>&quot;If you'd rather I add an 'Reset location history' admin endpoint (POST <code>/api/admin/user/:id/clear-locations</code>) for future cleanups, that's a 15-minute change. Not needed for this round; just an option.&quot;</em>
+<strong>Scope:</strong> New admin route in <code>backend/src/routes/admin.ts</code> that deletes all <code>UserLocation</code> rows for a given user id. Wire button in the admin dashboard.</p>
+<h3 id="stale-doc-fix-bring-claudemd-fully-into-sync-with-current-state" tabindex="-1"><a class="header-anchor" href="#stale-doc-fix-bring-claudemd-fully-into-sync-with-current-state" aria-hidden="true">#</a> 🟢 Stale-doc fix: bring CLAUDE.md fully into sync with current state</h3>
+<p><strong>Improves:</strong> Single source of truth for project conventions.
+<strong>Background:</strong> Several stale claims caught during the compliance audit and ops work. Most have been fixed (GitHub Actions reference, Expo Go claim, version bumps). Worth a periodic re-read for new drift.
+<strong>Scope:</strong> Periodic re-read. Update the &quot;Last reviewed&quot; date when you do.</p>
+<hr>
+<h2 id="8-optional-defensive-suggested-but-not-committed-to" tabindex="-1"><a class="header-anchor" href="#8-optional-defensive-suggested-but-not-committed-to" aria-hidden="true">#</a> 8. Optional / defensive (suggested but not committed to)</h2>
+<h3 id="aws-rekognition-image-moderation-for-ai-outputs" tabindex="-1"><a class="header-anchor" href="#aws-rekognition-image-moderation-for-ai-outputs" aria-hidden="true">#</a> 🟢 AWS Rekognition image moderation for AI outputs</h3>
+<p><strong>Improves:</strong> Belt-and-suspenders against App Store Guideline 1.1.4 if xAI's content filters ever miss something. Today the moderation pipeline relies on xAI filters + user reports + admin removal.
+<strong>Background:</strong> From the App Store compliance audit &quot;🟢 Optional improvements&quot; — <em>&quot;Not required if xAI's filters hold.&quot;</em>
+<strong>Scope:</strong> After Grok returns a result, run AWS Rekognition Moderation API on the output image. If flagged, hold the result in a quarantine state for admin review before showing to the user.</p>
+<h3 id="github-pages-for-hosted-docs" tabindex="-1"><a class="header-anchor" href="#github-pages-for-hosted-docs" aria-hidden="true">#</a> 🟢 GitHub Pages for hosted docs</h3>
+<p><strong>Improves:</strong> The <code>docs/</code> HTML you generated could be public-web reachable.
+<strong>Background:</strong> From the HTML docs setup — <em>&quot;Publish via GitHub Pages — point Pages at /docs folder on main branch and you get a public URL with zero extra work. Only do this if you're OK with the docs being public.&quot;</em>
+<strong>Scope:</strong> GitHub repo Settings → Pages → source = main branch / docs folder. No code change.</p>
+<h3 id="dark-mode-for-docs-html" tabindex="-1"><a class="header-anchor" href="#dark-mode-for-docs-html" aria-hidden="true">#</a> 🟢 Dark mode for <code>docs/</code> HTML</h3>
+<p><strong>Improves:</strong> Visual polish.
+<strong>Background:</strong> From the HTML docs setup — listed under &quot;Things you might want to change later.&quot;
+<strong>Scope:</strong> Add a <code>prefers-color-scheme</code> CSS block to docs/styles.css.</p>
+<h3 id="custom-favicon-logo-on-docs-html" tabindex="-1"><a class="header-anchor" href="#custom-favicon-logo-on-docs-html" aria-hidden="true">#</a> 🟢 Custom favicon / logo on <code>docs/</code> HTML</h3>
+<p><strong>Improves:</strong> Visual polish.
+<strong>Background:</strong> Same as dark mode.
+<strong>Scope:</strong> Add <code>&lt;link rel=&quot;icon&quot;&gt;</code> to the template in <code>scripts/build-docs.js</code>.</p>
+<h3 id="search-index-for-docs-html" tabindex="-1"><a class="header-anchor" href="#search-index-for-docs-html" aria-hidden="true">#</a> 🟢 Search index for <code>docs/</code> HTML</h3>
+<p><strong>Improves:</strong> Search across the 3 docs.
+<strong>Background:</strong> Same. <em>&quot;Would need a JS index (Lunr or Pagefind); not worth it for 3 docs.&quot;</em>
+<strong>Scope:</strong> Add Pagefind or Lunr as a post-build step.</p>
+<hr>
+<h2 id="maintenance-of-this-file" tabindex="-1"><a class="header-anchor" href="#maintenance-of-this-file" aria-hidden="true">#</a> Maintenance of this file</h2>
+<ul>
+<li>When you complete an item, move it to a <code>## ✅ Done</code> section at the bottom (or just delete it — git history preserves it).</li>
+<li>When something new is deferred mid-conversation, add it here with the same template.</li>
+<li>Re-scan once a month: are 🟠 items still 🟠, or has urgency changed?</li>
+</ul>
+
+  </main>
+</div>
+<footer class="footer">
+  <p>Generated from <code>TODOS.md</code>. Run <code>npm run build:docs</code> to regenerate.</p>
+</footer>
+</body>
+</html>

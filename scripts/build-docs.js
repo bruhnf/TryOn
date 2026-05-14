@@ -28,6 +28,7 @@ const sources = [
   { md: 'CLAUDE.md',       html: 'claude.html',       title: 'CLAUDE',       blurb: 'Architecture, conventions, business rules, and infrastructure overview.' },
   { md: 'DEPLOYMENT.md',   html: 'deployment.html',   title: 'DEPLOYMENT',   blurb: 'Lightsail setup, SSL, backups, restore, monitoring, troubleshooting.' },
   { md: 'CONTRIBUTING.md', html: 'contributing.html', title: 'CONTRIBUTING', blurb: 'Git workflow: branching, committing, reviewing, merging, cleanup.' },
+  { md: 'TODOS.md',        html: 'todos.html',        title: 'TODOS',        blurb: 'Deferred work and follow-ups, tagged by criticality.' },
 ];
 
 // Map "claude" / "deployment" / etc to the lowercase filename so link rewriting
